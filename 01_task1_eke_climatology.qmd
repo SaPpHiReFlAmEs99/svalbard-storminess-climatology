@@ -1,0 +1,54 @@
+---
+title: "Task 1: Arctic Storminess Climatology"
+author: Francesco Lucano
+format: html
+engine: knitr
+---
+
+### Setup
+
+This first R code chunk loads the `reticulate` library and configures a dedicated Python virtual environment for this project. This only needs to be run completely once.
+
+```{r setup-environment}
+# 1. Install and load the reticulate library
+library(reticulate)
+
+# 2. Define the name of our virtual environment
+venv_name <- "svalbard-env"
+
+# 3. Create the virtual environment (only if it doesn't exist)
+if (!virtualenv_exists(venv_name)) {
+  virtualenv_create(venv_name)
+}
+
+# 4. Tell R to USE this virtual environment for this session
+use_virtualenv(venv_name, required = TRUE)
+
+# 5. Install necessary Python packages into our environment
+# We will need these for handling climate data (NetCDF files) and arrays.
+# This command only needs to be run once, or when adding new packages.
+py_install(c("numpy", "pandas", "xarray", "netcdf4"))
+
+# 6. Check the configuration to ensure everything is pointing to our new environment
+py_config()
+```
+
+```{python}
+import numpy as np
+import pandas as pd
+import xarray as xr
+import sys
+
+print(f"Python version: {sys.version}")
+print(f"numpy version: {np.__version__}")
+print(f"pandas version: {pd.__version__}")
+print(f"xarray version: {xr.__version__}")
+```
+
+```{python}
+# This code will be executed by Python
+import numpy as np
+
+my_array = np.array([1, 2, 3])
+print(f"Successfully created a numpy array: {my_array}")
+```
