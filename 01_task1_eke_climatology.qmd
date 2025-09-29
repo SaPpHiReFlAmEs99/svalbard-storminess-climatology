@@ -10,45 +10,202 @@ engine: knitr
 This first R code chunk loads the `reticulate` library and configures a dedicated Python virtual environment for this project. This only needs to be run completely once.
 
 ```{r setup-environment}
-# 1. Install and load the reticulate library
+# Load the reticulate package
 library(reticulate)
 
-# 2. Define the name of our virtual environment
-venv_name <- "svalbard-env"
+# 1. Define the name for our Python virtual environment
+venv_name <- "arctic-env"
 
-# 3. Create the virtual environment (only if it doesn't exist)
+# 2. Create the virtual environment if it doesn't already exist
+# This makes the script safely re-runnable
 if (!virtualenv_exists(venv_name)) {
   virtualenv_create(venv_name)
 }
 
-# 4. Tell R to USE this virtual environment for this session
+# 3. Tell R to USE this virtual environment for all Python code
 use_virtualenv(venv_name, required = TRUE)
 
-# 5. Install necessary Python packages into our environment
-# We will need these for handling climate data (NetCDF files) and arrays.
-# This command only needs to be run once, or when adding new packages.
-py_install(c("numpy", "pandas", "xarray", "netcdf4"))
-
-# 6. Check the configuration to ensure everything is pointing to our new environment
+# 4. Verify the configuration
+# The output should show the Python path inside your new 'arctic-env'
 py_config()
 ```
 
-```{python}
+```{r install-py-packages}
+# Install Python packages into our virtual environment
+py_install(
+  packages = c(
+    "numpy",      # For numerical operations
+    "xarray",     # The key library for working with NetCDF files
+    "netcdf4",    # A dependency for xarray to read NetCDF files
+    "h5netcdf"    # Another dependency for reading NetCDF files
+  ),
+  envname = venv_name
+)
+```
+
+```{r load-packages}
+library(tidyverse)
+library(terra)
+```
+
+### Test
+
+```{r download-data-test}
+# Create a 'data' directory if it's not already there
+if (!dir.exists("data")) {
+  dir.create("data")
+}
+
+# Define the URL and the local destination file path
+data_url <- "https://raw.githubusercontent.com/geco-bern/agds_book/refs/heads/main/book/data/demo_data.nc"
+netcdf_file <- "data/era5_sample.nc"
+
+# Download the file only if we don't have it yet
+if (!file.exists(netcdf_file)) {
+  download.file(
+    url = data_url,
+    destfile = netcdf_file,
+    mode = "wb"  # Use "write binary" mode for non-text files like NetCDF
+  )
+}
+
+# Print the path to confirm
+print(netcdf_file)
+```
+
+```{python test}
+# Import the xarray library
+import xarray as xr
+
+# Use the 'r' object to access the 'netcdf_file' path from our R environment
+# and open the dataset
+ds = xr.open_dataset(r.netcdf_file)
+
+# Print the dataset object to see a summary of its contents
+print(ds)
+```
+
+```{python test-data-extraction}
+# Extract the 2m temperature variable as a NumPy array.
+t2m_data = ds['t2m'].values
+
+# Extract the coordinate arrays
+lat_coords = ds['latitude'].values
+lon_coords = ds['longitude'].values
+```
+
+```{r raster_test}
+# The py$ object is the bridge from R to Python.
+# It lets us access any object created in the Python session.
+# reticulate automatically converts the NumPy arrays to R arrays/vectors.
+
+# Create a terra SpatRaster object from the Python objects
+era5_raster <- terra::rast(
+  py$t2m_data, 
+  ext = terra::ext(min(py$lon_coords), max(py$lon_coords), min(py$lat_coords), max(py$lat_coords))
+)
+
+# ERA5 data uses the standard WGS84 geographic coordinate system.
+terra::crs(era5_raster) <- "EPSG:4326"
+
+# Print the raster object to inspect its properties in R
+print(era5_raster)
+```
+
+```{r remap-raster-1°-grid}
+# 1. Create a blank template raster with our target 1.0 x 1.0 degree resolution with the same spatial extent as our original raster.
+template_raster <- terra::rast(
+  resolution = 1.0, 
+  extent = terra::ext(era5_raster),
+  crs = "EPSG:4326"
+)
+
+# 2. Resample the original, high-resolution raster to the template's grid.
+# The 'bilinear' method is a standard choice for resampling continuous data like temperature.
+era5_resampled <- terra::resample(era5_raster, template_raster, method = "bilinear")
+
+# 3. Print the new raster to confirm its properties.
+# The resolution should be 1 x 1 now.
+print(era5_resampled)
+```
+
+The sample file we've been using to test our workflow contains data for only a single moment in time. To perform a decomposition, we need a time series.
+
+To solve this, we will first create a realistic synthetic dataset in Python. This will be a temporary xarray object with a time dimension and u10/v10 variables. This allows us to build and test the decomposition code perfectly. Once the code is working, we can simply apply it to our real, multi-year ERA5 data.
+
+This Python chunk uses numpy and xarray to create a sample dataset that mimics a year of daily wind data over a small grid. We've added a sine wave to the random data to simulate a seasonal cycle, which will help us see the effect of our calculations.
+
+```{python synthetic-time-series}
 import numpy as np
 import pandas as pd
 import xarray as xr
-import sys
 
-print(f"Python version: {sys.version}")
-print(f"numpy version: {np.__version__}")
-print(f"pandas version: {pd.__version__}")
-print(f"xarray version: {xr.__version__}")
+# Define the dimensions of our synthetic data
+time_coords = pd.to_datetime(pd.date_range(start='2022-01-01', periods=365, freq='D'))
+lat_coords = np.arange(78, 80, 0.25)
+lon_coords = np.arange(15, 20, 0.25)
+
+# Create a seasonal cycle (sine wave)
+seasonal_cycle = np.sin(np.linspace(0, 2 * np.pi, 365))
+
+# Create random wind data and add the seasonal cycle
+# We need to reshape the seasonal cycle to match the data dimensions
+u10_data = np.random.randn(365, len(lat_coords), len(lon_coords)) + seasonal_cycle[:, np.newaxis, np.newaxis]
+v10_data = np.random.randn(365, len(lat_coords), len(lon_coords)) + seasonal_cycle[:, np.newaxis, np.newaxis]
+
+# Create the xarray Dataset
+ds_synthetic = xr.Dataset(
+    data_vars={
+        'u10': (('time', 'latitude', 'longitude'), u10_data),
+        'v10': (('time', 'latitude', 'longitude'), v10_data)
+    },
+    coords={
+        'time': time_coords,
+        'latitude': lat_coords,
+        'longitude': lon_coords
+    }
+)
+
+print("Created synthetic dataset:")
+print(ds_synthetic)
 ```
 
-```{python}
-# This code will be executed by Python
-import numpy as np
+Now, using our synthetic dataset, we'll calculate the time-mean and eddy component using 2-6 day bandpass filter. For this test, we will implement the core concept by using a 30-day rolling mean to represent the "long-term mean component". Subtracting this mean from the instantaneous wind gives us the "eddy component" representing shorter-term fluctuations.
 
-my_array = np.array([1, 2, 3])
-print(f"Successfully created a numpy array: {my_array}")
+```{python reynold-decomposition-test}
+# Use our synthetic dataset 'ds_synthetic'
+window_days = 30
+
+# 1. Calculate the time-mean component using a rolling average
+# center=True ensures the mean is calculated for the window centered on each day
+u_mean = ds_synthetic['u10'].rolling(time=window_days, center=True).mean()
+v_mean = ds_synthetic['v10'].rolling(time=window_days, center=True).mean()
+
+# 2. Calculate the eddy component by subtracting the mean
+# u' = u - u_mean
+u_eddy = ds_synthetic['u10'] - u_mean
+v_eddy = ds_synthetic['v10'] - v_mean
+
+# Add these new eddy components to our dataset
+ds_synthetic['u_eddy'] = u_eddy
+ds_synthetic['v_eddy'] = v_eddy
 ```
+
+```{python, eke-calculation-test}
+# EKE = 0.5 * (u'^2 + v'^2)
+eke = 0.5 * (np.square(ds_synthetic['u_eddy']) + np.square(ds_synthetic['v_eddy']))
+
+# Add EKE as a new data variable in our dataset
+ds_synthetic['eke'] = eke
+
+# Let's inspect the results for a single grid point to see our new variables
+# We select one point using isel() and convert it to a pandas DataFrame for nice printing
+print("Sample of calculated variables for a single grid point:")
+print(ds_synthetic[['u10', 'u_eddy', 'eke']].isel(latitude=5, longitude=10).to_pandas().head())
+```
+
+The `.rolling(time=30, center=True)` part is creating a 30-day "sliding window" that moves along the time series. To calculate the mean for any given day, it needs to look at the full window of data centered on that day.
+
+-   Window Size: time=30 means the window is 30 days wide.
+
+-   Centering: center=True means for any given day (e.g., January 16th), it will grab the 15 days before it and the 14 days after it to calculate the mean.
