@@ -12,6 +12,9 @@ This first R code chunk loads the `reticulate` library and configures a dedicate
 ```{r setup-environment}
 # Load the reticulate package
 library(reticulate)
+library(tidyverse)
+library(terra)
+library(sf)
 
 # 1. Define the name for our Python virtual environment
 venv_name <- "arctic-env"
@@ -43,10 +46,6 @@ py_install(
 )
 ```
 
-```{r load-packages}
-library(tidyverse)
-library(terra)
-```
 
 ### Test
 
@@ -209,3 +208,57 @@ The `.rolling(time=30, center=True)` part is creating a 30-day "sliding window" 
 -   Window Size: time=30 means the window is 30 days wide.
 
 -   Centering: center=True means for any given day (e.g., January 16th), it will grab the 15 days before it and the 14 days after it to calculate the mean.
+
+```{python, eke-variance-test}
+# Calculate the variance of EKE across the 'time' dimension
+# This leaves us with a 2D DataArray of (latitude, longitude)
+eke_variance = ds_synthetic['eke'].var(dim='time')
+
+# Print the result to confirm it's now a 2D grid
+print("EKE Variance Data Array:")
+print(eke_variance)
+```
+
+```{r raster-creation-test}
+# Access the Python object `eke_variance` from R
+# reticulate converts the xarray DataArray into an R matrix/array
+eke_variance_r_matrix <- py$eke_variance$values
+
+# The matrix from Python is often oriented differently than what terra expects.
+# We use t() to transpose it (swap rows and columns).
+eke_variance_r_matrix_t <- t(eke_variance_r_matrix)
+
+# Create the final SpatRaster object for mapping
+eke_variance_raster <- terra::rast(
+  eke_variance_r_matrix_t,
+  ext = terra::ext(min(py$lon_coords), max(py$lon_coords), min(py$lat_coords), max(py$lat_coords))
+)
+
+# Set the CRS one last time
+terra::crs(eke_variance_raster) <- "EPSG:4326"
+
+# Give the layer a descriptive name for our plot legend
+names(eke_variance_raster) <- "eke_variance"
+
+print("Final R SpatRaster object:")
+print(eke_variance_raster)
+```
+
+```{r test-map-visualizationins}
+# Convert the SpatRaster to a data frame for plotting with ggplot2
+eke_variance_df <- as.data.frame(eke_variance_raster, xy = TRUE)
+
+# Create the map
+ggplot() +
+  geom_raster(data = eke_variance_df, aes(x = x, y = y, fill = eke_variance)) +
+  scale_fill_viridis_c(name = "EKE Variance\n(m²/s²)") +
+  labs(
+    title = "Map of Storm Track Activity",
+    subtitle = "Calculated from variance of Eddy Kinetic Energy on synthetic data",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  coord_sf(crs = "EPSG:4326") +
+  theme_minimal()
+```
+
