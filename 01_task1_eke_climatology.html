@@ -74,10 +74,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 </head>
 
-<body class="fullcontent quarto-light">
+<body class="quarto-light">
 
 <div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
-
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#setup" id="toc-setup" class="nav-link active" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#eke-tke-and-mke-850hpa-january-2022-test" id="toc-eke-tke-and-mke-850hpa-january-2022-test" class="nav-link" data-scroll-target="#eke-tke-and-mke-850hpa-january-2022-test">EKE, TKE and MKE 850hPa January 2022 test</a>
+  <ul class="collapse">
+  <li><a href="#step-1-calculate-eke-mke-and-tke" id="toc-step-1-calculate-eke-mke-and-tke" class="nav-link" data-scroll-target="#step-1-calculate-eke-mke-and-tke">Step 1: Calculate EKE, MKE and TKE</a></li>
+  <li><a href="#step-2-calculate-eke-variance" id="toc-step-2-calculate-eke-variance" class="nav-link" data-scroll-target="#step-2-calculate-eke-variance">Step 2: Calculate EKE variance</a></li>
+  <li><a href="#step-3-conversion-and-remapping" id="toc-step-3-conversion-and-remapping" class="nav-link" data-scroll-target="#step-3-conversion-and-remapping">Step 3: Conversion and remapping</a></li>
+  <li><a href="#step-4-visualize-the-final-maps" id="toc-step-4-visualize-the-final-maps" class="nav-link" data-scroll-target="#step-4-visualize-the-final-maps">Step 4: Visualize the final maps</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
@@ -105,83 +120,569 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="setup" class="level3">
-<h3 class="anchored" data-anchor-id="setup">Setup</h3>
+<section id="setup" class="level1">
+<h1>Setup</h1>
 <p>This first R code chunk loads the <code>reticulate</code> library and configures a dedicated Python virtual environment for this project. This only needs to be run completely once.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Install and load the reticulate library</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(reticulate)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the reticulate package</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(reticulate)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>Warning: package 'reticulate' was built under R version 4.5.1</code></pre>
+<pre><code>── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.1     ✔ stringr   1.5.1
+✔ ggplot2   3.5.2     ✔ tibble    3.2.1
+✔ lubridate 1.9.4     ✔ tidyr     1.3.1
+✔ purrr     1.0.4     
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Define the name of our virtual environment</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>venv_name <span class="ot">&lt;-</span> <span class="st">"svalbard-env"</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Create the virtual environment (only if it doesn't exist)</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">virtualenv_exists</span>(venv_name)) {</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">virtualenv_create</span>(venv_name)</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Tell R to USE this virtual environment for this session</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="fu">use_virtualenv</span>(venv_name, <span class="at">required =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Install necessary Python packages into our environment</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># We will need these for handling climate data (NetCDF files) and arrays.</span></span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co"># This command only needs to be run once, or when adding new packages.</span></span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="fu">py_install</span>(<span class="fu">c</span>(<span class="st">"numpy"</span>, <span class="st">"pandas"</span>, <span class="st">"xarray"</span>, <span class="st">"netcdf4"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>Using virtual environment "C:/Users/franc/Documents/.virtualenvs/svalbard-env" ...</code></pre>
-</div>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(terra)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>+ "C:/Users/franc/Documents/.virtualenvs/svalbard-env/Scripts/python.exe" -m pip install --upgrade --no-user numpy pandas xarray netcdf4</code></pre>
+<pre><code>terra 1.8.70
+
+Attaching package: 'terra'
+
+The following object is masked from 'package:tidyr':
+
+    extract</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Check the configuration to ensure everything is pointing to our new environment</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">py_config</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Linking to GEOS 3.13.1, GDAL 3.11.0, PROJ 9.6.0; sf_use_s2() is TRUE</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(rnaturalearth)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(devtools)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Loading required package: usethis</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Define the name for our Python virtual environment</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>venv_name <span class="ot">&lt;-</span> <span class="st">"arctic-env"</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Create the virtual environment if it doesn't already exist</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># This makes the script safely re-runnable</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">virtualenv_exists</span>(venv_name)) {</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">virtualenv_create</span>(venv_name)</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Tell R to USE this virtual environment for all Python code</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="fu">use_virtualenv</span>(venv_name, <span class="at">required =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Verify the configuration</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="co"># The output should show the Python path inside your new 'arctic-env'</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="fu">py_config</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>python:         C:/Users/franc/Documents/.virtualenvs/svalbard-env/Scripts/python.exe
+<pre><code>python:         C:/Users/franc/Documents/.virtualenvs/arctic-env/Scripts/python.exe
 libpython:      C:/Users/franc/AppData/Local/r-reticulate/r-reticulate/pyenv/pyenv-win/versions/3.11.9/python311.dll
-pythonhome:     C:/Users/franc/Documents/.virtualenvs/svalbard-env
+pythonhome:     C:/Users/franc/Documents/.virtualenvs/arctic-env
 version:        3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]
 Architecture:   64bit
-numpy:          C:/Users/franc/Documents/.virtualenvs/svalbard-env/Lib/site-packages/numpy
+numpy:          C:/Users/franc/Documents/.virtualenvs/arctic-env/Lib/site-packages/numpy
 numpy_version:  2.3.3
 
 NOTE: Python version was forced by use_python() function</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Python version: </span><span class="sc">{</span>sys<span class="sc">.</span>version<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Install Python packages into our virtual environment</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">py_install</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">packages =</span> <span class="fu">c</span>(</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"numpy"</span>,      <span class="co"># For numerical operations</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"xarray"</span>,     <span class="co"># The key library for working with NetCDF files</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"netcdf4"</span>,    <span class="co"># A dependency for xarray to read NetCDF files</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"h5netcdf"</span>,   <span class="co"># Another dependency for reading NetCDF files</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"cdsapi"</span>,     <span class="co"># API to download ERA5 data</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"scipy"</span>       <span class="co"># Scientific computation</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">envname =</span> venv_name</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Python version: 3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]</code></pre>
+<pre><code>Using virtual environment "arctic-env" ...</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"numpy version: </span><span class="sc">{</span>np<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>numpy version: 2.3.3</code></pre>
+<div class="cell-output cell-output-stderr">
+<pre><code>+ "C:/Users/franc/Documents/.virtualenvs/arctic-env/Scripts/python.exe" -m pip install --upgrade --no-user numpy xarray netcdf4 h5netcdf cdsapi scipy</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"pandas version: </span><span class="sc">{</span>pd<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>pandas version: 2.3.2</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"xarray version: </span><span class="sc">{</span>xr<span class="sc">.</span>__version__<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="eke-tke-and-mke-850hpa-january-2022-test" class="level1">
+<h1>EKE, TKE and MKE 850hPa January 2022 test</h1>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cdsapi</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy <span class="im">import</span> signal</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Define the final path where we want the file to be</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>final_path <span class="op">=</span> os.path.join(<span class="st">'data'</span>, <span class="st">'era5_850hpa_2022_01_svalbard.nc'</span>)</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="co"># First, check if the file already exists at the final destination</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> os.path.exists(final_path):</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"File not found at </span><span class="sc">{</span>final_path<span class="sc">}</span><span class="ss">. Starting download from CDS..."</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    c <span class="op">=</span> cdsapi.Client()</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    dataset <span class="op">=</span> <span class="st">"reanalysis-era5-pressure-levels"</span></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>    request <span class="op">=</span> {</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">"product_type"</span>: <span class="st">"reanalysis"</span>,</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>        <span class="st">"variable"</span>: [</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>            <span class="st">"u_component_of_wind"</span>, <span class="st">"v_component_of_wind"</span></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>        <span class="st">"year"</span>: <span class="st">"2022"</span>,</span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">"month"</span>: <span class="st">"01"</span>,</span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">"day"</span>: [</span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>            <span class="st">"01"</span>, <span class="st">"02"</span>, <span class="st">"03"</span>, <span class="st">"04"</span>, <span class="st">"05"</span>, <span class="st">"06"</span>, <span class="st">"07"</span>, <span class="st">"08"</span>, <span class="st">"09"</span>, <span class="st">"10"</span>,</span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>            <span class="st">"11"</span>, <span class="st">"12"</span>, <span class="st">"13"</span>, <span class="st">"14"</span>, <span class="st">"15"</span>, <span class="st">"16"</span>, <span class="st">"17"</span>, <span class="st">"18"</span>, <span class="st">"19"</span>, <span class="st">"20"</span>,</span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>            <span class="st">"21"</span>, <span class="st">"22"</span>, <span class="st">"23"</span>, <span class="st">"24"</span>, <span class="st">"25"</span>, <span class="st">"26"</span>, <span class="st">"27"</span>, <span class="st">"28"</span>, <span class="st">"29"</span>, <span class="st">"30"</span>, <span class="st">"31"</span></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">"time"</span>: [</span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>            <span class="st">"00:00"</span>, <span class="st">"01:00"</span>, <span class="st">"02:00"</span>, <span class="st">"03:00"</span>, <span class="st">"04:00"</span>, <span class="st">"05:00"</span>, <span class="st">"06:00"</span>,</span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>            <span class="st">"07:00"</span>, <span class="st">"08:00"</span>, <span class="st">"09:00"</span>, <span class="st">"10:00"</span>, <span class="st">"11:00"</span>, <span class="st">"12:00"</span>, <span class="st">"13:00"</span>,</span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>            <span class="st">"14:00"</span>, <span class="st">"15:00"</span>, <span class="st">"16:00"</span>, <span class="st">"17:00"</span>, <span class="st">"18:00"</span>, <span class="st">"19:00"</span>, <span class="st">"20:00"</span>,</span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>            <span class="st">"21:00"</span>, <span class="st">"22:00"</span>, <span class="st">"23:00"</span></span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>        <span class="st">"pressure_level"</span>: <span class="st">"850"</span>,</span>
+<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>        <span class="st">"format"</span>: <span class="st">"netcdf"</span>,</span>
+<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a>        <span class="st">"area"</span>: [<span class="dv">81</span>, <span class="dv">10</span>, <span class="dv">76</span>, <span class="dv">35</span>]</span>
+<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-39"><a href="#cb14-39" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Retrieve the data AND download it to the final path in one step by adding .download(target=final_path)</span></span>
+<span id="cb14-40"><a href="#cb14-40" aria-hidden="true" tabindex="-1"></a>    c.retrieve(dataset, request).download(target<span class="op">=</span>final_path)</span>
+<span id="cb14-41"><a href="#cb14-41" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-42"><a href="#cb14-42" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Data successfully downloaded to </span><span class="sc">{</span>final_path<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb14-43"><a href="#cb14-43" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
+<span id="cb14-44"><a href="#cb14-44" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"File already exists at </span><span class="sc">{</span>final_path<span class="sc">}</span><span class="ss">. Skipping download."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>xarray version: 2025.9.0</code></pre>
+<pre><code>File already exists at data\era5_850hpa_2022_01_svalbard.nc. Skipping download.</code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># This code will be executed by Python</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>my_array <span class="op">=</span> np.array([<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>])</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Successfully created a numpy array: </span><span class="sc">{</span>my_array<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 1: Define the New, Robust Filter Function ---</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> bandpass_filter(ds, u_var, v_var, time_dim, fs, lowcut_days, highcut_days, order<span class="op">=</span><span class="dv">5</span>):</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="co">    Applies a robust, detrending band-pass filter to u and v components of an xarray Dataset.</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="co">    Uses a simple loop for stability and returns the Dataset with eddy components.</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Designing the filter..."</span>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Design the filter once</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    lowcut_freq <span class="op">=</span> <span class="dv">1</span> <span class="op">/</span> lowcut_days</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    highcut_freq <span class="op">=</span> <span class="dv">1</span> <span class="op">/</span> highcut_days</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    b, a <span class="op">=</span> signal.butter(order, [lowcut_freq, highcut_freq], btype<span class="op">=</span><span class="st">'band'</span>, fs<span class="op">=</span>fs)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get data as numpy arrays</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    u_data <span class="op">=</span> ds[u_var].values.astype(<span class="st">'float64'</span>)</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    v_data <span class="op">=</span> ds[v_var].values.astype(<span class="st">'float64'</span>)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create empty arrays for results</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>    u_eddy_data <span class="op">=</span> np.empty_like(u_data)</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>    v_eddy_data <span class="op">=</span> np.empty_like(v_data)</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Applying filter cell by cell. This may take a moment..."</span>)</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Loop through each spatial grid cell</span></span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> lat_idx <span class="kw">in</span> <span class="bu">range</span>(u_data.shape[<span class="dv">1</span>]):</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> lon_idx <span class="kw">in</span> <span class="bu">range</span>(u_data.shape[<span class="dv">2</span>]):</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Detrend and filter the time series for this cell</span></span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>            u_filtered <span class="op">=</span> signal.filtfilt(b, a, signal.detrend(u_data[:, lat_idx, lon_idx]))</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>            v_filtered <span class="op">=</span> signal.filtfilt(b, a, signal.detrend(v_data[:, lat_idx, lon_idx]))</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Store the result</span></span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>            u_eddy_data[:, lat_idx, lon_idx] <span class="op">=</span> u_filtered</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>            v_eddy_data[:, lat_idx, lon_idx] <span class="op">=</span> v_filtered</span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Filtering complete."</span>)</span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Add the results back to the original dataset</span></span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a>    ds[<span class="st">'u_eddy'</span>] <span class="op">=</span> ((time_dim, <span class="st">'latitude'</span>, <span class="st">'longitude'</span>), u_eddy_data)</span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a>    ds[<span class="st">'v_eddy'</span>] <span class="op">=</span> ((time_dim, <span class="st">'latitude'</span>, <span class="st">'longitude'</span>), v_eddy_data)</span>
+<span id="cb16-38"><a href="#cb16-38" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-39"><a href="#cb16-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ds</span>
+<span id="cb16-40"><a href="#cb16-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-41"><a href="#cb16-41" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 2: Load Data and Apply the Function ---</span></span>
+<span id="cb16-42"><a href="#cb16-42" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the dataset</span></span>
+<span id="cb16-43"><a href="#cb16-43" aria-hidden="true" tabindex="-1"></a>ds_real <span class="op">=</span> xr.open_dataset(<span class="st">'data/era5_850hpa_2022_01_svalbard.nc'</span>).squeeze()</span>
+<span id="cb16-44"><a href="#cb16-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-45"><a href="#cb16-45" aria-hidden="true" tabindex="-1"></a><span class="co"># Define parameters</span></span>
+<span id="cb16-46"><a href="#cb16-46" aria-hidden="true" tabindex="-1"></a>fs_samples_per_day <span class="op">=</span> <span class="dv">24</span></span>
+<span id="cb16-47"><a href="#cb16-47" aria-hidden="true" tabindex="-1"></a>lowcut_period_days <span class="op">=</span> <span class="fl">6.0</span></span>
+<span id="cb16-48"><a href="#cb16-48" aria-hidden="true" tabindex="-1"></a>highcut_period_days <span class="op">=</span> <span class="fl">2.0</span></span>
+<span id="cb16-49"><a href="#cb16-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-50"><a href="#cb16-50" aria-hidden="true" tabindex="-1"></a><span class="co"># Call the self-contained function</span></span>
+<span id="cb16-51"><a href="#cb16-51" aria-hidden="true" tabindex="-1"></a>ds_real_filtered <span class="op">=</span> bandpass_filter(</span>
+<span id="cb16-52"><a href="#cb16-52" aria-hidden="true" tabindex="-1"></a>    ds<span class="op">=</span>ds_real,</span>
+<span id="cb16-53"><a href="#cb16-53" aria-hidden="true" tabindex="-1"></a>    u_var<span class="op">=</span><span class="st">'u'</span>,</span>
+<span id="cb16-54"><a href="#cb16-54" aria-hidden="true" tabindex="-1"></a>    v_var<span class="op">=</span><span class="st">'v'</span>,</span>
+<span id="cb16-55"><a href="#cb16-55" aria-hidden="true" tabindex="-1"></a>    time_dim<span class="op">=</span><span class="st">'valid_time'</span>,</span>
+<span id="cb16-56"><a href="#cb16-56" aria-hidden="true" tabindex="-1"></a>    fs<span class="op">=</span>fs_samples_per_day,</span>
+<span id="cb16-57"><a href="#cb16-57" aria-hidden="true" tabindex="-1"></a>    lowcut_days<span class="op">=</span>lowcut_period_days,</span>
+<span id="cb16-58"><a href="#cb16-58" aria-hidden="true" tabindex="-1"></a>    highcut_days<span class="op">=</span>highcut_period_days</span>
+<span id="cb16-59"><a href="#cb16-59" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Successfully created a numpy array: [1 2 3]</code></pre>
+<pre><code>Designing the filter...
+Applying filter cell by cell. This may take a moment...
+Filtering complete.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 3: Sanity Check ---</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">Sanity Check of filtered 'u_eddy' values:"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Sanity Check of filtered 'u_eddy' values:</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Min: </span><span class="sc">{</span>ds_real_filtered[<span class="st">'u_eddy'</span>]<span class="sc">.</span><span class="bu">min</span>()<span class="sc">.</span>values<span class="sc">:.2f}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Min: -16.92</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Max: </span><span class="sc">{</span>ds_real_filtered[<span class="st">'u_eddy'</span>]<span class="sc">.</span><span class="bu">max</span>()<span class="sc">.</span>values<span class="sc">:.2f}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Max: 11.95</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"  Mean: </span><span class="sc">{</span>ds_real_filtered[<span class="st">'u_eddy'</span>]<span class="sc">.</span>mean()<span class="sc">.</span>values<span class="sc">:.2f}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Mean: 0.02</code></pre>
 </div>
 </div>
+<p><strong>## 1. The <code>bandpass_filter</code> Function</strong></p>
+<p>First, we defined a Python function.</p>
+<pre><code>def bandpass_filter(data_array, fs, lowcut_days, highcut_days, order=5):     # ... code inside ...     return filtered_data </code></pre>
+<p><strong>Why a function?</strong> We need to perform the exact same filtering operation on both the <code>u</code> and <code>v</code> wind components. Encapsulating the logic in a function makes our code <strong>reusable, readable, and less prone to errors</strong> from copy-pasting.</p>
+<p><strong>## 2. The Function’s Inputs (Parameters)</strong></p>
+<p>Let’s look at the function’s “control knobs”:</p>
+<ul>
+<li><p><code>data_array</code>: This is the input data we want to filter (e.g., the <code>xarray</code> DataArray containing our <code>u</code> wind component).</p></li>
+<li><p><code>fs</code>: This stands for <strong>sampling frequency</strong>. Think of it as frames per second in a video. It tells the filter how many data points we have per time unit. Since our filter is defined in <strong>days</strong> (a 2-6 <strong>day</strong> band) and our data is <strong>hourly</strong>, we have <strong>24 samples per day</strong>. So, <code>fs = 24</code>.</p></li>
+<li><p><code>lowcut_days</code> and <code>highcut_days</code>: These are the edges of our “band,” directly from your proposal. We set them to <code>6.0</code> and <code>2.0</code>. This tells the filter we want to <em>keep</em> the signals with a period <em>between</em> 2 and 6 days.</p></li>
+<li><p><code>order=5</code>: This controls the “steepness” of the filter. A higher order creates a sharper cutoff between the signals we keep and those we reject. An order of 5 is a robust, standard choice that provides a clean separation.</p></li>
+</ul>
+<p><strong>## 3. Inside the Function: The “How”</strong></p>
+<p>This is where the scientific computation happens.</p>
+<p>A. Designing the Filter</p>
+<pre><code>from scipy import signal  # ... b, a = signal.butter(order, [low, high], btype='band') </code></pre>
+<p>Digital filters are defined by a set of mathematical coefficients. This line uses the <code>scipy.signal.butter</code> function to design a <strong>Butterworth filter</strong>, which is a standard type known for being very stable and not distorting the signal in the “passband” (the 2-6 day range we want to keep). The function takes our parameters and calculates the necessary coefficients, which it returns as <code>b</code> and <code>a</code>.</p>
+<p>B. Applying the Filter</p>
+<pre><code>lambda x: signal.filtfilt(b, a, signal.detrend(x))</code></pre>
+<p>This is the core operation. The <code>signal.filtfilt</code> function takes the filter coefficients (<code>b</code>, <code>a</code>) and applies them to the data (<code>x</code>). The reason we use <code>filtfilt</code> (“filter-filter”) is crucial:</p>
+<ul>
+<li><p>It filters the data once in the forward direction.</p></li>
+<li><p>Then, it filters the resulting signal again in the backward direction.</p></li>
+</ul>
+<p>This two-way pass <strong>perfectly corrects for any time lag (phase shift)</strong> that a normal filter would introduce. This ensures that the peaks and troughs in our filtered storm signal are perfectly aligned in time with the original data. The data is also detrended with <code>signal.detrend()</code> prior to filtering to remove any linear trends that could cause filter instability.</p>
+<p>C. Applying Across the Entire grid</p>
+<pre><code>filtered_data = xr.apply_ufunc(...) </code></pre>
+<p>This is the most powerful part of the code. The <code>filtfilt</code> function is designed to work on a simple, 1D time series. But our data is a 3D grid (time, latitude, longitude).</p>
+<p><code>xr.apply_ufunc</code> is <code>xarray</code>’s magic wand for this problem. It intelligently applies the 1D <code>filtfilt</code> function to every single time series at each individual latitude/longitude grid point. It handles all the looping for us in a highly optimized way. The <code>input_core_dims=[['time']]</code> argument is our instruction to <code>xarray</code>, telling it that <code>filtfilt</code> operates along the <code>time</code> dimension.</p>
+<p><strong>## 4. Putting It All Together</strong></p>
+<p>Finally, we call our function:</p>
+<pre><code>u_eddy = bandpass_filter(ds_real['u'], fs_samples_per_day, ...) v_eddy = bandpass_filter(ds_real['v'], fs_samples_per_day, ...) </code></pre>
+<p>This executes the whole process. It feeds the raw <code>u</code> and <code>v</code> wind data into our function. The function then designs the filter and applies it across the entire grid, returning the perfectly isolated eddy components (u’ and v’). These are now ready for the final EKE calculation.</p>
+<section id="step-1-calculate-eke-mke-and-tke" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-calculate-eke-mke-and-tke">Step 1: Calculate EKE, MKE and TKE</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 'ds_real' is the xarray Dataset from the previous chunk, containing u_eddy and v_eddy</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Calculate EKE using the eddy components</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="co"># EKE = 0.5 * (u'^2 + v'^2)</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>eke <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (np.square(ds_real[<span class="st">'u_eddy'</span>]) <span class="op">+</span> np.square(ds_real[<span class="st">'v_eddy'</span>]))</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Add EKE as a new data variable to the dataset</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>ds_real[<span class="st">'eke'</span>] <span class="op">=</span> eke</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Print the dataset to confirm the new 'eke' variable is present</span></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(ds_real)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>&lt;xarray.Dataset&gt; Size: 51MB
+Dimensions:         (valid_time: 744, latitude: 21, longitude: 101)
+Coordinates:
+    number          int64 8B ...
+  * valid_time      (valid_time) datetime64[ns] 6kB 2022-01-01 ... 2022-01-31...
+    pressure_level  float64 8B 850.0
+  * latitude        (latitude) float64 168B 81.0 80.75 80.5 ... 76.5 76.25 76.0
+  * longitude       (longitude) float64 808B 10.0 10.25 10.5 ... 34.5 34.75 35.0
+    expver          (valid_time) &lt;U4 12kB ...
+Data variables:
+    u               (valid_time, latitude, longitude) float32 6MB -9.694 ... ...
+    v               (valid_time, latitude, longitude) float32 6MB -0.1228 ......
+    u_eddy          (valid_time, latitude, longitude) float64 13MB 1.742 ... ...
+    v_eddy          (valid_time, latitude, longitude) float64 13MB -0.1631 .....
+    eke             (valid_time, latitude, longitude) float64 13MB 1.531 ... ...
+Attributes:
+    GRIB_centre:             ecmf
+    GRIB_centreDescription:  European Centre for Medium-Range Weather Forecasts
+    GRIB_subCentre:          0
+    Conventions:             CF-1.7
+    institution:             European Centre for Medium-Range Weather Forecasts
+    history:                 2025-10-01T15:15 GRIB to CDM+CF via cfgrib-0.9.1...</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 4. Calculate the time-averaged wind components (u_bar, v_bar)</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="co"># We take the mean of the original wind fields across the 'valid_time' dimension.</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>u_bar <span class="op">=</span> ds_real[<span class="st">'u'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>)</span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>v_bar <span class="op">=</span> ds_real[<span class="st">'v'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>)</span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="co"># 5. Calculate Mean Kinetic Energy (MKE) using the formula</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>mke <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (np.square(u_bar) <span class="op">+</span> np.square(v_bar))</span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 6. Calculate the time-average of our previously calculated EKE</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>eke_mean <span class="op">=</span> ds_real[<span class="st">'eke'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>)</span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a><span class="co"># 7. Calculate the time-average of Total Kinetic Energy (TKE)</span></span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>tke <span class="op">=</span> mke <span class="op">+</span> eke_mean</span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a><span class="co"># 8. Combine these into a final summary dataset for easy access</span></span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a>ds_summary <span class="op">=</span> xr.Dataset({</span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">'mke'</span>: mke, </span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a>    <span class="st">'eke_mean'</span>: eke_mean, </span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">'tke'</span>: tke</span>
+<span id="cb33-20"><a href="#cb33-20" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb33-21"><a href="#cb33-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-22"><a href="#cb33-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Rename the 'eke_mean' to just 'eke' for simplicity, as it's the mean EKE</span></span>
+<span id="cb33-23"><a href="#cb33-23" aria-hidden="true" tabindex="-1"></a>ds_summary <span class="op">=</span> ds_summary.rename({<span class="st">'eke_mean'</span>: <span class="st">'eke'</span>})</span>
+<span id="cb33-24"><a href="#cb33-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-25"><a href="#cb33-25" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Summary of Monthly-Mean Kinetic Energy Components (m²/s²):"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Summary of Monthly-Mean Kinetic Energy Components (m²/s²):</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(ds_summary)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>&lt;xarray.Dataset&gt; Size: 43kB
+Dimensions:         (latitude: 21, longitude: 101)
+Coordinates:
+    number          int64 8B 0
+    pressure_level  float64 8B 850.0
+  * latitude        (latitude) float64 168B 81.0 80.75 80.5 ... 76.5 76.25 76.0
+  * longitude       (longitude) float64 808B 10.0 10.25 10.5 ... 34.5 34.75 35.0
+Data variables:
+    mke             (latitude, longitude) float32 8kB 5.1 4.941 ... 1.417 1.39
+    eke             (latitude, longitude) float64 17kB 16.42 16.47 ... 19.48
+    tke             (latitude, longitude) float64 17kB 21.52 21.41 ... 20.87</code></pre>
+</div>
+</div>
+</section>
+<section id="step-2-calculate-eke-variance" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-calculate-eke-variance">Step 2: Calculate EKE variance</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 'ds_real' now contains our 'eke' variable</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate the variance across the time dimension ('valid_time')</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="co"># This leaves us with a 2D grid of (latitude, longitude)</span></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>eke_variance <span class="op">=</span> ds_real[<span class="st">'eke'</span>].var(dim<span class="op">=</span><span class="st">'valid_time'</span>)</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Print the final 2D DataArray</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Final 2D EKE Variance grid:"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Final 2D EKE Variance grid:</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(eke_variance)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>&lt;xarray.DataArray 'eke' (latitude: 21, longitude: 101)&gt; Size: 17kB
+array([[289.96876873, 293.04693922, 295.71314684, ..., 358.84092046,
+        342.36477921, 325.39313085],
+       [315.00407761, 315.0657759 , 314.36522357, ..., 351.64111161,
+        332.04903741, 313.89207933],
+       [321.93092482, 321.13066035, 318.83723812, ..., 340.30042977,
+        319.31674403, 300.43730022],
+       ...,
+       [684.95545032, 671.97864538, 651.17401606, ..., 589.36865325,
+        565.86029154, 542.17191288],
+       [644.62265168, 630.05633442, 614.56218247, ..., 578.45030447,
+        554.50269551, 534.34552214],
+       [636.96972035, 625.72814428, 611.50514077, ..., 555.56279592,
+        535.73488895, 519.18232471]], shape=(21, 101))
+Coordinates:
+    number          int64 8B ...
+    pressure_level  float64 8B 850.0
+  * latitude        (latitude) float64 168B 81.0 80.75 80.5 ... 76.5 76.25 76.0
+  * longitude       (longitude) float64 808B 10.0 10.25 10.5 ... 34.5 34.75 35.0</code></pre>
+</div>
+</div>
+</section>
+<section id="step-3-conversion-and-remapping" class="level2">
+<h2 class="anchored" data-anchor-id="step-3-conversion-and-remapping">Step 3: Conversion and remapping</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 1: Define the Integrated Function ---</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="co"># This single function handles both conversion from Python and remapping.</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>process_and_remap_py <span class="ot">&lt;-</span> <span class="cf">function</span>(py_xarray_object, layer_name, template_raster) {</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Step A: Convert the Python object to a high-resolution R SpatRaster</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>  high_res_raster <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">rast</span>(</span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">t</span>(py_xarray_object<span class="sc">$</span>values),</span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">ext =</span> terra<span class="sc">::</span><span class="fu">ext</span>(</span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">min</span>(py_xarray_object<span class="sc">$</span>longitude<span class="sc">$</span>values),</span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">max</span>(py_xarray_object<span class="sc">$</span>longitude<span class="sc">$</span>values),</span>
+<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">min</span>(py_xarray_object<span class="sc">$</span>latitude<span class="sc">$</span>values),</span>
+<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">max</span>(py_xarray_object<span class="sc">$</span>latitude<span class="sc">$</span>values)</span>
+<span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb41-14"><a href="#cb41-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">crs =</span> <span class="st">"EPSG:4326"</span></span>
+<span id="cb41-15"><a href="#cb41-15" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb41-16"><a href="#cb41-16" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb41-17"><a href="#cb41-17" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Step B: Remap the high-resolution raster to the template grid</span></span>
+<span id="cb41-18"><a href="#cb41-18" aria-hidden="true" tabindex="-1"></a>  resampled_raster <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">resample</span>(high_res_raster, template_raster, <span class="at">method =</span> <span class="st">"bilinear"</span>)</span>
+<span id="cb41-19"><a href="#cb41-19" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb41-20"><a href="#cb41-20" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Set the final layer name</span></span>
+<span id="cb41-21"><a href="#cb41-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">names</span>(resampled_raster) <span class="ot">&lt;-</span> layer_name</span>
+<span id="cb41-22"><a href="#cb41-22" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb41-23"><a href="#cb41-23" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Return the final, remapped raster</span></span>
+<span id="cb41-24"><a href="#cb41-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span>(resampled_raster)</span>
+<span id="cb41-25"><a href="#cb41-25" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb41-26"><a href="#cb41-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-27"><a href="#cb41-27" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 2: Prepare the Target Grid (Blueprint) ---</span></span>
+<span id="cb41-28"><a href="#cb41-28" aria-hidden="true" tabindex="-1"></a><span class="co"># We create the 1.0-degree blueprint once. All data will be remapped to this grid.</span></span>
+<span id="cb41-29"><a href="#cb41-29" aria-hidden="true" tabindex="-1"></a>template_raster <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">rast</span>(</span>
+<span id="cb41-30"><a href="#cb41-30" aria-hidden="true" tabindex="-1"></a>  <span class="at">resolution =</span> <span class="fl">1.0</span>, </span>
+<span id="cb41-31"><a href="#cb41-31" aria-hidden="true" tabindex="-1"></a>  <span class="at">extent =</span> terra<span class="sc">::</span><span class="fu">ext</span>(</span>
+<span id="cb41-32"><a href="#cb41-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">min</span>(py<span class="sc">$</span>eke_variance<span class="sc">$</span>longitude<span class="sc">$</span>values),</span>
+<span id="cb41-33"><a href="#cb41-33" aria-hidden="true" tabindex="-1"></a>    <span class="fu">max</span>(py<span class="sc">$</span>eke_variance<span class="sc">$</span>longitude<span class="sc">$</span>values),</span>
+<span id="cb41-34"><a href="#cb41-34" aria-hidden="true" tabindex="-1"></a>    <span class="fu">min</span>(py<span class="sc">$</span>eke_variance<span class="sc">$</span>latitude<span class="sc">$</span>values),</span>
+<span id="cb41-35"><a href="#cb41-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">max</span>(py<span class="sc">$</span>eke_variance<span class="sc">$</span>latitude<span class="sc">$</span>values)</span>
+<span id="cb41-36"><a href="#cb41-36" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb41-37"><a href="#cb41-37" aria-hidden="true" tabindex="-1"></a>  <span class="at">crs =</span> <span class="st">"EPSG:4326"</span></span>
+<span id="cb41-38"><a href="#cb41-38" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb41-39"><a href="#cb41-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-40"><a href="#cb41-40" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 3: Apply the New Function to All Variables ---</span></span>
+<span id="cb41-41"><a href="#cb41-41" aria-hidden="true" tabindex="-1"></a><span class="co"># Now we just call our powerful new function for each variable.</span></span>
+<span id="cb41-42"><a href="#cb41-42" aria-hidden="true" tabindex="-1"></a>eke_variance_resampled <span class="ot">&lt;-</span> <span class="fu">process_and_remap_py</span>(py<span class="sc">$</span>eke_variance, <span class="st">"eke_variance"</span>, template_raster)</span>
+<span id="cb41-43"><a href="#cb41-43" aria-hidden="true" tabindex="-1"></a>mke_resampled <span class="ot">&lt;-</span> <span class="fu">process_and_remap_py</span>(py<span class="sc">$</span>ds_summary<span class="sc">$</span>mke, <span class="st">"mke"</span>, template_raster)</span>
+<span id="cb41-44"><a href="#cb41-44" aria-hidden="true" tabindex="-1"></a>tke_resampled <span class="ot">&lt;-</span> <span class="fu">process_and_remap_py</span>(py<span class="sc">$</span>ds_summary<span class="sc">$</span>tke, <span class="st">"tke"</span>, template_raster)</span>
+<span id="cb41-45"><a href="#cb41-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-46"><a href="#cb41-46" aria-hidden="true" tabindex="-1"></a><span class="co"># Let's print one of the final products to verify.</span></span>
+<span id="cb41-47"><a href="#cb41-47" aria-hidden="true" tabindex="-1"></a><span class="co"># The resolution should now be 1 x 1.</span></span>
+<span id="cb41-48"><a href="#cb41-48" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="st">"--- Final Resampled EKE Raster (1.0-degree resolution) ---"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "--- Final Resampled EKE Raster (1.0-degree resolution) ---"</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(eke_variance_resampled)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>class       : SpatRaster 
+size        : 5, 25, 1  (nrow, ncol, nlyr)
+resolution  : 1, 1  (x, y)
+extent      : 10, 35, 76, 81  (xmin, xmax, ymin, ymax)
+coord. ref. : lon/lat WGS 84 (EPSG:4326) 
+source(s)   : memory
+name        : eke_variance 
+min value   :     293.5577 
+max value   :    1284.6801 </code></pre>
+</div>
+</div>
+</section>
+<section id="step-4-visualize-the-final-maps" class="level2">
+<h2 class="anchored" data-anchor-id="step-4-visualize-the-final-maps">Step 4: Visualize the final maps</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Devtools to install the high-resolution map data package from its source</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a><span class="co"># devtools::install_github("ropensci/rnaturalearthhires")</span></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Acquire all Norwegian state-level polygons using the function: ne_states().</span></span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>norway_territories <span class="ot">&lt;-</span> <span class="fu">ne_states</span>(<span class="at">country =</span> <span class="st">"Norway"</span>, <span class="at">returnclass =</span> <span class="st">"sf"</span>)</span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Now, filter that collection to get only the feature named "Svalbard"</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>svalbard_sf <span class="ot">&lt;-</span> norway_territories <span class="sc">|&gt;</span></span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(name <span class="sc">==</span> <span class="st">"Svalbard"</span>)</span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Get the bounding box of the Svalbard polygon</span></span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>svalbard_bbox <span class="ot">&lt;-</span> <span class="fu">st_bbox</span>(svalbard_sf)</span>
+<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-14"><a href="#cb45-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert the raster to a data frame for plotting with ggplot2</span></span>
+<span id="cb45-15"><a href="#cb45-15" aria-hidden="true" tabindex="-1"></a>eke_variance_resampled_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(eke_variance_resampled, <span class="at">xy =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb45-16"><a href="#cb45-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-17"><a href="#cb45-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Create the final map with the new contour layer</span></span>
+<span id="cb45-18"><a href="#cb45-18" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb45-19"><a href="#cb45-19" aria-hidden="true" tabindex="-1"></a>  <span class="co"># First, draw the EKE raster data</span></span>
+<span id="cb45-20"><a href="#cb45-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_raster</span>(<span class="at">data =</span> eke_variance_resampled_df, <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> y, <span class="at">fill =</span> eke_variance)) <span class="sc">+</span></span>
+<span id="cb45-21"><a href="#cb45-21" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb45-22"><a href="#cb45-22" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Next, draw the Svalbard outline on top</span></span>
+<span id="cb45-23"><a href="#cb45-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> svalbard_sf, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"white"</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb45-24"><a href="#cb45-24" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb45-25"><a href="#cb45-25" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Apply color scale and labels</span></span>
+<span id="cb45-26"><a href="#cb45-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_c</span>(<span class="at">name =</span> <span class="st">"EKE Variance</span><span class="sc">\n</span><span class="st">(m²/s²)²)"</span>) <span class="sc">+</span></span>
+<span id="cb45-27"><a href="#cb45-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb45-28"><a href="#cb45-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Storm Track Activity over Svalbard"</span>,</span>
+<span id="cb45-29"><a href="#cb45-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"January 2022 | Variance of 2-6 day band-pass filtered EKE at 850 hPa"</span>,</span>
+<span id="cb45-30"><a href="#cb45-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Longitude"</span>,</span>
+<span id="cb45-31"><a href="#cb45-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Latitude"</span></span>
+<span id="cb45-32"><a href="#cb45-32" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb45-33"><a href="#cb45-33" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb45-34"><a href="#cb45-34" aria-hidden="true" tabindex="-1"></a>  <span class="co"># IMPORTANT: Set the plot's coordinate system and limits</span></span>
+<span id="cb45-35"><a href="#cb45-35" aria-hidden="true" tabindex="-1"></a>  <span class="co"># We add a small buffer (e.g., +/- 1 degree) for a nice margin</span></span>
+<span id="cb45-36"><a href="#cb45-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(</span>
+<span id="cb45-37"><a href="#cb45-37" aria-hidden="true" tabindex="-1"></a>    <span class="at">xlim =</span> <span class="fu">c</span>(svalbard_bbox[<span class="st">"xmin"</span>], svalbard_bbox[<span class="st">"xmax"</span>]),</span>
+<span id="cb45-38"><a href="#cb45-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">ylim =</span> <span class="fu">c</span>(svalbard_bbox[<span class="st">"ymin"</span>] <span class="sc">+</span> <span class="dv">1</span>, svalbard_bbox[<span class="st">"ymax"</span>]),</span>
+<span id="cb45-39"><a href="#cb45-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">expand =</span> <span class="cn">FALSE</span></span>
+<span id="cb45-40"><a href="#cb45-40" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb45-41"><a href="#cb45-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="01_task1_eke_climatology_files/figure-html/visualization-EKE-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb46"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>mke_resampled_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(mke_resampled, <span class="at">xy =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_raster</span>(<span class="at">data =</span> mke_resampled_df, <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> y, <span class="at">fill =</span> mke)) <span class="sc">+</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> svalbard_sf, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"white"</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_c</span>(<span class="at">name =</span> <span class="st">"MKE</span><span class="sc">\n</span><span class="st">(m²/s²)"</span>) <span class="sc">+</span></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Mean Kinetic Energy (MKE) over Svalbard"</span>,</span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"January 2022 | Energy of the time-averaged flow at 850 hPa"</span>,</span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Longitude"</span>,</span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Latitude"</span></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(</span>
+<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">xlim =</span> <span class="fu">c</span>(svalbard_bbox[<span class="st">"xmin"</span>], svalbard_bbox[<span class="st">"xmax"</span>]),</span>
+<span id="cb46-18"><a href="#cb46-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">ylim =</span> <span class="fu">c</span>(svalbard_bbox[<span class="st">"ymin"</span>] <span class="sc">+</span> <span class="dv">1</span>, svalbard_bbox[<span class="st">"ymax"</span>]),</span>
+<span id="cb46-19"><a href="#cb46-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">expand =</span> <span class="cn">FALSE</span></span>
+<span id="cb46-20"><a href="#cb46-20" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb46-21"><a href="#cb46-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="01_task1_eke_climatology_files/figure-html/visualization-MKE-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert the raster to a data frame for plotting with ggplot2</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>tke_resampled_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(tke_resampled, <span class="at">xy =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Create the final map with the new contour layer</span></span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a>  <span class="co"># First, draw the EKE raster data</span></span>
+<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_raster</span>(<span class="at">data =</span> tke_resampled_df, <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> y, <span class="at">fill =</span> tke)) <span class="sc">+</span></span>
+<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Next, draw the Svalbard outline on top</span></span>
+<span id="cb47-10"><a href="#cb47-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> svalbard_sf, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"white"</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb47-11"><a href="#cb47-11" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb47-12"><a href="#cb47-12" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Apply color scale and labels</span></span>
+<span id="cb47-13"><a href="#cb47-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis_c</span>(<span class="at">name =</span> <span class="st">"TzKE</span><span class="sc">\n</span><span class="st">(m²/s²)"</span>) <span class="sc">+</span></span>
+<span id="cb47-14"><a href="#cb47-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb47-15"><a href="#cb47-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Total Kinetic Energy (TKE) over Svalbard"</span>,</span>
+<span id="cb47-16"><a href="#cb47-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"January 2022 | Total mean kinetic energy (MKE + EKE) at 850 hPa"</span>,</span>
+<span id="cb47-17"><a href="#cb47-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Longitude"</span>,</span>
+<span id="cb47-18"><a href="#cb47-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Latitude"</span></span>
+<span id="cb47-19"><a href="#cb47-19" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb47-20"><a href="#cb47-20" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb47-21"><a href="#cb47-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># IMPORTANT: Set the plot's coordinate system and limits</span></span>
+<span id="cb47-22"><a href="#cb47-22" aria-hidden="true" tabindex="-1"></a>  <span class="co"># We add a small buffer (e.g., +/- 1 degree) for a nice margin</span></span>
+<span id="cb47-23"><a href="#cb47-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(</span>
+<span id="cb47-24"><a href="#cb47-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">xlim =</span> <span class="fu">c</span>(svalbard_bbox[<span class="st">"xmin"</span>], svalbard_bbox[<span class="st">"xmax"</span>]),</span>
+<span id="cb47-25"><a href="#cb47-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">ylim =</span> <span class="fu">c</span>(svalbard_bbox[<span class="st">"ymin"</span>] <span class="sc">+</span> <span class="dv">1</span>, svalbard_bbox[<span class="st">"ymax"</span>]),</span>
+<span id="cb47-26"><a href="#cb47-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">expand =</span> <span class="cn">FALSE</span></span>
+<span id="cb47-27"><a href="#cb47-27" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb47-28"><a href="#cb47-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="01_task1_eke_climatology_files/figure-html/visualization-TKE-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
 </section>
 
 </main>

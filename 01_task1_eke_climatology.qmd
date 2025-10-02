@@ -3,9 +3,10 @@ title: "Task 1: Arctic Storminess Climatology"
 author: Francesco Lucano
 format: html
 engine: knitr
+toc: true
 ---
 
-### Setup
+# Setup
 
 This first R code chunk loads the `reticulate` library and configures a dedicated Python virtual environment for this project. This only needs to be run completely once.
 
@@ -15,6 +16,9 @@ library(reticulate)
 library(tidyverse)
 library(terra)
 library(sf)
+library(rnaturalearth)
+library(dplyr)
+library(devtools)
 
 # 1. Define the name for our Python virtual environment
 venv_name <- "arctic-env"
@@ -40,225 +44,407 @@ py_install(
     "numpy",      # For numerical operations
     "xarray",     # The key library for working with NetCDF files
     "netcdf4",    # A dependency for xarray to read NetCDF files
-    "h5netcdf"    # Another dependency for reading NetCDF files
+    "h5netcdf",   # Another dependency for reading NetCDF files
+    "cdsapi",     # API to download ERA5 data
+    "scipy"       # Scientific computation
   ),
   envname = venv_name
 )
 ```
 
+# EKE, TKE and MKE 850hPa January 2022 test
 
-### Test
-
-```{r download-data-test}
-# Create a 'data' directory if it's not already there
-if (!dir.exists("data")) {
-  dir.create("data")
-}
-
-# Define the URL and the local destination file path
-data_url <- "https://raw.githubusercontent.com/geco-bern/agds_book/refs/heads/main/book/data/demo_data.nc"
-netcdf_file <- "data/era5_sample.nc"
-
-# Download the file only if we don't have it yet
-if (!file.exists(netcdf_file)) {
-  download.file(
-    url = data_url,
-    destfile = netcdf_file,
-    mode = "wb"  # Use "write binary" mode for non-text files like NetCDF
-  )
-}
-
-# Print the path to confirm
-print(netcdf_file)
-```
-
-```{python test}
-# Import the xarray library
+```{python API-request}
+import cdsapi
+import os
 import xarray as xr
-
-# Use the 'r' object to access the 'netcdf_file' path from our R environment
-# and open the dataset
-ds = xr.open_dataset(r.netcdf_file)
-
-# Print the dataset object to see a summary of its contents
-print(ds)
-```
-
-```{python test-data-extraction}
-# Extract the 2m temperature variable as a NumPy array.
-t2m_data = ds['t2m'].values
-
-# Extract the coordinate arrays
-lat_coords = ds['latitude'].values
-lon_coords = ds['longitude'].values
-```
-
-```{r raster_test}
-# The py$ object is the bridge from R to Python.
-# It lets us access any object created in the Python session.
-# reticulate automatically converts the NumPy arrays to R arrays/vectors.
-
-# Create a terra SpatRaster object from the Python objects
-era5_raster <- terra::rast(
-  py$t2m_data, 
-  ext = terra::ext(min(py$lon_coords), max(py$lon_coords), min(py$lat_coords), max(py$lat_coords))
-)
-
-# ERA5 data uses the standard WGS84 geographic coordinate system.
-terra::crs(era5_raster) <- "EPSG:4326"
-
-# Print the raster object to inspect its properties in R
-print(era5_raster)
-```
-
-```{r remap-raster-1°-grid}
-# 1. Create a blank template raster with our target 1.0 x 1.0 degree resolution with the same spatial extent as our original raster.
-template_raster <- terra::rast(
-  resolution = 1.0, 
-  extent = terra::ext(era5_raster),
-  crs = "EPSG:4326"
-)
-
-# 2. Resample the original, high-resolution raster to the template's grid.
-# The 'bilinear' method is a standard choice for resampling continuous data like temperature.
-era5_resampled <- terra::resample(era5_raster, template_raster, method = "bilinear")
-
-# 3. Print the new raster to confirm its properties.
-# The resolution should be 1 x 1 now.
-print(era5_resampled)
-```
-
-The sample file we've been using to test our workflow contains data for only a single moment in time. To perform a decomposition, we need a time series.
-
-To solve this, we will first create a realistic synthetic dataset in Python. This will be a temporary xarray object with a time dimension and u10/v10 variables. This allows us to build and test the decomposition code perfectly. Once the code is working, we can simply apply it to our real, multi-year ERA5 data.
-
-This Python chunk uses numpy and xarray to create a sample dataset that mimics a year of daily wind data over a small grid. We've added a sine wave to the random data to simulate a seasonal cycle, which will help us see the effect of our calculations.
-
-```{python synthetic-time-series}
+from scipy import signal
 import numpy as np
-import pandas as pd
-import xarray as xr
 
-# Define the dimensions of our synthetic data
-time_coords = pd.to_datetime(pd.date_range(start='2022-01-01', periods=365, freq='D'))
-lat_coords = np.arange(78, 80, 0.25)
-lon_coords = np.arange(15, 20, 0.25)
+# Define the final path where we want the file to be
+final_path = os.path.join('data', 'era5_850hpa_2022_01_svalbard.nc')
 
-# Create a seasonal cycle (sine wave)
-seasonal_cycle = np.sin(np.linspace(0, 2 * np.pi, 365))
+# First, check if the file already exists at the final destination
+if not os.path.exists(final_path):
+    print(f"File not found at {final_path}. Starting download from CDS...")
+    c = cdsapi.Client()
 
-# Create random wind data and add the seasonal cycle
-# We need to reshape the seasonal cycle to match the data dimensions
-u10_data = np.random.randn(365, len(lat_coords), len(lon_coords)) + seasonal_cycle[:, np.newaxis, np.newaxis]
-v10_data = np.random.randn(365, len(lat_coords), len(lon_coords)) + seasonal_cycle[:, np.newaxis, np.newaxis]
-
-# Create the xarray Dataset
-ds_synthetic = xr.Dataset(
-    data_vars={
-        'u10': (('time', 'latitude', 'longitude'), u10_data),
-        'v10': (('time', 'latitude', 'longitude'), v10_data)
-    },
-    coords={
-        'time': time_coords,
-        'latitude': lat_coords,
-        'longitude': lon_coords
+    dataset = "reanalysis-era5-pressure-levels"
+    request = {
+        "product_type": "reanalysis",
+        "variable": [
+            "u_component_of_wind", "v_component_of_wind"
+        ],
+        "year": "2022",
+        "month": "01",
+        "day": [
+            "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+            "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+            "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"
+        ],
+        "time": [
+            "00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00",
+            "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00",
+            "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00",
+            "21:00", "22:00", "23:00"
+        ],
+        "pressure_level": "850",
+        "format": "netcdf",
+        "area": [81, 10, 76, 35]
     }
+    
+    # Retrieve the data AND download it to the final path in one step by adding .download(target=final_path)
+    c.retrieve(dataset, request).download(target=final_path)
+    
+    print(f"Data successfully downloaded to {final_path}")
+else:
+    print(f"File already exists at {final_path}. Skipping download.")
+```
+
+```{python filtering}
+# --- PART 1: Define the New, Robust Filter Function ---
+def bandpass_filter(ds, u_var, v_var, time_dim, fs, lowcut_days, highcut_days, order=5):
+    """
+    Applies a robust, detrending band-pass filter to u and v components of an xarray Dataset.
+    Uses a simple loop for stability and returns the Dataset with eddy components.
+    """
+    print("Designing the filter...")
+    # Design the filter once
+    lowcut_freq = 1 / lowcut_days
+    highcut_freq = 1 / highcut_days
+    b, a = signal.butter(order, [lowcut_freq, highcut_freq], btype='band', fs=fs)
+
+    # Get data as numpy arrays
+    u_data = ds[u_var].values.astype('float64')
+    v_data = ds[v_var].values.astype('float64')
+    
+    # Create empty arrays for results
+    u_eddy_data = np.empty_like(u_data)
+    v_eddy_data = np.empty_like(v_data)
+
+    print("Applying filter cell by cell. This may take a moment...")
+    # Loop through each spatial grid cell
+    for lat_idx in range(u_data.shape[1]):
+        for lon_idx in range(u_data.shape[2]):
+            # Detrend and filter the time series for this cell
+            u_filtered = signal.filtfilt(b, a, signal.detrend(u_data[:, lat_idx, lon_idx]))
+            v_filtered = signal.filtfilt(b, a, signal.detrend(v_data[:, lat_idx, lon_idx]))
+            
+            # Store the result
+            u_eddy_data[:, lat_idx, lon_idx] = u_filtered
+            v_eddy_data[:, lat_idx, lon_idx] = v_filtered
+    
+    print("Filtering complete.")
+
+    # Add the results back to the original dataset
+    ds['u_eddy'] = ((time_dim, 'latitude', 'longitude'), u_eddy_data)
+    ds['v_eddy'] = ((time_dim, 'latitude', 'longitude'), v_eddy_data)
+    
+    return ds
+
+# --- PART 2: Load Data and Apply the Function ---
+# Load the dataset
+ds_real = xr.open_dataset('data/era5_850hpa_2022_01_svalbard.nc').squeeze()
+
+# Define parameters
+fs_samples_per_day = 24
+lowcut_period_days = 6.0
+highcut_period_days = 2.0
+
+# Call the self-contained function
+ds_real_filtered = bandpass_filter(
+    ds=ds_real,
+    u_var='u',
+    v_var='v',
+    time_dim='valid_time',
+    fs=fs_samples_per_day,
+    lowcut_days=lowcut_period_days,
+    highcut_days=highcut_period_days
 )
 
-print("Created synthetic dataset:")
-print(ds_synthetic)
+# --- PART 3: Sanity Check ---
+print("\nSanity Check of filtered 'u_eddy' values:")
+print(f"  Min: {ds_real_filtered['u_eddy'].min().values:.2f}")
+print(f"  Max: {ds_real_filtered['u_eddy'].max().values:.2f}")
+print(f"  Mean: {ds_real_filtered['u_eddy'].mean().values:.2f}")
 ```
 
-Now, using our synthetic dataset, we'll calculate the time-mean and eddy component using 2-6 day bandpass filter. For this test, we will implement the core concept by using a 30-day rolling mean to represent the "long-term mean component". Subtracting this mean from the instantaneous wind gives us the "eddy component" representing shorter-term fluctuations.
+**\## 1. The `bandpass_filter` Function**
 
-```{python reynold-decomposition-test}
-# Use our synthetic dataset 'ds_synthetic'
-window_days = 30
+First, we defined a Python function.
 
-# 1. Calculate the time-mean component using a rolling average
-# center=True ensures the mean is calculated for the window centered on each day
-u_mean = ds_synthetic['u10'].rolling(time=window_days, center=True).mean()
-v_mean = ds_synthetic['v10'].rolling(time=window_days, center=True).mean()
-
-# 2. Calculate the eddy component by subtracting the mean
-# u' = u - u_mean
-u_eddy = ds_synthetic['u10'] - u_mean
-v_eddy = ds_synthetic['v10'] - v_mean
-
-# Add these new eddy components to our dataset
-ds_synthetic['u_eddy'] = u_eddy
-ds_synthetic['v_eddy'] = v_eddy
+```         
+def bandpass_filter(data_array, fs, lowcut_days, highcut_days, order=5):     # ... code inside ...     return filtered_data 
 ```
 
-```{python, eke-calculation-test}
+**Why a function?** We need to perform the exact same filtering operation on both the `u` and `v` wind components. Encapsulating the logic in a function makes our code **reusable, readable, and less prone to errors** from copy-pasting.
+
+**\## 2. The Function's Inputs (Parameters)**
+
+Let's look at the function's "control knobs":
+
+-   `data_array`: This is the input data we want to filter (e.g., the `xarray` DataArray containing our `u` wind component).
+
+-   `fs`: This stands for **sampling frequency**. Think of it as frames per second in a video. It tells the filter how many data points we have per time unit. Since our filter is defined in **days** (a 2-6 **day** band) and our data is **hourly**, we have **24 samples per day**. So, `fs = 24`.
+
+-   `lowcut_days` and `highcut_days`: These are the edges of our "band," directly from your proposal. We set them to `6.0` and `2.0`. This tells the filter we want to *keep* the signals with a period *between* 2 and 6 days.
+
+-   `order=5`: This controls the "steepness" of the filter. A higher order creates a sharper cutoff between the signals we keep and those we reject. An order of 5 is a robust, standard choice that provides a clean separation.
+
+**\## 3. Inside the Function: The "How"**
+
+This is where the scientific computation happens.
+
+A. Designing the Filter
+
+```         
+from scipy import signal  # ... b, a = signal.butter(order, [low, high], btype='band') 
+```
+
+Digital filters are defined by a set of mathematical coefficients. This line uses the `scipy.signal.butter` function to design a **Butterworth filter**, which is a standard type known for being very stable and not distorting the signal in the "passband" (the 2-6 day range we want to keep). The function takes our parameters and calculates the necessary coefficients, which it returns as `b` and `a`.
+
+B. Applying the Filter
+
+```         
+lambda x: signal.filtfilt(b, a, signal.detrend(x))
+```
+
+This is the core operation. The `signal.filtfilt` function takes the filter coefficients (`b`, `a`) and applies them to the data (`x`). The reason we use `filtfilt` ("filter-filter") is crucial:
+
+-   It filters the data once in the forward direction.
+
+-   Then, it filters the resulting signal again in the backward direction.
+
+This two-way pass **perfectly corrects for any time lag (phase shift)** that a normal filter would introduce. This ensures that the peaks and troughs in our filtered storm signal are perfectly aligned in time with the original data. The data is also detrended with `signal.detrend()` prior to filtering to remove any linear trends that could cause filter instability.
+
+C. Applying Across the Entire grid
+
+```         
+filtered_data = xr.apply_ufunc(...) 
+```
+
+This is the most powerful part of the code. The `filtfilt` function is designed to work on a simple, 1D time series. But our data is a 3D grid (time, latitude, longitude).
+
+`xr.apply_ufunc` is `xarray`'s magic wand for this problem. It intelligently applies the 1D `filtfilt` function to every single time series at each individual latitude/longitude grid point. It handles all the looping for us in a highly optimized way. The `input_core_dims=[['time']]` argument is our instruction to `xarray`, telling it that `filtfilt` operates along the `time` dimension.
+
+**\## 4. Putting It All Together**
+
+Finally, we call our function:
+
+```         
+u_eddy = bandpass_filter(ds_real['u'], fs_samples_per_day, ...) v_eddy = bandpass_filter(ds_real['v'], fs_samples_per_day, ...) 
+```
+
+This executes the whole process. It feeds the raw `u` and `v` wind data into our function. The function then designs the filter and applies it across the entire grid, returning the perfectly isolated eddy components (u' and v'). These are now ready for the final EKE calculation.
+
+## Step 1: Calculate EKE, MKE and TKE
+
+```{python eke-calculation}
+# 'ds_real' is the xarray Dataset from the previous chunk, containing u_eddy and v_eddy
+
+# 1. Calculate EKE using the eddy components
 # EKE = 0.5 * (u'^2 + v'^2)
-eke = 0.5 * (np.square(ds_synthetic['u_eddy']) + np.square(ds_synthetic['v_eddy']))
+eke = 0.5 * (np.square(ds_real['u_eddy']) + np.square(ds_real['v_eddy']))
 
-# Add EKE as a new data variable in our dataset
-ds_synthetic['eke'] = eke
+# 2. Add EKE as a new data variable to the dataset
+ds_real['eke'] = eke
 
-# Let's inspect the results for a single grid point to see our new variables
-# We select one point using isel() and convert it to a pandas DataFrame for nice printing
-print("Sample of calculated variables for a single grid point:")
-print(ds_synthetic[['u10', 'u_eddy', 'eke']].isel(latitude=5, longitude=10).to_pandas().head())
+# 3. Print the dataset to confirm the new 'eke' variable is present
+print(ds_real)
+
+# 4. Calculate the time-averaged wind components (u_bar, v_bar)
+# We take the mean of the original wind fields across the 'valid_time' dimension.
+u_bar = ds_real['u'].mean(dim='valid_time')
+v_bar = ds_real['v'].mean(dim='valid_time')
+
+# 5. Calculate Mean Kinetic Energy (MKE) using the formula
+mke = 0.5 * (np.square(u_bar) + np.square(v_bar))
+
+# 6. Calculate the time-average of our previously calculated EKE
+eke_mean = ds_real['eke'].mean(dim='valid_time')
+
+# 7. Calculate the time-average of Total Kinetic Energy (TKE)
+tke = mke + eke_mean
+
+# 8. Combine these into a final summary dataset for easy access
+ds_summary = xr.Dataset({
+    'mke': mke, 
+    'eke_mean': eke_mean, 
+    'tke': tke
+})
+
+# Rename the 'eke_mean' to just 'eke' for simplicity, as it's the mean EKE
+ds_summary = ds_summary.rename({'eke_mean': 'eke'})
+
+print("Summary of Monthly-Mean Kinetic Energy Components (m²/s²):")
+print(ds_summary)
 ```
 
-The `.rolling(time=30, center=True)` part is creating a 30-day "sliding window" that moves along the time series. To calculate the mean for any given day, it needs to look at the full window of data centered on that day.
+## Step 2: Calculate EKE variance
 
--   Window Size: time=30 means the window is 30 days wide.
+```{python eke-variance}
+# 'ds_real' now contains our 'eke' variable
 
--   Centering: center=True means for any given day (e.g., January 16th), it will grab the 15 days before it and the 14 days after it to calculate the mean.
+# Calculate the variance across the time dimension ('valid_time')
+# This leaves us with a 2D grid of (latitude, longitude)
+eke_variance = ds_real['eke'].var(dim='valid_time')
 
-```{python, eke-variance-test}
-# Calculate the variance of EKE across the 'time' dimension
-# This leaves us with a 2D DataArray of (latitude, longitude)
-eke_variance = ds_synthetic['eke'].var(dim='time')
-
-# Print the result to confirm it's now a 2D grid
-print("EKE Variance Data Array:")
+# Print the final 2D DataArray
+print("Final 2D EKE Variance grid:")
 print(eke_variance)
 ```
 
-```{r raster-creation-test}
-# Access the Python object `eke_variance` from R
-# reticulate converts the xarray DataArray into an R matrix/array
-eke_variance_r_matrix <- py$eke_variance$values
+## Step 3: Conversion and remapping
 
-# The matrix from Python is often oriented differently than what terra expects.
-# We use t() to transpose it (swap rows and columns).
-eke_variance_r_matrix_t <- t(eke_variance_r_matrix)
+```{r}
+# --- PART 1: Define the Integrated Function ---
+# This single function handles both conversion from Python and remapping.
+process_and_remap_py <- function(py_xarray_object, layer_name, template_raster) {
+  
+  # Step A: Convert the Python object to a high-resolution R SpatRaster
+  high_res_raster <- terra::rast(
+    t(py_xarray_object$values),
+    ext = terra::ext(
+      min(py_xarray_object$longitude$values),
+      max(py_xarray_object$longitude$values),
+      min(py_xarray_object$latitude$values),
+      max(py_xarray_object$latitude$values)
+    ),
+    crs = "EPSG:4326"
+  )
+  
+  # Step B: Remap the high-resolution raster to the template grid
+  resampled_raster <- terra::resample(high_res_raster, template_raster, method = "bilinear")
+  
+  # Set the final layer name
+  names(resampled_raster) <- layer_name
+  
+  # Return the final, remapped raster
+  return(resampled_raster)
+}
 
-# Create the final SpatRaster object for mapping
-eke_variance_raster <- terra::rast(
-  eke_variance_r_matrix_t,
-  ext = terra::ext(min(py$lon_coords), max(py$lon_coords), min(py$lat_coords), max(py$lat_coords))
+# --- PART 2: Prepare the Target Grid (Blueprint) ---
+# We create the 1.0-degree blueprint once. All data will be remapped to this grid.
+template_raster <- terra::rast(
+  resolution = 1.0, 
+  extent = terra::ext(
+    min(py$eke_variance$longitude$values),
+    max(py$eke_variance$longitude$values),
+    min(py$eke_variance$latitude$values),
+    max(py$eke_variance$latitude$values)
+  ),
+  crs = "EPSG:4326"
 )
 
-# Set the CRS one last time
-terra::crs(eke_variance_raster) <- "EPSG:4326"
+# --- PART 3: Apply the New Function to All Variables ---
+# Now we just call our powerful new function for each variable.
+eke_variance_resampled <- process_and_remap_py(py$eke_variance, "eke_variance", template_raster)
+mke_resampled <- process_and_remap_py(py$ds_summary$mke, "mke", template_raster)
+tke_resampled <- process_and_remap_py(py$ds_summary$tke, "tke", template_raster)
 
-# Give the layer a descriptive name for our plot legend
-names(eke_variance_raster) <- "eke_variance"
-
-print("Final R SpatRaster object:")
-print(eke_variance_raster)
+# Let's print one of the final products to verify.
+# The resolution should now be 1 x 1.
+print("--- Final Resampled EKE Raster (1.0-degree resolution) ---")
+print(eke_variance_resampled)
 ```
 
-```{r test-map-visualizationins}
-# Convert the SpatRaster to a data frame for plotting with ggplot2
-eke_variance_df <- as.data.frame(eke_variance_raster, xy = TRUE)
+## Step 4: Visualize the final maps
 
-# Create the map
+```{r visualization-EKE}
+# Devtools to install the high-resolution map data package from its source
+# devtools::install_github("ropensci/rnaturalearthhires")
+
+# Acquire all Norwegian state-level polygons using the function: ne_states().
+norway_territories <- ne_states(country = "Norway", returnclass = "sf")
+
+# Now, filter that collection to get only the feature named "Svalbard"
+svalbard_sf <- norway_territories |>
+  filter(name == "Svalbard")
+
+# Get the bounding box of the Svalbard polygon
+svalbard_bbox <- st_bbox(svalbard_sf)
+
+# Convert the raster to a data frame for plotting with ggplot2
+eke_variance_resampled_df <- as.data.frame(eke_variance_resampled, xy = TRUE)
+
+# Create the final map with the new contour layer
 ggplot() +
-  geom_raster(data = eke_variance_df, aes(x = x, y = y, fill = eke_variance)) +
-  scale_fill_viridis_c(name = "EKE Variance\n(m²/s²)") +
+  # First, draw the EKE raster data
+  geom_raster(data = eke_variance_resampled_df, aes(x = x, y = y, fill = eke_variance)) +
+  
+  # Next, draw the Svalbard outline on top
+  geom_sf(data = svalbard_sf, fill = NA, color = "white", linewidth = 0.5) +
+  
+  # Apply color scale and labels
+  scale_fill_viridis_c(name = "EKE Variance\n(m²/s²)²)") +
   labs(
-    title = "Map of Storm Track Activity",
-    subtitle = "Calculated from variance of Eddy Kinetic Energy on synthetic data",
+    title = "Storm Track Activity over Svalbard",
+    subtitle = "January 2022 | Variance of 2-6 day band-pass filtered EKE at 850 hPa",
     x = "Longitude",
     y = "Latitude"
   ) +
-  coord_sf(crs = "EPSG:4326") +
+  
+  # IMPORTANT: Set the plot's coordinate system and limits
+  # We add a small buffer (e.g., +/- 1 degree) for a nice margin
+  coord_sf(
+    xlim = c(svalbard_bbox["xmin"], svalbard_bbox["xmax"]),
+    ylim = c(svalbard_bbox["ymin"] + 1, svalbard_bbox["ymax"]),
+    expand = FALSE
+  ) +
   theme_minimal()
 ```
 
+```{r visualization-MKE}
+mke_resampled_df <- as.data.frame(mke_resampled, xy = TRUE)
+
+ggplot() +
+  geom_raster(data = mke_resampled_df, aes(x = x, y = y, fill = mke)) +
+  
+  geom_sf(data = svalbard_sf, fill = NA, color = "white", linewidth = 0.5) +
+  
+  scale_fill_viridis_c(name = "MKE\n(m²/s²)") +
+  labs(
+    title = "Mean Kinetic Energy (MKE) over Svalbard",
+    subtitle = "January 2022 | Energy of the time-averaged flow at 850 hPa",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  
+  coord_sf(
+    xlim = c(svalbard_bbox["xmin"], svalbard_bbox["xmax"]),
+    ylim = c(svalbard_bbox["ymin"] + 1, svalbard_bbox["ymax"]),
+    expand = FALSE
+  ) +
+  theme_minimal()
+```
+
+```{r visualization-TKE}
+# Convert the raster to a data frame for plotting with ggplot2
+tke_resampled_df <- as.data.frame(tke_resampled, xy = TRUE)
+
+# Create the final map with the new contour layer
+ggplot() +
+  # First, draw the EKE raster data
+  geom_raster(data = tke_resampled_df, aes(x = x, y = y, fill = tke)) +
+  
+  # Next, draw the Svalbard outline on top
+  geom_sf(data = svalbard_sf, fill = NA, color = "white", linewidth = 0.5) +
+  
+  # Apply color scale and labels
+  scale_fill_viridis_c(name = "TzKE\n(m²/s²)") +
+  labs(
+    title = "Total Kinetic Energy (TKE) over Svalbard",
+    subtitle = "January 2022 | Total mean kinetic energy (MKE + EKE) at 850 hPa",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  
+  # IMPORTANT: Set the plot's coordinate system and limits
+  # We add a small buffer (e.g., +/- 1 degree) for a nice margin
+  coord_sf(
+    xlim = c(svalbard_bbox["xmin"], svalbard_bbox["xmax"]),
+    ylim = c(svalbard_bbox["ymin"] + 1, svalbard_bbox["ymax"]),
+    expand = FALSE
+  ) +
+  theme_minimal()
+```
