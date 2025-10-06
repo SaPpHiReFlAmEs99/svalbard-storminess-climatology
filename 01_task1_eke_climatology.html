@@ -122,7 +122,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="setup" class="level1">
 <h1>Setup</h1>
-<p>This first R code chunk loads the <code>reticulate</code> library and configures a dedicated Python virtual environment for this project. This only needs to be run completely once.</p>
+<p>A self-contained and reproducible computational environment was established as the foundation for the analysis.</p>
+<ul>
+<li><strong>Project Setup</strong>: The workflow was situated within an <strong>RStudio Project</strong> to ensure all file paths were relative and the project was portable. The R <strong><code>reticulate</code></strong> package was used to create and manage a dedicated Python virtual environment (<code>"arctic-env"</code>), ensuring all Python package dependencies are isolated and reproducible.</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the reticulate package</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(reticulate)</span>
@@ -209,6 +212,12 @@ NOTE: Python version was forced by use_python() function</code></pre>
 </section>
 <section id="eke-tke-and-mke-850hpa-january-2022-test" class="level1">
 <h1>EKE, TKE and MKE 850hPa January 2022 test</h1>
+<p><strong>Data Acquisition</strong>: The source data was programmatically downloaded from the Copernicus Climate Data Store (CDS) using the Python <strong><code>cdsapi</code></strong> library.</p>
+<ul>
+<li><p>The specific dataset requested was <strong><code>reanalysis-era5-pressure-levels</code></strong>.</p></li>
+<li><p>The variables <code>u_component_of_wind</code> and <code>v_component_of_wind</code> were downloaded at the <strong>850 hPa</strong> pressure level in NetCDF format.</p></li>
+<li><p>The downloaded data was loaded into a Python session as an <strong><code>xarray.Dataset</code></strong> object, which is ideal for handling labeled, multi-dimensional climate data.</p></li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cdsapi</span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
@@ -258,6 +267,12 @@ NOTE: Python version was forced by use_python() function</code></pre>
 <pre><code>File already exists at data\era5_850hpa_2022_01_svalbard.nc. Skipping download.</code></pre>
 </div>
 </div>
+<p>To isolate the transient eddy components (u′ and v′), a digital band-pass filter was applied.</p>
+<ul>
+<li><p><strong>Function Definition</strong>: A reusable Python function, <code>robust_bandpass_filter</code>, was created to encapsulate the filtering logic.</p></li>
+<li><p><strong>Filter Design</strong>: A 5th-order <strong>Butterworth filter</strong> was designed using the <code>scipy.signal.butter</code> function. The filter was configured with a passband corresponding to periods of <strong>2 to 6 days</strong>, consistent with the timescale of synoptic-scale storms. The sampling frequency (<code>fs</code>) was set to 24 to reflect the hourly resolution of the input data.</p></li>
+<li><p><strong>Filter Application</strong>: To ensure numerical stability, the time series at each grid cell was first <strong>detrended</strong> using <code>scipy.signal.detrend</code>. The Butterworth filter was then applied using <code>scipy.signal.filtfilt</code>, which performs a <strong>zero-phase filtering</strong> operation to prevent any temporal shift in the output data. This entire process was applied to each grid cell’s time series via a Python loop for maximum stability. The output of this step consists of two new <code>xarray.DataArray</code> variables, <code>u_eddy</code> and <code>v_eddy</code>.</p></li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 1: Define the New, Robust Filter Function ---</span></span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> bandpass_filter(ds, u_var, v_var, time_dim, fs, lowcut_days, highcut_days, order<span class="op">=</span><span class="dv">5</span>):</span>
@@ -377,6 +392,12 @@ Sanity Check of filtered 'u_eddy' values:</code></pre>
 <p>This executes the whole process. It feeds the raw <code>u</code> and <code>v</code> wind data into our function. The function then designs the filter and applies it across the entire grid, returning the perfectly isolated eddy components (u’ and v’). These are now ready for the final EKE calculation.</p>
 <section id="step-1-calculate-eke-mke-and-tke" class="level2">
 <h2 class="anchored" data-anchor-id="step-1-calculate-eke-mke-and-tke">Step 1: Calculate EKE, MKE and TKE</h2>
+<p>The three key kinetic energy indices were calculated in Python.</p>
+<ul>
+<li><p><strong>Eddy Kinetic Energy (EKE)</strong>: The instantaneous EKE was calculated at each grid cell for every time step from the eddy components. The result was stored as a new 3D <code>DataArray</code> named <code>eke</code>.</p></li>
+<li><p><strong>Mean Kinetic Energy (MKE)</strong>: The time-averaged wind components, u and v, were calculated by applying the <code>.mean(dim='valid_time')</code> method to the original <code>u</code> and <code>v</code> DataArrays. MKE was then calculated and resulted in a 2D DataArray.</p></li>
+<li><p><strong>Total Kinetic Energy (TKE)</strong>: The time-averaged EKE, was first calculated. The mean TKE was then computed as the sum of the two time-averaged components:.</p></li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 'ds_real' is the xarray Dataset from the previous chunk, containing u_eddy and v_eddy</span></span>
 <span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -459,6 +480,10 @@ Data variables:
 </section>
 <section id="step-2-calculate-eke-variance" class="level2">
 <h2 class="anchored" data-anchor-id="step-2-calculate-eke-variance">Step 2: Calculate EKE variance</h2>
+<p>The primary storminess metric was calculated as the final analytical step in Python.</p>
+<ul>
+<li>The <strong>variance of EKE</strong> was computed by applying the <code>.var(dim='valid_time')</code> method to the 3D <code>eke</code> DataArray. This operation collapses the time dimension, resulting in a final 2D <code>xarray.DataArray</code> (<code>eke_variance</code>) which serves as the “fundamental metric for overall storm track activity.”</li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 'ds_real' now contains our 'eke' variable</span></span>
 <span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -497,6 +522,16 @@ Coordinates:
 </section>
 <section id="step-3-conversion-and-remapping" class="level2">
 <h2 class="anchored" data-anchor-id="step-3-conversion-and-remapping">Step 3: Conversion and remapping</h2>
+<p>The final 2D data products were transferred from Python to R for remapping and visualization.</p>
+<ul>
+<li><p><strong>Data Transfer</strong>: The <code>eke_variance</code>, <code>mke</code>, and <code>tke</code> <code>xarray</code> objects were accessed in R using <strong><code>reticulate</code></strong>’s <code>py$</code> accessor.</p></li>
+<li><p><strong>Remapping to Standard Grid</strong>: As required by your proposal for robust trend analysis, each data grid was remapped to a common <strong>1.0° x 1.0° grid</strong>. This was achieved by:</p>
+<ul>
+<li><p>First converting the Python objects into high-resolution <strong><code>terra::SpatRaster</code></strong> objects in R.</p></li>
+<li><p>Creating a blank 1.0° target grid (<code>template_raster</code>).</p></li>
+<li><p>Using the <strong><code>terra::resample()</code></strong> function with <code>bilinear</code> interpolation to project the high-resolution data onto the target grid.</p></li>
+</ul></li>
+</ul>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- PART 1: Define the Integrated Function ---</span></span>
 <span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a><span class="co"># This single function handles both conversion from Python and remapping.</span></span>
@@ -565,6 +600,9 @@ max value   :    1284.6801 </code></pre>
 </section>
 <section id="step-4-visualize-the-final-maps" class="level2">
 <h2 class="anchored" data-anchor-id="step-4-visualize-the-final-maps">Step 4: Visualize the final maps</h2>
+<p>The final, remapped <code>SpatRaster</code> objects were converted to <code>data.frame</code> objects.</p>
+<p>Publication-quality maps were generated using the <strong><code>ggplot2</code></strong> package, with <code>geom_raster</code> to display the energy data.</p>
+<p>A geographical outline of Svalbard was acquired using the <strong><code>rnaturalearth</code></strong> package and overlaid using <strong><code>geom_sf</code></strong> to provide essential context.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Devtools to install the high-resolution map data package from its source</span></span>
 <span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a><span class="co"># devtools::install_github("ropensci/rnaturalearthhires")</span></span>

@@ -8,51 +8,80 @@ toc: true
 
 # Setup
 
-This first R code chunk loads the `reticulate` library and configures a dedicated Python virtual environment for this project. This only needs to be run completely once.
+A self-contained and reproducible computational environment was established as the foundation for the analysis.
+
+-   **Project Setup**: The workflow was situated within an **RStudio Project** to ensure all file paths were relative and the project was portable. The R **`reticulate`** package was used to create and manage a dedicated Python virtual environment (`"arctic-env"`), ensuring all Python package dependencies are isolated and reproducible.
+
+```{r installation}
+# --- ONE-TIME INSTALLATION ---
+
+# -- R Packages --
+# Install all required R packages from CRAN
+install.packages(c(
+    "reticulate", "tidyverse", "terra", "sf", "rnaturalearth", 
+    "devtools", "future", "furrr", "glue", "progressr"
+))
+
+# Install the high-resolution map data package from GitHub
+# devtools::install_github("ropensci/rnaturalearthhires")
+
+
+# -- Python Environment and Packages --
+# Create the virtual environment if it doesn't already exist
+if (!reticulate::virtualenv_exists(envname = "arctic-env")) {
+    reticulate::virtualenv_create(envname = "arctic-env")
+}
+
+# Install all required Python packages into the new environment
+reticulate::py_install(
+    packages = c(
+        "numpy", "xarray", "netcdf4", "h5netcdf", 
+        "cdsapi", "scipy", "tqdm", "dask",
+    ),
+    envname = "arctic-env"
+)
+```
 
 ```{r setup-environment}
-# Load the reticulate package
+# Load R Libraries
 library(reticulate)
 library(tidyverse)
 library(terra)
 library(sf)
 library(rnaturalearth)
-library(dplyr)
-library(devtools)
+library(glue)
+library(future)
+library(furrr)
+library(progressr)
 
-# 1. Define the name for our Python virtual environment
-venv_name <- "arctic-env"
+# Configure Python Environment
+use_virtualenv("arctic-env", required = TRUE)
 
-# 2. Create the virtual environment if it doesn't already exist
-# This makes the script safely re-runnable
-if (!virtualenv_exists(venv_name)) {
-  virtualenv_create(venv_name)
-}
 
-# 3. Tell R to USE this virtual environment for all Python code
-use_virtualenv(venv_name, required = TRUE)
+# Define the absolute path to the data storage folder
+DATA_DIRECTORY <- "E:/ERA5_data"
 
-# 4. Verify the configuration
-# The output should show the Python path inside your new 'arctic-env'
-py_config()
+# Setting for more parallel downloads
+#plan(multisession, workers = 20)
 ```
 
-```{r install-py-packages}
-# Install Python packages into our virtual environment
-py_install(
-  packages = c(
-    "numpy",      # For numerical operations
-    "xarray",     # The key library for working with NetCDF files
-    "netcdf4",    # A dependency for xarray to read NetCDF files
-    "h5netcdf",   # Another dependency for reading NetCDF files
-    "cdsapi",     # API to download ERA5 data
-    "scipy"       # Scientific computation
-  ),
-  envname = venv_name
-)
+```{python test}
+import cupy as cp
+print(f"CuPy version: {cp.__version__}")
+print(f"CUDA available: {cp.cuda.is_available()}")
+print(f"GPU: {cp.cuda.runtime.getDeviceProperties(0)['name'].decode()}")
+print(f"GPU Memory: {cp.cuda.runtime.getDeviceProperties(0)['totalGlobalMem'] / 1e9:.1f} GB")
 ```
 
 # EKE, TKE and MKE 850hPa January 2022 test
+
+**Data Acquisition**: The source data was programmatically downloaded from the Copernicus Climate Data Store (CDS) using the Python **`cdsapi`** library.
+
+-   The specific dataset requested was **`reanalysis-era5-pressure-levels`**.
+
+-   The variables `u_component_of_wind` and `v_component_of_wind` were downloaded at the **850 hPa** pressure level in NetCDF format.
+
+-   The downloaded data was loaded into a Python session as an **`xarray.Dataset`** object, which is ideal for handling labeled, multi-dimensional climate data.
 
 ```{python API-request}
 import cdsapi
@@ -101,6 +130,16 @@ else:
     print(f"File already exists at {final_path}. Skipping download.")
 ```
 
+## Step 1: Reynolds decomposition via Band-Pass filtering
+
+To isolate the transient eddy components (u′ and v′), a digital band-pass filter was applied.
+
+-   **Function Definition**: A reusable Python function, `robust_bandpass_filter`, was created to encapsulate the filtering logic.
+
+-   **Filter Design**: A 5th-order **Butterworth filter** was designed using the `scipy.signal.butter` function. The filter was configured with a passband corresponding to periods of **2 to 6 days**, consistent with the timescale of synoptic-scale storms. The sampling frequency (`fs`) was set to 24 to reflect the hourly resolution of the input data.
+
+-   **Filter Application**: To ensure numerical stability, the time series at each grid cell was first **detrended** using `scipy.signal.detrend`. The Butterworth filter was then applied using `scipy.signal.filtfilt`, which performs a **zero-phase filtering** operation to prevent any temporal shift in the output data. This entire process was applied to each grid cell's time series via a Python loop for maximum stability. The output of this step consists of two new `xarray.DataArray` variables, `u_eddy` and `v_eddy`.
+
 ```{python filtering}
 # --- PART 1: Define the New, Robust Filter Function ---
 def bandpass_filter(ds, u_var, v_var, time_dim, fs, lowcut_days, highcut_days, order=5):
@@ -141,7 +180,9 @@ def bandpass_filter(ds, u_var, v_var, time_dim, fs, lowcut_days, highcut_days, o
     ds['v_eddy'] = ((time_dim, 'latitude', 'longitude'), v_eddy_data)
     
     return ds
+```
 
+```{python}
 # --- PART 2: Load Data and Apply the Function ---
 # Load the dataset
 ds_real = xr.open_dataset('data/era5_850hpa_2022_01_svalbard.nc').squeeze()
@@ -237,7 +278,15 @@ u_eddy = bandpass_filter(ds_real['u'], fs_samples_per_day, ...) v_eddy = bandpas
 
 This executes the whole process. It feeds the raw `u` and `v` wind data into our function. The function then designs the filter and applies it across the entire grid, returning the perfectly isolated eddy components (u' and v'). These are now ready for the final EKE calculation.
 
-## Step 1: Calculate EKE, MKE and TKE
+## Step 2: Calculate EKE, MKE and TKE
+
+The three key kinetic energy indices were calculated in Python.
+
+-   **Eddy Kinetic Energy (EKE)**: The instantaneous EKE was calculated at each grid cell for every time step from the eddy components. The result was stored as a new 3D `DataArray` named `eke`.
+
+-   **Mean Kinetic Energy (MKE)**: The time-averaged wind components, u and v, were calculated by applying the `.mean(dim='valid_time')` method to the original `u` and `v` DataArrays. MKE was then calculated and resulted in a 2D DataArray.
+
+-   **Total Kinetic Energy (TKE)**: The time-averaged EKE, was first calculated. The mean TKE was then computed as the sum of the two time-averaged components:.
 
 ```{python eke-calculation}
 # 'ds_real' is the xarray Dataset from the previous chunk, containing u_eddy and v_eddy
@@ -280,7 +329,11 @@ print("Summary of Monthly-Mean Kinetic Energy Components (m²/s²):")
 print(ds_summary)
 ```
 
-## Step 2: Calculate EKE variance
+## Step 3: Calculate EKE variance
+
+The primary storminess metric was calculated as the final analytical step in Python.
+
+-   The **variance of EKE** was computed by applying the `.var(dim='valid_time')` method to the 3D `eke` DataArray. This operation collapses the time dimension, resulting in a final 2D `xarray.DataArray` (`eke_variance`) which serves as the "fundamental metric for overall storm track activity."
 
 ```{python eke-variance}
 # 'ds_real' now contains our 'eke' variable
@@ -295,6 +348,18 @@ print(eke_variance)
 ```
 
 ## Step 3: Conversion and remapping
+
+The final 2D data products were transferred from Python to R for remapping and visualization.
+
+-   **Data Transfer**: The `eke_variance`, `mke`, and `tke` `xarray` objects were accessed in R using **`reticulate`**'s `py$` accessor.
+
+-   **Remapping to Standard Grid**: As required by your proposal for robust trend analysis, each data grid was remapped to a common **1.0° x 1.0° grid**. This was achieved by:
+
+    -   First converting the Python objects into high-resolution **`terra::SpatRaster`** objects in R.
+
+    -   Creating a blank 1.0° target grid (`template_raster`).
+
+    -   Using the **`terra::resample()`** function with `bilinear` interpolation to project the high-resolution data onto the target grid.
 
 ```{r}
 # --- PART 1: Define the Integrated Function ---
@@ -349,6 +414,12 @@ print(eke_variance_resampled)
 ```
 
 ## Step 4: Visualize the final maps
+
+The final, remapped `SpatRaster` objects were converted to `data.frame` objects.
+
+Publication-quality maps were generated using the **`ggplot2`** package, with `geom_raster` to display the energy data.
+
+A geographical outline of Svalbard was acquired using the **`rnaturalearth`** package and overlaid using **`geom_sf`** to provide essential context.
 
 ```{r visualization-EKE}
 # Devtools to install the high-resolution map data package from its source
@@ -448,3 +519,458 @@ ggplot() +
   ) +
   theme_minimal()
 ```
+
+
+# 1979-present EKE, TKE and MKE 850hPa
+
+```{python single-download}
+import cdsapir
+import os
+import xarray as xr
+from scipy import signal
+import numpy as np
+
+# --- 1. CONFIGURATION ---
+# Access the DATA_DIRECTORY variable from your R configuration chunk
+data_dir = r.DATA_DIRECTORY
+
+# Create the directory on your hard disk if it doesn't exist
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
+    print(f"Created directory: {data_dir}")
+
+# Let's start with just two years to test the monthly download loop.
+# For the final run, you will change this to range(1958, 2025).
+YEARS_TO_DOWNLOAD = range(1958, 2024) 
+
+AREA_PAN_ARCTIC = [90, -180, 55, 180] # North, West, South, East
+
+# --- 2. NESTED LOOP AND DOWNLOAD ---
+c = cdsapi.Client()
+print("Starting batch download process (one file per month)...")
+
+# Outer loop for each year
+for year in YEARS_TO_DOWNLOAD:
+    # Inner loop for each month (from 1 to 12)
+    for month in range(1, 13):
+        # Format the month with a leading zero (e.g., 1 -> "01", 10 -> "10")
+        month_str = f"{month:02d}"
+        
+        # Create a specific filename for each YEAR and MONTH
+        final_path = os.path.join(data_dir, f"era5_850hpa_panarctic_{year}-{month_str}.nc")
+        
+        # Check if this specific monthly file already exists
+        if not os.path.exists(final_path):
+            print(f"--- Downloading data for: {year}-{month_str} ---")
+            
+            request = {
+                "product_type": "reanalysis",
+                "variable": ["u_component_of_wind", "v_component_of_wind"],
+                "year": str(year),
+                "month": month_str, # Dynamically set the month
+                "day": [
+                    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+                    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+                    "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", 
+                    "31"
+                ],
+                "time": [
+                    "00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00",
+                    "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00",
+                    "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00",
+                    "21:00", "22:00", "23:00"
+                ],
+                "pressure_level": "850",
+                "format": "netcdf",
+                "area": AREA_PAN_ARCTIC
+            }
+            
+            # Use a try-except block to handle potential API errors for a single month
+            try:
+                c.retrieve('reanalysis-era5-pressure-levels', request).download(target=final_path)
+                print(f"Successfully downloaded to {final_path}")
+            except Exception as e:
+                print(f"!!! FAILED to download data for {year}-{month_str}. Error: {e}")
+
+        else:
+            print(f"--- File for {year}-{month_str} already exists. Skipping. ---")
+
+print("\nFull data download process complete for the specified years.")
+```
+
+```{r}
+YEARS_TO_DOWNLOAD <- 1958:2024
+AREA_OF_INTEREST <- c(90, -180, 55, 180)
+```
+
+```{python parallel-download}
+import cdsapi
+import os
+import concurrent.futures
+from tqdm.auto import tqdm
+
+# --- 1. CONFIGURATION ---
+# Get the configuration variables from your R 'configuration' chunk
+data_dir = r.DATA_DIRECTORY
+years_to_download = r.YEARS_TO_DOWNLOAD
+area_of_interest = r.AREA_OF_INTEREST
+
+# Set the number of parallel download
+MAX_WORKERS = 20
+
+# --- 2. DEFINE THE DOWNLOAD FUNCTION FOR A SINGLE JOB ---
+def download_era5_month(job_info):
+    year, month = job_info # Unpack the year and month for this job
+    month_str = f"{month:02d}"
+    final_path = os.path.join(data_dir, f"era5_850hpa_panarctic_{year}-{month_str}.nc")
+
+    if os.path.exists(final_path):
+        return f"Skipped (already exists): {year}-{month_str}"
+
+    # Each worker needs its own API client instance
+    c = cdsapi.Client(quiet=True, progress=False)
+    
+    request = {
+        'product_type': 'reanalysis', 'variable': ['u_component_of_wind', 'v_component_of_wind'],
+        'year': str(int(year)), 'month': month_str,
+        'day': ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31'],
+        'time': ['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'],
+        'pressure_level': '850', 'format': 'netcdf', 'area': area_of_interest
+    }
+    
+    try:
+        c.retrieve('reanalysis-era5-pressure-levels', request).download(target=final_path)
+        return f"Success: {year}-{month_str}"
+    except Exception as e:
+        return f"!!! FAILED: {year}-{month_str}. Error: {e}"
+
+# --- 3. CREATE THE LIST OF JOBS ---
+jobs = []
+for year in years_to_download:
+    for month in range(1, 13):
+        jobs.append((year, month))
+
+# --- 4. EXECUTE THE DOWNLOADS IN PARALLEL WITH A PROGRESS BAR ---
+print(f"Starting parallel download for {len(jobs)} files using {MAX_WORKERS} workers...")
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    # 'tqdm' wraps the executor to create a live progress bar.
+    results = list(tqdm(executor.map(download_era5_month, jobs), total=len(jobs)))
+
+print("\nAll download tasks have been processed.")
+```
+
+## Analytical time series
+
+```{python cuda-optimized}
+import xarray as xr
+from scipy import signal
+import numpy as np
+import cupy as cp
+import cupyx.scipy.signal as cp_signal
+import glob
+import os
+from tqdm.auto import tqdm
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+raw_data_dir = r.DATA_DIRECTORY
+output_dir = os.path.join(raw_data_dir, "processed_correct")
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+YEARS_TO_PROCESS = range(1958, 2024)
+cp.cuda.set_allocator(cp.cuda.MemoryPool().malloc)
+
+# Band-pass filter parameters (2-6 day synoptic scale)
+FS = 24.0
+LOWCUT_DAYS = 6.0  # Low-frequency cutoff
+HIGHCUT_DAYS = 2.0  # High-frequency cutoff
+ORDER = 5
+
+# Pre-compute filter coefficients
+FILTER_B, FILTER_A = signal.butter(
+    ORDER, 
+    [1/LOWCUT_DAYS, 1/HIGHCUT_DAYS], 
+    btype='band', 
+    fs=FS
+)
+FILTER_B_GPU = cp.asarray(FILTER_B)
+FILTER_A_GPU = cp.asarray(FILTER_A)
+
+# ============================================================================
+# STEP 0: RESOLUTION STANDARDIZATION
+# ============================================================================
+def standardize_resolution():
+    """
+    Remap all raw ERA5 data to standard 1.0° x 1.0° grid.
+    This ensures robust trend analysis as per Rohrer et al. (2020).
+    """
+    standardized_dir = os.path.join(raw_data_dir, "standardized_1deg")
+    if not os.path.exists(standardized_dir):
+        os.makedirs(standardized_dir)
+    
+    print("\n" + "="*60)
+    print("RESOLUTION STANDARDIZATION TO 1.0° x 1.0°")
+    print("="*60)
+    
+    raw_files = sorted(glob.glob(os.path.join(raw_data_dir, "era5_850hpa_panarctic_*.nc")))
+    
+    for file in tqdm(raw_files, desc="Standardizing resolution"):
+        filename = os.path.basename(file)
+        output_file = os.path.join(standardized_dir, filename)
+        
+        if os.path.exists(output_file):
+            continue
+        
+        # Load high-res data
+        ds = xr.open_dataset(file)
+        
+        # Create 1.0° grid
+        lat_1deg = np.arange(ds.latitude.min(), ds.latitude.max() + 1.0, 1.0)
+        lon_1deg = np.arange(ds.longitude.min(), ds.longitude.max() + 1.0, 1.0)
+        
+        # Regrid using bilinear interpolation
+        ds_regrid = ds.interp(latitude=lat_1deg, longitude=lon_1deg, method='linear')
+        
+        # Save
+        ds_regrid.to_netcdf(output_file)
+        ds.close()
+        ds_regrid.close()
+    
+    print(f"Standardized files saved to: {standardized_dir}")
+    return standardized_dir
+
+# ============================================================================
+# STEP 1: CALCULATE CLIMATOLOGY
+# ============================================================================
+def calculate_climatology(data_dir):
+    """
+    Calculate long-term mean u and v for Reynolds decomposition.
+    """
+    climatology_file = os.path.join(output_dir, "climatology_1958-2024.nc")
+    
+    if os.path.exists(climatology_file):
+        print("Climatology already exists.")
+        return xr.open_dataset(climatology_file)
+    
+    print("\n" + "="*60)
+    print("CALCULATING CLIMATOLOGY (1958-2024)")
+    print("="*60)
+    
+    all_files = sorted(glob.glob(os.path.join(data_dir, "era5_850hpa_panarctic_*.nc")))
+    
+    print(f"Loading {len(all_files)} files...")
+    ds_all = xr.open_mfdataset(all_files, combine='by_coords', parallel=True)
+    
+    print("Computing time-mean...")
+    u_clim = ds_all['u'].mean(dim='valid_time').compute()
+    v_clim = ds_all['v'].mean(dim='valid_time').compute()
+    
+    ds_clim = xr.Dataset({
+        'u_climatology': u_clim,
+        'v_climatology': v_clim
+    })
+    ds_clim.to_netcdf(climatology_file)
+    
+    ds_all.close()
+    return ds_clim
+
+# ============================================================================
+# STEP 2: GPU BAND-PASS FILTER
+# ============================================================================
+def bandpass_filter_gpu(data_3d):
+    """
+    Apply 2-6 day band-pass filter on GPU.
+    """
+    data_gpu = cp.asarray(data_3d, dtype=cp.float64)
+    ntime, nlat, nlon = data_gpu.shape
+    
+    data_reshaped = data_gpu.reshape(ntime, nlat * nlon)
+    
+    # Detrend
+    mean_vals = cp.mean(data_reshaped, axis=0, keepdims=True)
+    data_centered = data_reshaped - mean_vals
+    
+    time_indices = cp.arange(ntime, dtype=cp.float64).reshape(-1, 1)
+    time_centered = time_indices - cp.mean(time_indices)
+    
+    numerator = cp.sum(time_centered * data_centered, axis=0)
+    denominator = cp.sum(time_centered ** 2)
+    slopes = numerator / denominator
+    trends = time_centered @ slopes.reshape(1, -1)
+    data_detrended = data_centered - trends
+    
+    # Apply filter
+    data_transposed = data_detrended.T
+    filtered_transposed = cp_signal.filtfilt(
+        FILTER_B_GPU, FILTER_A_GPU, data_transposed, axis=1,
+        padlen=min(3 * max(len(FILTER_B_GPU), len(FILTER_A_GPU)), ntime - 1)
+    )
+    
+    filtered_3d = filtered_transposed.T.reshape(ntime, nlat, nlon)
+    result = cp.asnumpy(filtered_3d)
+    
+    del data_gpu, data_reshaped, data_centered, data_detrended
+    del data_transposed, filtered_transposed, filtered_3d
+    cp.get_default_memory_pool().free_all_blocks()
+    
+    return result
+
+# ============================================================================
+# STEP 3: PROCESS YEAR WITH CORRECT REYNOLDS DECOMPOSITION
+# ============================================================================
+def process_year_correct(year, data_dir, climatology):
+    """
+    CORRECT IMPLEMENTATION:
+    1. Load data
+    2. Subtract climatology (Reynolds decomposition) → get u', v'
+    3. Apply band-pass filter to u', v' → get u'_filtered, v'_filtered
+    4. Calculate EKE, MKE, TKE
+    """
+    print(f"\n{'='*60}")
+    print(f"PROCESSING YEAR {year}")
+    print(f"{'='*60}")
+    
+    year_file = os.path.join(output_dir, f"storminess_{year}.nc")
+    
+    if os.path.exists(year_file):
+        print(f"Year {year} already processed.")
+        return f"[SKIP] {year}"
+    
+    try:
+        # Load year with overlap
+        year_files = sorted(glob.glob(
+            os.path.join(data_dir, f"era5_850hpa_panarctic_{year}-*.nc")
+        ))
+        
+        if len(year_files) == 0:
+            return f"[WARN] No files for {year}"
+        
+        # Add overlap
+        extended_files = []
+        prev_dec = os.path.join(data_dir, f"era5_850hpa_panarctic_{year-1}-12.nc")
+        if os.path.exists(prev_dec):
+            extended_files.append(prev_dec)
+        
+        extended_files.extend(year_files)
+        
+        next_jan = os.path.join(data_dir, f"era5_850hpa_panarctic_{year+1}-01.nc")
+        if os.path.exists(next_jan):
+            extended_files.append(next_jan)
+        
+        ds = xr.open_mfdataset(extended_files, combine='by_coords').squeeze().load()
+        
+        print(f"   Data shape: {ds['u'].shape}")
+        
+        # CRITICAL STEP: Reynolds decomposition FIRST
+        print(f"   Step 1: Reynolds decomposition (u' = u - ū)...")
+        u_clim = climatology['u_climatology']
+        v_clim = climatology['v_climatology']
+        
+        # Calculate eddy components (deviation from climatology)
+        u_prime = ds['u'] - u_clim
+        v_prime = ds['v'] - v_clim
+        
+        # THEN apply band-pass filter to the eddy components
+        print(f"   Step 2: Band-pass filtering u', v'...")
+        u_prime_filtered = bandpass_filter_gpu(u_prime.values.astype(np.float64))
+        v_prime_filtered = bandpass_filter_gpu(v_prime.values.astype(np.float64))
+        
+        # Add to dataset
+        ds['u_eddy'] = (ds['u'].dims, u_prime_filtered)
+        ds['v_eddy'] = (ds['v'].dims, v_prime_filtered)
+        
+        # Calculate instantaneous EKE
+        ds['eke'] = 0.5 * (ds['u_eddy']**2 + ds['v_eddy']**2)
+        
+        # Calculate instantaneous TKE (for proper averaging)
+        ds['tke'] = 0.5 * (ds['u']**2 + ds['v']**2)
+        
+        # Extract target year
+        ds_year = ds.sel(valid_time=slice(f"{year}-01-01", f"{year}-12-31"))
+        
+        print(f"   Step 3: Calculating monthly summaries...")
+        
+        # MKE from climatology (same for all months)
+        mke = 0.5 * (u_clim**2 + v_clim**2)
+        
+        monthly_summaries = []
+        
+        for month in range(1, 13):
+            ds_month = ds_year.sel(valid_time=ds_year.valid_time.dt.month == month)
+            
+            if len(ds_month.valid_time) == 0:
+                continue
+            
+            # Time-averaged quantities for this month
+            eke_mean = ds_month['eke'].mean('valid_time')
+            eke_variance = ds_month['eke'].var('valid_time')
+            tke_mean = ds_month['tke'].mean('valid_time')
+            
+            ds_summary = xr.Dataset({
+                'eke_mean': eke_mean,
+                'eke_variance': eke_variance,  # PRIMARY STORMINESS INDEX
+                'mke': mke,
+                'tke_mean': tke_mean
+            })
+            
+            ds_summary = ds_summary.assign_coords({'month': month})
+            monthly_summaries.append(ds_summary)
+        
+        # Combine months
+        ds_year_summary = xr.concat(monthly_summaries, dim='month')
+        ds_year_summary['year'] = year
+        
+        # Save
+        ds_year_summary.to_netcdf(year_file)
+        
+        ds.close()
+        print(f"   Saved: {year_file}")
+        
+        return f"[DONE] {year}"
+        
+    except Exception as e:
+        cp.get_default_memory_pool().free_all_blocks()
+        return f"[ERROR] {year}: {str(e)}"
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+print("="*60)
+print("SCIENTIFICALLY CORRECT ARCTIC STORMINESS ANALYSIS")
+print("="*60)
+print(f"GPU: {cp.cuda.runtime.getDeviceProperties(0)['name'].decode()}")
+print(f"GPU Memory: {cp.cuda.runtime.getDeviceProperties(0)['totalGlobalMem'] / 1e9:.1f} GB")
+print("="*60)
+
+# Step 0: Resolution standardization
+print("\nSTEP 0: Resolution standardization...")
+standardized_dir = standardize_resolution()
+
+# Step 1: Calculate climatology
+print("\nSTEP 1: Calculate climatology...")
+climatology = calculate_climatology(standardized_dir)
+
+# Step 2: Process all years
+print("\nSTEP 2: Process all years...")
+results = []
+
+for year in tqdm(YEARS_TO_PROCESS, desc="Years"):
+    result = process_year_correct(year, standardized_dir, climatology)
+    results.append(result)
+
+# Summary
+print("\n" + "="*60)
+print("SUMMARY")
+print("="*60)
+print(f"Completed: {sum('[DONE]' in r for r in results)}")
+print(f"Skipped: {sum('[SKIP]' in r for r in results)}")
+print(f"Errors: {sum('[ERROR]' in r for r in results)}")
+print("="*60)
+print(f"\nOutputs in: {output_dir}")
+print("Ready for trend analysis!")
+```
+
+
