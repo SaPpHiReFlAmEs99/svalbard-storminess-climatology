@@ -3,6 +3,7 @@ title: "Task 1: Arctic Storminess Climatology"
 author: Francesco Lucano
 format: html
 engine: knitr
+editor: visual
 warning: false
 error: false
 toc: true
@@ -66,7 +67,6 @@ DATA_DIRECTORY <- "E:/ERA5_data"
 # Setting for more parallel downloads
 #plan(multisession, workers = 20)
 ```
-
 
 # EKE, TKE and MKE 850hPa January 2022 test
 
@@ -515,8 +515,7 @@ ggplot() +
   theme_minimal()
 ```
 
-
-# 1979-present EKE, TKE and MKE 850hPa
+# 1958-present EKE, TKE and MKE 850hPa
 
 ```{python single-download}
 import cdsapi
@@ -655,7 +654,129 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
 print("\nAll download tasks have been processed.")
 ```
 
-## Analytical time series
+## Processing
+
+### Overview
+
+This workflow implements a scientifically rigorous Eulerian analysis of Arctic storminess (1958-2024) using ERA5 reanalysis data, following the methodological framework established by Blackmon (1976), Rohrer et al. (2020).
+
+### Step 0: Resolution standardization (Preprocessing)
+
+**Objective**: Ensure robust, resolution-independent trend analysis
+
+**Implementation**:
+
+-   All raw ERA5 data (\~0.25° native resolution) was remapped to a standard 1.0° × 1.0° grid
+
+-   Method: Bilinear interpolation using xarray's `.interp()` function
+
+-   Rationale: Rohrer et al. (2020) demonstrated that Eulerian metrics are robust to resolution changes when data is standardized. This prevents spurious trends from changing observational density over time and ensures comparability with other climate datasets
+
+**Technical details**:
+
+-   Input: 804 monthly files (1958-2024, 67 years × 12 months)
+
+-   Output: Standardized NetCDF files with consistent spatial grid
+
+### Step 1: Climatological mean calculation
+
+**Objective**: Establish the long-term mean background flow for Reynolds decomposition
+
+**Implementation**:
+
+```         
+ū = (1/N) Σ u(t)    [averaged over all time steps 1958-2024] v̄ = (1/N) Σ v(t) 
+```
+
+-   Reynolds decomposition requires separating the instantaneous wind field into:
+
+    -   Time-mean component (ū, v̄): The stable, climatological background flow
+
+    -   Transient component (u', v'): Deviations representing weather systems
+
+-   This is NOT the same as monthly means. The climatology represents the 67-year average state of the atmosphere at each grid point
+
+**Output**: Single NetCDF file containing ū and v̄ on the 1.0° grid
+
+### Step 2: Reynolds Decomposition
+
+**Objective**: Isolate transient atmospheric variability from the mean flow
+
+**Implementation**: For each time step in each year:
+
+```         
+u'(t) = u(t) - ū v'(t) = v(t) - v̄ 
+```
+
+**Physical interpretation**:
+
+-   u', v' represent wind anomalies relative to the long-term climatology
+
+-   These anomalies contain all timescales: from hours to interannual variations
+
+-   Next step isolates the specific synoptic (2-6 day) timescale
+
+### Step 3: Band-Pass Filtering (The Core Innovation)
+
+**Objective**: Isolate synoptic-scale (storm) variability from the eddy components
+
+#### 3.1 Filter Design
+
+-   **Type**: 5th-order Butterworth band-pass filter
+
+-   **Passband**: 2-6 days (synoptic timescale)
+
+-   **Sampling frequency**: 24 samples/day (hourly data)
+
+-   **Implementation**: Pre-computed filter coefficients (computed once, applied millions of times for efficiency)
+
+#### 3.2 Why This Timescale?
+
+-   Extratropical cyclones have characteristic lifespans of 2-6 days (Blackmon 1976, Hoskins & Hodges 2002)
+
+-   Shorter periods: Sub-synoptic turbulence, diurnal cycles
+
+-   Longer periods: Seasonal cycles, climate modes (NAO, blocking patterns)
+
+-   The filter cleanly extracts the storm signal
+
+#### 3.3 Edge Effect Mitigation (Critical Innovation)
+
+**The Problem**: Digital filters require data padding to avoid artifacts at time series boundaries. Processing each month independently would create contamination at month edges where storms transition across boundaries.
+
+**Our Solution - Overlapping Windows**:
+
+```         
+For year Y:   Load: Dec(Y-1) + All_of(Y) + Jan(Y+1)   Filter: Entire continuous dataset   Extract: Only year Y for saving 
+```
+
+**Why this works**:
+
+-   The filter sees continuous data spanning \~14 months
+
+-   Edge effects occur only in Dec(Y-1) and Jan(Y+1), which are discarded
+
+-   The extracted year Y contains clean, artifact-free filtered data
+
+-   Storm events spanning month/year boundaries are captured correctly
+
+**Example**: A cyclone active Jan 28 - Feb 3, 2020:
+
+-   Without overlap: Split into two separate filtering operations → distorted signal
+
+-   With overlap: Filtered as single continuous event → correct representation
+
+## Output Dataset Structure
+
+```         
+processed_correct/ 
+├── climatology_1958-2024.nc          # ū, v̄
+└── storminess_YYYY.nc (×67 files)    # Monthly summaries     
+    ├── eke_variance (lat, lon, month=12)  # Primary metric     
+    ├── eke_mean (lat, lon, month=12)     
+    ├── mke (lat, lon)     
+    └── tke_mean (lat, lon, month=12) 
+```
 
 ```{python cuda-optimized}
 import xarray as xr
@@ -685,6 +806,7 @@ HIGHCUT_DAYS = 2.0  # High-frequency cutoff
 ORDER = 5
 
 # Pre-compute filter coefficients
+# # Purpose: To isolate specific weather patterns. We focus on synoptic-scale storms, which typically last from 2 to 6 days. This filter is designed to remove signals from slower climate variations (longer than 6 days) and faster, smaller-scale "noise" (shorter than 2 days), leaving only the "storm signal."
 FILTER_B, FILTER_A = signal.butter(
     ORDER, 
     [1/LOWCUT_DAYS, 1/HIGHCUT_DAYS], 
@@ -742,6 +864,7 @@ def standardize_resolution():
 # ============================================================================
 # STEP 1: CALCULATE CLIMATOLOGY
 # ============================================================================
+# This function calculates the long-term average wind field (uˉ and vˉ) for the entire 1958-2024 period. It does this by opening all the standardized files at once (xr.open_mfdataset) and computing the mean over the time dimension (.mean(dim='valid_time')). This gives the baseline "mean climate" needed for Reynolds decomposition.
 def calculate_climatology(data_dir):
     """
     Calculate long-term mean u and v for Reynolds decomposition.
@@ -777,6 +900,7 @@ def calculate_climatology(data_dir):
 # ============================================================================
 # STEP 2: GPU BAND-PASS FILTER
 # ============================================================================
+# This function takes a 3D data array (time, latitude, longitude) and applies the band-pass filter to it on the GPU.
 def bandpass_filter_gpu(data_3d):
     """
     Apply 2-6 day band-pass filter on GPU.
@@ -789,12 +913,14 @@ def bandpass_filter_gpu(data_3d):
     if data_np.ndim != 3:
         raise ValueError(f"Expected 3D data after squeeze, got {data_np.ndim}D: {data_np.shape}")
     
+    # cp.asarray(data_np, ...) copies the wind data from the RAm to the VRAM
     data_gpu = cp.asarray(data_np, dtype=cp.float64)
     ntime, nlat, nlon = data_gpu.shape
     
+    # data_reshaped = data_gpu.reshape(...) flattens the spatial dimensions (latitude and longitude) into a single long dimension. This turns the 3D cube of data into a 2D array (time x space). This is done because filtering functions are much more efficient when applied along one dimension of a 2D array.
     data_reshaped = data_gpu.reshape(ntime, nlat * nlon)
     
-    # Detrend
+    # Detrend: Before filtering, it's critical to remove any long-term linear trend from the data. A filter assumes the data mean is constant. If there's a trend (e.g., due to climate change), it can introduce errors at the edges of the filter. This block of code calculates and subtracts the linear trend from each grid point's time series.More details of the calculations under
     mean_vals = cp.mean(data_reshaped, axis=0, keepdims=True)
     data_centered = data_reshaped - mean_vals
     
@@ -807,13 +933,14 @@ def bandpass_filter_gpu(data_3d):
     trends = time_centered @ slopes.reshape(1, -1)
     data_detrended = data_centered - trends
     
-    # Apply filter
+    # Apply Filter: cp_signal.filtfilt(...) is the main event. It applies the Butterworth filter we designed earlier. The filtfilt function is special because it applies the filter once forward and then once backward. This technique cancels out any phase distortion, ensuring that the peaks and troughs of the storm signals in the output align perfectly in time with the original data.
     data_transposed = data_detrended.T
     filtered_transposed = cp_signal.filtfilt(
         FILTER_B_GPU, FILTER_A_GPU, data_transposed, axis=1,
         padlen=min(3 * max(len(FILTER_B_GPU), len(FILTER_A_GPU)), ntime - 1)
     )
     
+    # Reshape Back and Return: The code reshapes the 2D filtered data back into a 3D cube, copies it from the GPU back to the CPU's RAM (cp.asnumpy(filtered_3d)), and cleans up the GPU memory for the next chunk of data.
     filtered_3d = filtered_transposed.T.reshape(ntime, nlat, nlon)
     result = cp.asnumpy(filtered_3d)
     
@@ -826,6 +953,7 @@ def bandpass_filter_gpu(data_3d):
 # ============================================================================
 # STEP 3: PROCESS YEAR WITH CORRECT REYNOLDS DECOMPOSITION
 # ============================================================================
+# This function brings everything together to process a single year of data and produce the final storminess metrics.
 def process_year_correct(year, data_dir, climatology):
     """
     CORRECT IMPLEMENTATION:
@@ -845,7 +973,7 @@ def process_year_correct(year, data_dir, climatology):
         return f"[SKIP] {year}"
     
     try:
-        # Load year with overlap
+        # Load Data with Overlap: It loads all 12 months for the target year, plus the previous December and the next January. This overlap is essential to avoid edge effects from the filter. Without this padding, the results for the first few days of January and the last few days of December would be inaccurate.
         year_files = sorted(glob.glob(
             os.path.join(data_dir, f"era5_850hpa_panarctic_{year}-*.nc")
         ))
@@ -874,11 +1002,12 @@ def process_year_correct(year, data_dir, climatology):
         u_clim = climatology['u_climatology']
         v_clim = climatology['v_climatology']
         
-        # Calculate eddy components (deviation from climatology)
+        # Reynoldss decomposition: Calculate eddy components (deviation from               climatology)
+        # This is the first critical scientific step. It subtracts the long-term climatology (uˉ, vˉ) from the instantaneous wind data to get the eddy components (u′, v′).
         u_prime = ds['u'] - u_clim
         v_prime = ds['v'] - v_clim
         
-        # THEN apply band-pass filter to the eddy components
+        # THEN apply band-pass filter to the eddy components (u′ and v′)
         print(f"   Step 2: Band-pass filtering u', v'...")
         u_prime_filtered = bandpass_filter_gpu(u_prime.values.astype(np.float64))
         v_prime_filtered = bandpass_filter_gpu(v_prime.values.astype(np.float64))
@@ -886,6 +1015,8 @@ def process_year_correct(year, data_dir, climatology):
         # Add to dataset
         ds['u_eddy'] = (ds['u'].dims, u_prime_filtered)
         ds['v_eddy'] = (ds['v'].dims, v_prime_filtered)
+        
+        # Calculate Kinetic Energy: With the filtered eddy components, it now   calculates the key metrics :
         
         # Calculate instantaneous EKE
         ds['eke'] = 0.5 * (ds['u_eddy']**2 + ds['v_eddy']**2)
@@ -902,6 +1033,8 @@ def process_year_correct(year, data_dir, climatology):
         mke = 0.5 * (u_clim**2 + v_clim**2)
         
         monthly_summaries = []
+        
+        # Summarize and Save: It loops through each month of the target year, calculating the final statistical products: the mean and variance of EKE. It bundles these monthly summaries into a new NetCDF file (storminess_{year}.nc) and saves it to disk.
         
         for month in range(1, 13):
             ds_month = ds_year.sel(valid_time=ds_year.valid_time.dt.month == month)
@@ -978,4 +1111,44 @@ print(f"\nOutputs in: {output_dir}")
 print("Ready for trend analysis!")
 ```
 
+### How the detrending is done (STEP 2: GPU BAND-PASS FILTER)
 
+The code is performing Ordinary Least Squares (OLS) linear regression on the time series of each individual grid cell. In simple terms, it finds the "line of best fit" through the time series data and then subtracts that line, leaving the data minus its long-term trend.
+
+This process is crucial because a band-pass filter is designed to work on stationary data (data without a trend). Removing the trend first prevents it from distorting the filter's output.
+
+#### 1. Center the Variables
+
+The first step is to "center" both the wind data ($Y$) and the time vector ($t$) by subtracting their respective means ($\bar{Y}$ and $\bar{t}$). This simplifies the math for the next steps.
+
+`data_centered` = $Y_t - \bar{Y}$
+
+`time_centered` = $t - \bar{t}$
+
+#### 2. Calculate the Trend Slope ($\beta_1$)
+
+The code then calculates the slope of the best-fit line using the standard OLS formula. The slope, $\beta_1$, represents the rate of change over time (the trend).
+
+-   **Numerator**: The code calculates the sum of the products of the centered variables. This is related to the covariance between time and your wind data. $$
+      \text{numerator} = \sum_{t=1}^{n} (t - \bar{t})(Y_t - \bar{Y})
+      $$
+
+-   **Denominator**: The code calculates the sum of the squared centered time variables. This is related to the variance of the time vector. $$
+      \text{denominator} = \sum_{t=1}^{n} (t - \bar{t})^2
+      $$
+
+-   **Slope**: The slope is the ratio of the numerator to the denominator. $$
+      \beta_1 = \frac{\sum_{t=1}^{n} (t - \bar{t})(Y_t - \bar{Y})}{\sum_{t=1}^{n} (t - \bar{t})^2}
+      $$ This is what the line `slopes = numerator / denominator` computes for every grid cell simultaneously.
+
+#### 3. Reconstruct and Subtract the Trend
+
+Finally, the code reconstructs the full trend line and subtracts it from the centered data.
+
+-   **Trend Line**: The trend component for each point in time is calculated by multiplying the slope by the centered time vector. $$
+      \text{Trend}_t = \beta_1 \times (t - \bar{t})
+      $$ This is what the line `trends = time_centered @ slopes.reshape(1, -1)` does.
+
+-   **Final Detrended Data**: This trend is then subtracted from the centered wind data. The result is the residuals ($\epsilon_t$) of the linear regression, which is your original data with the linear trend removed. $$
+      \text{data_detrended} = (Y_t - \bar{Y}) - \text{Trend}_t
+      $$ The final `data_detrended` variable contains the wind data for each grid cell, now oscillating around zero with no long-term linear trend.

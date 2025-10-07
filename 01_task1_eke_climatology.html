@@ -71,6 +71,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="01_task1_eke_climatology_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="01_task1_eke_climatology_files/libs/bootstrap/bootstrap-bb462d781dde1847d9e3ccf7736099dd.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 </head>
 
@@ -91,9 +120,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#step-3-conversion-and-remapping" id="toc-step-3-conversion-and-remapping" class="nav-link" data-scroll-target="#step-3-conversion-and-remapping">Step 3: Conversion and remapping</a></li>
   <li><a href="#step-4-visualize-the-final-maps" id="toc-step-4-visualize-the-final-maps" class="nav-link" data-scroll-target="#step-4-visualize-the-final-maps">Step 4: Visualize the final maps</a></li>
   </ul></li>
-  <li><a href="#present-eke-tke-and-mke-850hpa" id="toc-present-eke-tke-and-mke-850hpa" class="nav-link" data-scroll-target="#present-eke-tke-and-mke-850hpa">1979-present EKE, TKE and MKE 850hPa</a>
+  <li><a href="#present-eke-tke-and-mke-850hpa" id="toc-present-eke-tke-and-mke-850hpa" class="nav-link" data-scroll-target="#present-eke-tke-and-mke-850hpa">1958-present EKE, TKE and MKE 850hPa</a>
   <ul class="collapse">
-  <li><a href="#analytical-time-series" id="toc-analytical-time-series" class="nav-link" data-scroll-target="#analytical-time-series">Analytical time series</a></li>
+  <li><a href="#processing" id="toc-processing" class="nav-link" data-scroll-target="#processing">Processing</a>
+  <ul class="collapse">
+  <li><a href="#overview" id="toc-overview" class="nav-link" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#step-0-resolution-standardization-preprocessing" id="toc-step-0-resolution-standardization-preprocessing" class="nav-link" data-scroll-target="#step-0-resolution-standardization-preprocessing">Step 0: Resolution standardization (Preprocessing)</a></li>
+  <li><a href="#step-1-climatological-mean-calculation" id="toc-step-1-climatological-mean-calculation" class="nav-link" data-scroll-target="#step-1-climatological-mean-calculation">Step 1: Climatological mean calculation</a></li>
+  <li><a href="#step-2-reynolds-decomposition" id="toc-step-2-reynolds-decomposition" class="nav-link" data-scroll-target="#step-2-reynolds-decomposition">Step 2: Reynolds Decomposition</a></li>
+  <li><a href="#step-3-band-pass-filtering-the-core-innovation" id="toc-step-3-band-pass-filtering-the-core-innovation" class="nav-link" data-scroll-target="#step-3-band-pass-filtering-the-core-innovation">Step 3: Band-Pass Filtering (The Core Innovation)</a></li>
+  </ul></li>
+  <li><a href="#output-dataset-structure" id="toc-output-dataset-structure" class="nav-link" data-scroll-target="#output-dataset-structure">Output Dataset Structure</a>
+  <ul class="collapse">
+  <li><a href="#how-the-detrending-is-done-step-2-gpu-band-pass-filter" id="toc-how-the-detrending-is-done-step-2-gpu-band-pass-filter" class="nav-link" data-scroll-target="#how-the-detrending-is-done-step-2-gpu-band-pass-filter">How the detrending is done (STEP 2: GPU BAND-PASS FILTER)</a></li>
+  </ul></li>
   </ul></li>
   </ul>
 </nav>
@@ -700,7 +740,7 @@ max value   :    1284.6801 </code></pre>
 </section>
 </section>
 <section id="present-eke-tke-and-mke-850hpa" class="level1">
-<h1>1979-present EKE, TKE and MKE 850hPa</h1>
+<h1>1958-present EKE, TKE and MKE 850hPa</h1>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cdsapi</span>
 <span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
@@ -1636,7 +1676,7 @@ Full data download process complete for the specified years.</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>
   0%|          | 0/804 [00:00&lt;?, ?it/s]
-100%|##########| 804/804 [00:00&lt;00:00, 54739.39it/s]</code></pre>
+100%|##########| 804/804 [00:00&lt;00:00, 41887.29it/s]</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">All download tasks have been processed."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -1644,325 +1684,433 @@ Full data download process complete for the specified years.</code></pre>
 All download tasks have been processed.</code></pre>
 </div>
 </div>
-<section id="analytical-time-series" class="level2">
-<h2 class="anchored" data-anchor-id="analytical-time-series">Analytical time series</h2>
+<section id="processing" class="level2">
+<h2 class="anchored" data-anchor-id="processing">Processing</h2>
+<section id="overview" class="level3">
+<h3 class="anchored" data-anchor-id="overview">Overview</h3>
+<p>This workflow implements a scientifically rigorous Eulerian analysis of Arctic storminess (1958-2024) using ERA5 reanalysis data, following the methodological framework established by Blackmon (1976), Rohrer et al.&nbsp;(2020).</p>
+</section>
+<section id="step-0-resolution-standardization-preprocessing" class="level3">
+<h3 class="anchored" data-anchor-id="step-0-resolution-standardization-preprocessing">Step 0: Resolution standardization (Preprocessing)</h3>
+<p><strong>Objective</strong>: Ensure robust, resolution-independent trend analysis</p>
+<p><strong>Implementation</strong>:</p>
+<ul>
+<li><p>All raw ERA5 data (~0.25° native resolution) was remapped to a standard 1.0° × 1.0° grid</p></li>
+<li><p>Method: Bilinear interpolation using xarray’s <code>.interp()</code> function</p></li>
+<li><p>Rationale: Rohrer et al.&nbsp;(2020) demonstrated that Eulerian metrics are robust to resolution changes when data is standardized. This prevents spurious trends from changing observational density over time and ensures comparability with other climate datasets</p></li>
+</ul>
+<p><strong>Technical details</strong>:</p>
+<ul>
+<li><p>Input: 804 monthly files (1958-2024, 67 years × 12 months)</p></li>
+<li><p>Output: Standardized NetCDF files with consistent spatial grid</p></li>
+</ul>
+</section>
+<section id="step-1-climatological-mean-calculation" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-climatological-mean-calculation">Step 1: Climatological mean calculation</h3>
+<p><strong>Objective</strong>: Establish the long-term mean background flow for Reynolds decomposition</p>
+<p><strong>Implementation</strong>:</p>
+<pre><code>ū = (1/N) Σ u(t)    [averaged over all time steps 1958-2024] v̄ = (1/N) Σ v(t) </code></pre>
+<ul>
+<li><p>Reynolds decomposition requires separating the instantaneous wind field into:</p>
+<ul>
+<li><p>Time-mean component (ū, v̄): The stable, climatological background flow</p></li>
+<li><p>Transient component (u’, v’): Deviations representing weather systems</p></li>
+</ul></li>
+<li><p>This is NOT the same as monthly means. The climatology represents the 67-year average state of the atmosphere at each grid point</p></li>
+</ul>
+<p><strong>Output</strong>: Single NetCDF file containing ū and v̄ on the 1.0° grid</p>
+</section>
+<section id="step-2-reynolds-decomposition" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-reynolds-decomposition">Step 2: Reynolds Decomposition</h3>
+<p><strong>Objective</strong>: Isolate transient atmospheric variability from the mean flow</p>
+<p><strong>Implementation</strong>: For each time step in each year:</p>
+<pre><code>u'(t) = u(t) - ū v'(t) = v(t) - v̄ </code></pre>
+<p><strong>Physical interpretation</strong>:</p>
+<ul>
+<li><p>u’, v’ represent wind anomalies relative to the long-term climatology</p></li>
+<li><p>These anomalies contain all timescales: from hours to interannual variations</p></li>
+<li><p>Next step isolates the specific synoptic (2-6 day) timescale</p></li>
+</ul>
+</section>
+<section id="step-3-band-pass-filtering-the-core-innovation" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-band-pass-filtering-the-core-innovation">Step 3: Band-Pass Filtering (The Core Innovation)</h3>
+<p><strong>Objective</strong>: Isolate synoptic-scale (storm) variability from the eddy components</p>
+<section id="filter-design" class="level4">
+<h4 class="anchored" data-anchor-id="filter-design">3.1 Filter Design</h4>
+<ul>
+<li><p><strong>Type</strong>: 5th-order Butterworth band-pass filter</p></li>
+<li><p><strong>Passband</strong>: 2-6 days (synoptic timescale)</p></li>
+<li><p><strong>Sampling frequency</strong>: 24 samples/day (hourly data)</p></li>
+<li><p><strong>Implementation</strong>: Pre-computed filter coefficients (computed once, applied millions of times for efficiency)</p></li>
+</ul>
+</section>
+<section id="why-this-timescale" class="level4">
+<h4 class="anchored" data-anchor-id="why-this-timescale">3.2 Why This Timescale?</h4>
+<ul>
+<li><p>Extratropical cyclones have characteristic lifespans of 2-6 days (Blackmon 1976, Hoskins &amp; Hodges 2002)</p></li>
+<li><p>Shorter periods: Sub-synoptic turbulence, diurnal cycles</p></li>
+<li><p>Longer periods: Seasonal cycles, climate modes (NAO, blocking patterns)</p></li>
+<li><p>The filter cleanly extracts the storm signal</p></li>
+</ul>
+</section>
+<section id="edge-effect-mitigation-critical-innovation" class="level4">
+<h4 class="anchored" data-anchor-id="edge-effect-mitigation-critical-innovation">3.3 Edge Effect Mitigation (Critical Innovation)</h4>
+<p><strong>The Problem</strong>: Digital filters require data padding to avoid artifacts at time series boundaries. Processing each month independently would create contamination at month edges where storms transition across boundaries.</p>
+<p><strong>Our Solution - Overlapping Windows</strong>:</p>
+<pre><code>For year Y:   Load: Dec(Y-1) + All_of(Y) + Jan(Y+1)   Filter: Entire continuous dataset   Extract: Only year Y for saving </code></pre>
+<p><strong>Why this works</strong>:</p>
+<ul>
+<li><p>The filter sees continuous data spanning ~14 months</p></li>
+<li><p>Edge effects occur only in Dec(Y-1) and Jan(Y+1), which are discarded</p></li>
+<li><p>The extracted year Y contains clean, artifact-free filtered data</p></li>
+<li><p>Storm events spanning month/year boundaries are captured correctly</p></li>
+</ul>
+<p><strong>Example</strong>: A cyclone active Jan 28 - Feb 3, 2020:</p>
+<ul>
+<li><p>Without overlap: Split into two separate filtering operations → distorted signal</p></li>
+<li><p>With overlap: Filtered as single continuous event → correct representation</p></li>
+</ul>
+</section>
+</section>
+</section>
+<section id="output-dataset-structure" class="level2">
+<h2 class="anchored" data-anchor-id="output-dataset-structure">Output Dataset Structure</h2>
+<pre><code>processed_correct/ 
+├── climatology_1958-2024.nc          # ū, v̄
+└── storminess_YYYY.nc (×67 files)    # Monthly summaries     
+    ├── eke_variance (lat, lon, month=12)  # Primary metric     
+    ├── eke_mean (lat, lon, month=12)     
+    ├── mke (lat, lon)     
+    └── tke_mean (lat, lon, month=12) </code></pre>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
-<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy <span class="im">import</span> signal</span>
-<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
-<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cupy <span class="im">as</span> cp</span>
-<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cupyx.scipy.signal <span class="im">as</span> cp_signal</span>
-<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> glob</span>
-<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
-<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tqdm.auto <span class="im">import</span> tqdm</span>
-<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a><span class="co"># CONFIGURATION</span></span>
-<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-13"><a href="#cb51-13" aria-hidden="true" tabindex="-1"></a>raw_data_dir <span class="op">=</span> r.DATA_DIRECTORY</span>
-<span id="cb51-14"><a href="#cb51-14" aria-hidden="true" tabindex="-1"></a>output_dir <span class="op">=</span> os.path.join(raw_data_dir, <span class="st">"processed_correct"</span>)</span>
-<span id="cb51-15"><a href="#cb51-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> os.path.exists(output_dir):</span>
-<span id="cb51-16"><a href="#cb51-16" aria-hidden="true" tabindex="-1"></a>    os.makedirs(output_dir)</span>
-<span id="cb51-17"><a href="#cb51-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a>YEARS_TO_PROCESS <span class="op">=</span> <span class="bu">range</span>(<span class="dv">1958</span>, <span class="dv">2025</span>)</span>
-<span id="cb51-19"><a href="#cb51-19" aria-hidden="true" tabindex="-1"></a>cp.cuda.set_allocator(cp.cuda.MemoryPool().malloc)</span>
-<span id="cb51-20"><a href="#cb51-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-21"><a href="#cb51-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Band-pass filter parameters (2-6 day synoptic scale)</span></span>
-<span id="cb51-22"><a href="#cb51-22" aria-hidden="true" tabindex="-1"></a>FS <span class="op">=</span> <span class="fl">24.0</span></span>
-<span id="cb51-23"><a href="#cb51-23" aria-hidden="true" tabindex="-1"></a>LOWCUT_DAYS <span class="op">=</span> <span class="fl">6.0</span>  <span class="co"># Low-frequency cutoff</span></span>
-<span id="cb51-24"><a href="#cb51-24" aria-hidden="true" tabindex="-1"></a>HIGHCUT_DAYS <span class="op">=</span> <span class="fl">2.0</span>  <span class="co"># High-frequency cutoff</span></span>
-<span id="cb51-25"><a href="#cb51-25" aria-hidden="true" tabindex="-1"></a>ORDER <span class="op">=</span> <span class="dv">5</span></span>
-<span id="cb51-26"><a href="#cb51-26" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-27"><a href="#cb51-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Pre-compute filter coefficients</span></span>
-<span id="cb51-28"><a href="#cb51-28" aria-hidden="true" tabindex="-1"></a>FILTER_B, FILTER_A <span class="op">=</span> signal.butter(</span>
-<span id="cb51-29"><a href="#cb51-29" aria-hidden="true" tabindex="-1"></a>    ORDER, </span>
-<span id="cb51-30"><a href="#cb51-30" aria-hidden="true" tabindex="-1"></a>    [<span class="dv">1</span><span class="op">/</span>LOWCUT_DAYS, <span class="dv">1</span><span class="op">/</span>HIGHCUT_DAYS], </span>
-<span id="cb51-31"><a href="#cb51-31" aria-hidden="true" tabindex="-1"></a>    btype<span class="op">=</span><span class="st">'band'</span>, </span>
-<span id="cb51-32"><a href="#cb51-32" aria-hidden="true" tabindex="-1"></a>    fs<span class="op">=</span>FS</span>
-<span id="cb51-33"><a href="#cb51-33" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb51-34"><a href="#cb51-34" aria-hidden="true" tabindex="-1"></a>FILTER_B_GPU <span class="op">=</span> cp.asarray(FILTER_B)</span>
-<span id="cb51-35"><a href="#cb51-35" aria-hidden="true" tabindex="-1"></a>FILTER_A_GPU <span class="op">=</span> cp.asarray(FILTER_A)</span>
-<span id="cb51-36"><a href="#cb51-36" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-37"><a href="#cb51-37" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-38"><a href="#cb51-38" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 0: RESOLUTION STANDARDIZATION</span></span>
-<span id="cb51-39"><a href="#cb51-39" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-40"><a href="#cb51-40" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> standardize_resolution():</span>
-<span id="cb51-41"><a href="#cb51-41" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb51-42"><a href="#cb51-42" aria-hidden="true" tabindex="-1"></a><span class="co">    Remap all raw ERA5 data to standard 1.0° x 1.0° grid.</span></span>
-<span id="cb51-43"><a href="#cb51-43" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb51-44"><a href="#cb51-44" aria-hidden="true" tabindex="-1"></a>    standardized_dir <span class="op">=</span> os.path.join(raw_data_dir, <span class="st">"standardized_1deg"</span>)</span>
-<span id="cb51-45"><a href="#cb51-45" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> os.path.exists(standardized_dir):</span>
-<span id="cb51-46"><a href="#cb51-46" aria-hidden="true" tabindex="-1"></a>        os.makedirs(standardized_dir)</span>
-<span id="cb51-47"><a href="#cb51-47" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-48"><a href="#cb51-48" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="op">+</span> <span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
-<span id="cb51-49"><a href="#cb51-49" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"RESOLUTION STANDARDIZATION TO 1.0° x 1.0°"</span>)</span>
-<span id="cb51-50"><a href="#cb51-50" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
-<span id="cb51-51"><a href="#cb51-51" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-52"><a href="#cb51-52" aria-hidden="true" tabindex="-1"></a>    raw_files <span class="op">=</span> <span class="bu">sorted</span>(glob.glob(os.path.join(raw_data_dir, <span class="st">"era5_850hpa_panarctic_*.nc"</span>)))</span>
-<span id="cb51-53"><a href="#cb51-53" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-54"><a href="#cb51-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="bu">file</span> <span class="kw">in</span> tqdm(raw_files, desc<span class="op">=</span><span class="st">"Standardizing resolution"</span>):</span>
-<span id="cb51-55"><a href="#cb51-55" aria-hidden="true" tabindex="-1"></a>        filename <span class="op">=</span> os.path.basename(<span class="bu">file</span>)</span>
-<span id="cb51-56"><a href="#cb51-56" aria-hidden="true" tabindex="-1"></a>        output_file <span class="op">=</span> os.path.join(standardized_dir, filename)</span>
-<span id="cb51-57"><a href="#cb51-57" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-58"><a href="#cb51-58" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> os.path.exists(output_file):</span>
-<span id="cb51-59"><a href="#cb51-59" aria-hidden="true" tabindex="-1"></a>            <span class="cf">continue</span></span>
-<span id="cb51-60"><a href="#cb51-60" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-61"><a href="#cb51-61" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Load and squeeze</span></span>
-<span id="cb51-62"><a href="#cb51-62" aria-hidden="true" tabindex="-1"></a>        ds <span class="op">=</span> xr.open_dataset(<span class="bu">file</span>).squeeze()  <span class="co"># Remove singleton dims</span></span>
-<span id="cb51-63"><a href="#cb51-63" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-64"><a href="#cb51-64" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create 1.0° grid</span></span>
-<span id="cb51-65"><a href="#cb51-65" aria-hidden="true" tabindex="-1"></a>        lat_1deg <span class="op">=</span> np.arange(ds.latitude.<span class="bu">min</span>(), ds.latitude.<span class="bu">max</span>() <span class="op">+</span> <span class="fl">1.0</span>, <span class="fl">1.0</span>)</span>
-<span id="cb51-66"><a href="#cb51-66" aria-hidden="true" tabindex="-1"></a>        lon_1deg <span class="op">=</span> np.arange(ds.longitude.<span class="bu">min</span>(), ds.longitude.<span class="bu">max</span>() <span class="op">+</span> <span class="fl">1.0</span>, <span class="fl">1.0</span>)</span>
-<span id="cb51-67"><a href="#cb51-67" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-68"><a href="#cb51-68" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Regrid</span></span>
-<span id="cb51-69"><a href="#cb51-69" aria-hidden="true" tabindex="-1"></a>        ds_regrid <span class="op">=</span> ds.interp(latitude<span class="op">=</span>lat_1deg, longitude<span class="op">=</span>lon_1deg, method<span class="op">=</span><span class="st">'linear'</span>)</span>
-<span id="cb51-70"><a href="#cb51-70" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-71"><a href="#cb51-71" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Ensure clean dimensions</span></span>
-<span id="cb51-72"><a href="#cb51-72" aria-hidden="true" tabindex="-1"></a>        ds_regrid <span class="op">=</span> ds_regrid.squeeze()</span>
-<span id="cb51-73"><a href="#cb51-73" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-74"><a href="#cb51-74" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Save</span></span>
-<span id="cb51-75"><a href="#cb51-75" aria-hidden="true" tabindex="-1"></a>        ds_regrid.to_netcdf(output_file)</span>
-<span id="cb51-76"><a href="#cb51-76" aria-hidden="true" tabindex="-1"></a>        ds.close()</span>
-<span id="cb51-77"><a href="#cb51-77" aria-hidden="true" tabindex="-1"></a>        ds_regrid.close()</span>
-<span id="cb51-78"><a href="#cb51-78" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-79"><a href="#cb51-79" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Standardized files saved to: </span><span class="sc">{</span>standardized_dir<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-80"><a href="#cb51-80" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> standardized_dir</span>
-<span id="cb51-81"><a href="#cb51-81" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-82"><a href="#cb51-82" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-83"><a href="#cb51-83" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 1: CALCULATE CLIMATOLOGY</span></span>
-<span id="cb51-84"><a href="#cb51-84" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-85"><a href="#cb51-85" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calculate_climatology(data_dir):</span>
-<span id="cb51-86"><a href="#cb51-86" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb51-87"><a href="#cb51-87" aria-hidden="true" tabindex="-1"></a><span class="co">    Calculate long-term mean u and v for Reynolds decomposition.</span></span>
-<span id="cb51-88"><a href="#cb51-88" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb51-89"><a href="#cb51-89" aria-hidden="true" tabindex="-1"></a>    climatology_file <span class="op">=</span> os.path.join(output_dir, <span class="st">"climatology_1958-2024.nc"</span>)</span>
-<span id="cb51-90"><a href="#cb51-90" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-91"><a href="#cb51-91" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> os.path.exists(climatology_file):</span>
-<span id="cb51-92"><a href="#cb51-92" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="st">"Climatology already exists."</span>)</span>
-<span id="cb51-93"><a href="#cb51-93" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> xr.open_dataset(climatology_file)</span>
-<span id="cb51-94"><a href="#cb51-94" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-95"><a href="#cb51-95" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="op">+</span> <span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
-<span id="cb51-96"><a href="#cb51-96" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"CALCULATING CLIMATOLOGY (1958-2024)"</span>)</span>
-<span id="cb51-97"><a href="#cb51-97" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
-<span id="cb51-98"><a href="#cb51-98" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-99"><a href="#cb51-99" aria-hidden="true" tabindex="-1"></a>    all_files <span class="op">=</span> <span class="bu">sorted</span>(glob.glob(os.path.join(data_dir, <span class="st">"era5_850hpa_panarctic_*.nc"</span>)))</span>
-<span id="cb51-100"><a href="#cb51-100" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-101"><a href="#cb51-101" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Loading </span><span class="sc">{</span><span class="bu">len</span>(all_files)<span class="sc">}</span><span class="ss"> files..."</span>)</span>
-<span id="cb51-102"><a href="#cb51-102" aria-hidden="true" tabindex="-1"></a>    ds_all <span class="op">=</span> xr.open_mfdataset(all_files, combine<span class="op">=</span><span class="st">'by_coords'</span>, parallel<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb51-103"><a href="#cb51-103" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-104"><a href="#cb51-104" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Computing time-mean..."</span>)</span>
-<span id="cb51-105"><a href="#cb51-105" aria-hidden="true" tabindex="-1"></a>    u_clim <span class="op">=</span> ds_all[<span class="st">'u'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>).compute()</span>
-<span id="cb51-106"><a href="#cb51-106" aria-hidden="true" tabindex="-1"></a>    v_clim <span class="op">=</span> ds_all[<span class="st">'v'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>).compute()</span>
-<span id="cb51-107"><a href="#cb51-107" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-108"><a href="#cb51-108" aria-hidden="true" tabindex="-1"></a>    ds_clim <span class="op">=</span> xr.Dataset({</span>
-<span id="cb51-109"><a href="#cb51-109" aria-hidden="true" tabindex="-1"></a>        <span class="st">'u_climatology'</span>: u_clim,</span>
-<span id="cb51-110"><a href="#cb51-110" aria-hidden="true" tabindex="-1"></a>        <span class="st">'v_climatology'</span>: v_clim</span>
-<span id="cb51-111"><a href="#cb51-111" aria-hidden="true" tabindex="-1"></a>    })</span>
-<span id="cb51-112"><a href="#cb51-112" aria-hidden="true" tabindex="-1"></a>    ds_clim.to_netcdf(climatology_file)</span>
-<span id="cb51-113"><a href="#cb51-113" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-114"><a href="#cb51-114" aria-hidden="true" tabindex="-1"></a>    ds_all.close()</span>
-<span id="cb51-115"><a href="#cb51-115" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ds_clim</span>
-<span id="cb51-116"><a href="#cb51-116" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-117"><a href="#cb51-117" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-118"><a href="#cb51-118" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 2: GPU BAND-PASS FILTER</span></span>
-<span id="cb51-119"><a href="#cb51-119" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-120"><a href="#cb51-120" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> bandpass_filter_gpu(data_3d):</span>
-<span id="cb51-121"><a href="#cb51-121" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb51-122"><a href="#cb51-122" aria-hidden="true" tabindex="-1"></a><span class="co">    Apply 2-6 day band-pass filter on GPU.</span></span>
-<span id="cb51-123"><a href="#cb51-123" aria-hidden="true" tabindex="-1"></a><span class="co">    Handles data with extra singleton dimensions.</span></span>
-<span id="cb51-124"><a href="#cb51-124" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb51-125"><a href="#cb51-125" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Squeeze out any singleton dimensions</span></span>
-<span id="cb51-126"><a href="#cb51-126" aria-hidden="true" tabindex="-1"></a>    data_np <span class="op">=</span> np.squeeze(data_3d)</span>
-<span id="cb51-127"><a href="#cb51-127" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-128"><a href="#cb51-128" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Verify we now have 3D data</span></span>
-<span id="cb51-129"><a href="#cb51-129" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> data_np.ndim <span class="op">!=</span> <span class="dv">3</span>:</span>
-<span id="cb51-130"><a href="#cb51-130" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="ss">f"Expected 3D data after squeeze, got </span><span class="sc">{</span>data_np<span class="sc">.</span>ndim<span class="sc">}</span><span class="ss">D: </span><span class="sc">{</span>data_np<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-131"><a href="#cb51-131" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-132"><a href="#cb51-132" aria-hidden="true" tabindex="-1"></a>    data_gpu <span class="op">=</span> cp.asarray(data_np, dtype<span class="op">=</span>cp.float64)</span>
-<span id="cb51-133"><a href="#cb51-133" aria-hidden="true" tabindex="-1"></a>    ntime, nlat, nlon <span class="op">=</span> data_gpu.shape</span>
-<span id="cb51-134"><a href="#cb51-134" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-135"><a href="#cb51-135" aria-hidden="true" tabindex="-1"></a>    data_reshaped <span class="op">=</span> data_gpu.reshape(ntime, nlat <span class="op">*</span> nlon)</span>
-<span id="cb51-136"><a href="#cb51-136" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-137"><a href="#cb51-137" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Detrend</span></span>
-<span id="cb51-138"><a href="#cb51-138" aria-hidden="true" tabindex="-1"></a>    mean_vals <span class="op">=</span> cp.mean(data_reshaped, axis<span class="op">=</span><span class="dv">0</span>, keepdims<span class="op">=</span><span class="va">True</span>)</span>
-<span id="cb51-139"><a href="#cb51-139" aria-hidden="true" tabindex="-1"></a>    data_centered <span class="op">=</span> data_reshaped <span class="op">-</span> mean_vals</span>
-<span id="cb51-140"><a href="#cb51-140" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-141"><a href="#cb51-141" aria-hidden="true" tabindex="-1"></a>    time_indices <span class="op">=</span> cp.arange(ntime, dtype<span class="op">=</span>cp.float64).reshape(<span class="op">-</span><span class="dv">1</span>, <span class="dv">1</span>)</span>
-<span id="cb51-142"><a href="#cb51-142" aria-hidden="true" tabindex="-1"></a>    time_centered <span class="op">=</span> time_indices <span class="op">-</span> cp.mean(time_indices)</span>
-<span id="cb51-143"><a href="#cb51-143" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-144"><a href="#cb51-144" aria-hidden="true" tabindex="-1"></a>    numerator <span class="op">=</span> cp.<span class="bu">sum</span>(time_centered <span class="op">*</span> data_centered, axis<span class="op">=</span><span class="dv">0</span>)</span>
-<span id="cb51-145"><a href="#cb51-145" aria-hidden="true" tabindex="-1"></a>    denominator <span class="op">=</span> cp.<span class="bu">sum</span>(time_centered <span class="op">**</span> <span class="dv">2</span>)</span>
-<span id="cb51-146"><a href="#cb51-146" aria-hidden="true" tabindex="-1"></a>    slopes <span class="op">=</span> numerator <span class="op">/</span> denominator</span>
-<span id="cb51-147"><a href="#cb51-147" aria-hidden="true" tabindex="-1"></a>    trends <span class="op">=</span> time_centered <span class="op">@</span> slopes.reshape(<span class="dv">1</span>, <span class="op">-</span><span class="dv">1</span>)</span>
-<span id="cb51-148"><a href="#cb51-148" aria-hidden="true" tabindex="-1"></a>    data_detrended <span class="op">=</span> data_centered <span class="op">-</span> trends</span>
-<span id="cb51-149"><a href="#cb51-149" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-150"><a href="#cb51-150" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Apply filter</span></span>
-<span id="cb51-151"><a href="#cb51-151" aria-hidden="true" tabindex="-1"></a>    data_transposed <span class="op">=</span> data_detrended.T</span>
-<span id="cb51-152"><a href="#cb51-152" aria-hidden="true" tabindex="-1"></a>    filtered_transposed <span class="op">=</span> cp_signal.filtfilt(</span>
-<span id="cb51-153"><a href="#cb51-153" aria-hidden="true" tabindex="-1"></a>        FILTER_B_GPU, FILTER_A_GPU, data_transposed, axis<span class="op">=</span><span class="dv">1</span>,</span>
-<span id="cb51-154"><a href="#cb51-154" aria-hidden="true" tabindex="-1"></a>        padlen<span class="op">=</span><span class="bu">min</span>(<span class="dv">3</span> <span class="op">*</span> <span class="bu">max</span>(<span class="bu">len</span>(FILTER_B_GPU), <span class="bu">len</span>(FILTER_A_GPU)), ntime <span class="op">-</span> <span class="dv">1</span>)</span>
-<span id="cb51-155"><a href="#cb51-155" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb51-156"><a href="#cb51-156" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-157"><a href="#cb51-157" aria-hidden="true" tabindex="-1"></a>    filtered_3d <span class="op">=</span> filtered_transposed.T.reshape(ntime, nlat, nlon)</span>
-<span id="cb51-158"><a href="#cb51-158" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> cp.asnumpy(filtered_3d)</span>
-<span id="cb51-159"><a href="#cb51-159" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-160"><a href="#cb51-160" aria-hidden="true" tabindex="-1"></a>    <span class="kw">del</span> data_gpu, data_reshaped, data_centered, data_detrended</span>
-<span id="cb51-161"><a href="#cb51-161" aria-hidden="true" tabindex="-1"></a>    <span class="kw">del</span> data_transposed, filtered_transposed, filtered_3d</span>
-<span id="cb51-162"><a href="#cb51-162" aria-hidden="true" tabindex="-1"></a>    cp.get_default_memory_pool().free_all_blocks()</span>
-<span id="cb51-163"><a href="#cb51-163" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-164"><a href="#cb51-164" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
-<span id="cb51-165"><a href="#cb51-165" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-166"><a href="#cb51-166" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-167"><a href="#cb51-167" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 3: PROCESS YEAR WITH CORRECT REYNOLDS DECOMPOSITION</span></span>
-<span id="cb51-168"><a href="#cb51-168" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-169"><a href="#cb51-169" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> process_year_correct(year, data_dir, climatology):</span>
-<span id="cb51-170"><a href="#cb51-170" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb51-171"><a href="#cb51-171" aria-hidden="true" tabindex="-1"></a><span class="co">    CORRECT IMPLEMENTATION:</span></span>
-<span id="cb51-172"><a href="#cb51-172" aria-hidden="true" tabindex="-1"></a><span class="co">    1. Load data</span></span>
-<span id="cb51-173"><a href="#cb51-173" aria-hidden="true" tabindex="-1"></a><span class="co">    2. Subtract climatology (Reynolds decomposition) → get u', v'</span></span>
-<span id="cb51-174"><a href="#cb51-174" aria-hidden="true" tabindex="-1"></a><span class="co">    3. Apply band-pass filter to u', v' → get u'_filtered, v'_filtered</span></span>
-<span id="cb51-175"><a href="#cb51-175" aria-hidden="true" tabindex="-1"></a><span class="co">    4. Calculate EKE, MKE, TKE</span></span>
-<span id="cb51-176"><a href="#cb51-176" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb51-177"><a href="#cb51-177" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="sc">{</span><span class="st">'='</span><span class="op">*</span><span class="dv">60</span><span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-178"><a href="#cb51-178" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"PROCESSING YEAR </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-179"><a href="#cb51-179" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="st">'='</span><span class="op">*</span><span class="dv">60</span><span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-180"><a href="#cb51-180" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-181"><a href="#cb51-181" aria-hidden="true" tabindex="-1"></a>    year_file <span class="op">=</span> os.path.join(output_dir, <span class="ss">f"storminess_</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">.nc"</span>)</span>
-<span id="cb51-182"><a href="#cb51-182" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-183"><a href="#cb51-183" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> os.path.exists(year_file):</span>
-<span id="cb51-184"><a href="#cb51-184" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Year </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss"> already processed."</span>)</span>
-<span id="cb51-185"><a href="#cb51-185" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"[SKIP] </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb51-186"><a href="#cb51-186" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb51-187"><a href="#cb51-187" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
-<span id="cb51-188"><a href="#cb51-188" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Load year with overlap</span></span>
-<span id="cb51-189"><a href="#cb51-189" aria-hidden="true" tabindex="-1"></a>        year_files <span class="op">=</span> <span class="bu">sorted</span>(glob.glob(</span>
-<span id="cb51-190"><a href="#cb51-190" aria-hidden="true" tabindex="-1"></a>            os.path.join(data_dir, <span class="ss">f"era5_850hpa_panarctic_</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">-*.nc"</span>)</span>
-<span id="cb51-191"><a href="#cb51-191" aria-hidden="true" tabindex="-1"></a>        ))</span>
-<span id="cb51-192"><a href="#cb51-192" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-193"><a href="#cb51-193" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">len</span>(year_files) <span class="op">==</span> <span class="dv">0</span>:</span>
-<span id="cb51-194"><a href="#cb51-194" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ss">f"[WARN] No files for </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb51-195"><a href="#cb51-195" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-196"><a href="#cb51-196" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Add overlap</span></span>
-<span id="cb51-197"><a href="#cb51-197" aria-hidden="true" tabindex="-1"></a>        extended_files <span class="op">=</span> []</span>
-<span id="cb51-198"><a href="#cb51-198" aria-hidden="true" tabindex="-1"></a>        prev_dec <span class="op">=</span> os.path.join(data_dir, <span class="ss">f"era5_850hpa_panarctic_</span><span class="sc">{</span>year<span class="op">-</span><span class="dv">1</span><span class="sc">}</span><span class="ss">-12.nc"</span>)</span>
-<span id="cb51-199"><a href="#cb51-199" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> os.path.exists(prev_dec):</span>
-<span id="cb51-200"><a href="#cb51-200" aria-hidden="true" tabindex="-1"></a>            extended_files.append(prev_dec)</span>
-<span id="cb51-201"><a href="#cb51-201" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-202"><a href="#cb51-202" aria-hidden="true" tabindex="-1"></a>        extended_files.extend(year_files)</span>
-<span id="cb51-203"><a href="#cb51-203" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-204"><a href="#cb51-204" aria-hidden="true" tabindex="-1"></a>        next_jan <span class="op">=</span> os.path.join(data_dir, <span class="ss">f"era5_850hpa_panarctic_</span><span class="sc">{</span>year<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">-01.nc"</span>)</span>
-<span id="cb51-205"><a href="#cb51-205" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> os.path.exists(next_jan):</span>
-<span id="cb51-206"><a href="#cb51-206" aria-hidden="true" tabindex="-1"></a>            extended_files.append(next_jan)</span>
-<span id="cb51-207"><a href="#cb51-207" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-208"><a href="#cb51-208" aria-hidden="true" tabindex="-1"></a>        ds <span class="op">=</span> ds <span class="op">=</span> xr.open_mfdataset(extended_files, combine<span class="op">=</span><span class="st">'by_coords'</span>).squeeze(drop<span class="op">=</span><span class="va">True</span>).load()</span>
-<span id="cb51-209"><a href="#cb51-209" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-210"><a href="#cb51-210" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Data shape: </span><span class="sc">{</span>ds[<span class="st">'u'</span>]<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-211"><a href="#cb51-211" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-212"><a href="#cb51-212" aria-hidden="true" tabindex="-1"></a>        <span class="co"># CRITICAL STEP: Reynolds decomposition FIRST</span></span>
-<span id="cb51-213"><a href="#cb51-213" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Step 1: Reynolds decomposition (u' = u - ū)..."</span>)</span>
-<span id="cb51-214"><a href="#cb51-214" aria-hidden="true" tabindex="-1"></a>        u_clim <span class="op">=</span> climatology[<span class="st">'u_climatology'</span>]</span>
-<span id="cb51-215"><a href="#cb51-215" aria-hidden="true" tabindex="-1"></a>        v_clim <span class="op">=</span> climatology[<span class="st">'v_climatology'</span>]</span>
-<span id="cb51-216"><a href="#cb51-216" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-217"><a href="#cb51-217" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Calculate eddy components (deviation from climatology)</span></span>
-<span id="cb51-218"><a href="#cb51-218" aria-hidden="true" tabindex="-1"></a>        u_prime <span class="op">=</span> ds[<span class="st">'u'</span>] <span class="op">-</span> u_clim</span>
-<span id="cb51-219"><a href="#cb51-219" aria-hidden="true" tabindex="-1"></a>        v_prime <span class="op">=</span> ds[<span class="st">'v'</span>] <span class="op">-</span> v_clim</span>
-<span id="cb51-220"><a href="#cb51-220" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-221"><a href="#cb51-221" aria-hidden="true" tabindex="-1"></a>        <span class="co"># THEN apply band-pass filter to the eddy components</span></span>
-<span id="cb51-222"><a href="#cb51-222" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Step 2: Band-pass filtering u', v'..."</span>)</span>
-<span id="cb51-223"><a href="#cb51-223" aria-hidden="true" tabindex="-1"></a>        u_prime_filtered <span class="op">=</span> bandpass_filter_gpu(u_prime.values.astype(np.float64))</span>
-<span id="cb51-224"><a href="#cb51-224" aria-hidden="true" tabindex="-1"></a>        v_prime_filtered <span class="op">=</span> bandpass_filter_gpu(v_prime.values.astype(np.float64))</span>
-<span id="cb51-225"><a href="#cb51-225" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-226"><a href="#cb51-226" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Add to dataset</span></span>
-<span id="cb51-227"><a href="#cb51-227" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'u_eddy'</span>] <span class="op">=</span> (ds[<span class="st">'u'</span>].dims, u_prime_filtered)</span>
-<span id="cb51-228"><a href="#cb51-228" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'v_eddy'</span>] <span class="op">=</span> (ds[<span class="st">'v'</span>].dims, v_prime_filtered)</span>
-<span id="cb51-229"><a href="#cb51-229" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-230"><a href="#cb51-230" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Calculate instantaneous EKE</span></span>
-<span id="cb51-231"><a href="#cb51-231" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'eke'</span>] <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (ds[<span class="st">'u_eddy'</span>]<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> ds[<span class="st">'v_eddy'</span>]<span class="op">**</span><span class="dv">2</span>)</span>
-<span id="cb51-232"><a href="#cb51-232" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-233"><a href="#cb51-233" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Calculate instantaneous TKE (for proper averaging)</span></span>
-<span id="cb51-234"><a href="#cb51-234" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'tke'</span>] <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (ds[<span class="st">'u'</span>]<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> ds[<span class="st">'v'</span>]<span class="op">**</span><span class="dv">2</span>)</span>
-<span id="cb51-235"><a href="#cb51-235" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-236"><a href="#cb51-236" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Extract target year</span></span>
-<span id="cb51-237"><a href="#cb51-237" aria-hidden="true" tabindex="-1"></a>        ds_year <span class="op">=</span> ds.sel(valid_time<span class="op">=</span><span class="bu">slice</span>(<span class="ss">f"</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">-01-01"</span>, <span class="ss">f"</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">-12-31"</span>))</span>
-<span id="cb51-238"><a href="#cb51-238" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-239"><a href="#cb51-239" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Step 3: Calculating monthly summaries..."</span>)</span>
-<span id="cb51-240"><a href="#cb51-240" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-241"><a href="#cb51-241" aria-hidden="true" tabindex="-1"></a>        <span class="co"># MKE from climatology (same for all months)</span></span>
-<span id="cb51-242"><a href="#cb51-242" aria-hidden="true" tabindex="-1"></a>        mke <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (u_clim<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> v_clim<span class="op">**</span><span class="dv">2</span>)</span>
-<span id="cb51-243"><a href="#cb51-243" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-244"><a href="#cb51-244" aria-hidden="true" tabindex="-1"></a>        monthly_summaries <span class="op">=</span> []</span>
-<span id="cb51-245"><a href="#cb51-245" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-246"><a href="#cb51-246" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> month <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1</span>, <span class="dv">13</span>):</span>
-<span id="cb51-247"><a href="#cb51-247" aria-hidden="true" tabindex="-1"></a>            ds_month <span class="op">=</span> ds_year.sel(valid_time<span class="op">=</span>ds_year.valid_time.dt.month <span class="op">==</span> month)</span>
-<span id="cb51-248"><a href="#cb51-248" aria-hidden="true" tabindex="-1"></a>            </span>
-<span id="cb51-249"><a href="#cb51-249" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="bu">len</span>(ds_month.valid_time) <span class="op">==</span> <span class="dv">0</span>:</span>
-<span id="cb51-250"><a href="#cb51-250" aria-hidden="true" tabindex="-1"></a>                <span class="cf">continue</span></span>
-<span id="cb51-251"><a href="#cb51-251" aria-hidden="true" tabindex="-1"></a>            </span>
-<span id="cb51-252"><a href="#cb51-252" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Time-averaged quantities for this month</span></span>
-<span id="cb51-253"><a href="#cb51-253" aria-hidden="true" tabindex="-1"></a>            eke_mean <span class="op">=</span> ds_month[<span class="st">'eke'</span>].mean(<span class="st">'valid_time'</span>)</span>
-<span id="cb51-254"><a href="#cb51-254" aria-hidden="true" tabindex="-1"></a>            eke_variance <span class="op">=</span> ds_month[<span class="st">'eke'</span>].var(<span class="st">'valid_time'</span>)</span>
-<span id="cb51-255"><a href="#cb51-255" aria-hidden="true" tabindex="-1"></a>            tke_mean <span class="op">=</span> ds_month[<span class="st">'tke'</span>].mean(<span class="st">'valid_time'</span>)</span>
-<span id="cb51-256"><a href="#cb51-256" aria-hidden="true" tabindex="-1"></a>            </span>
-<span id="cb51-257"><a href="#cb51-257" aria-hidden="true" tabindex="-1"></a>            ds_summary <span class="op">=</span> xr.Dataset({</span>
-<span id="cb51-258"><a href="#cb51-258" aria-hidden="true" tabindex="-1"></a>                <span class="st">'eke_mean'</span>: eke_mean,</span>
-<span id="cb51-259"><a href="#cb51-259" aria-hidden="true" tabindex="-1"></a>                <span class="st">'eke_variance'</span>: eke_variance,  <span class="co"># PRIMARY STORMINESS INDEX</span></span>
-<span id="cb51-260"><a href="#cb51-260" aria-hidden="true" tabindex="-1"></a>                <span class="st">'mke'</span>: mke,</span>
-<span id="cb51-261"><a href="#cb51-261" aria-hidden="true" tabindex="-1"></a>                <span class="st">'tke_mean'</span>: tke_mean</span>
-<span id="cb51-262"><a href="#cb51-262" aria-hidden="true" tabindex="-1"></a>            })</span>
-<span id="cb51-263"><a href="#cb51-263" aria-hidden="true" tabindex="-1"></a>            </span>
-<span id="cb51-264"><a href="#cb51-264" aria-hidden="true" tabindex="-1"></a>            ds_summary <span class="op">=</span> ds_summary.assign_coords({<span class="st">'month'</span>: month})</span>
-<span id="cb51-265"><a href="#cb51-265" aria-hidden="true" tabindex="-1"></a>            monthly_summaries.append(ds_summary)</span>
-<span id="cb51-266"><a href="#cb51-266" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-267"><a href="#cb51-267" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Combine months</span></span>
-<span id="cb51-268"><a href="#cb51-268" aria-hidden="true" tabindex="-1"></a>        ds_year_summary <span class="op">=</span> xr.concat(monthly_summaries, dim<span class="op">=</span><span class="st">'month'</span>)</span>
-<span id="cb51-269"><a href="#cb51-269" aria-hidden="true" tabindex="-1"></a>        ds_year_summary[<span class="st">'year'</span>] <span class="op">=</span> year</span>
-<span id="cb51-270"><a href="#cb51-270" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-271"><a href="#cb51-271" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Save</span></span>
-<span id="cb51-272"><a href="#cb51-272" aria-hidden="true" tabindex="-1"></a>        ds_year_summary.to_netcdf(year_file)</span>
-<span id="cb51-273"><a href="#cb51-273" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-274"><a href="#cb51-274" aria-hidden="true" tabindex="-1"></a>        ds.close()</span>
-<span id="cb51-275"><a href="#cb51-275" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Saved: </span><span class="sc">{</span>year_file<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb51-276"><a href="#cb51-276" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-277"><a href="#cb51-277" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"[DONE] </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb51-278"><a href="#cb51-278" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb51-279"><a href="#cb51-279" aria-hidden="true" tabindex="-1"></a>    <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
-<span id="cb51-280"><a href="#cb51-280" aria-hidden="true" tabindex="-1"></a>        cp.get_default_memory_pool().free_all_blocks()</span>
-<span id="cb51-281"><a href="#cb51-281" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"[ERROR] </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span><span class="bu">str</span>(e)<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb51-282"><a href="#cb51-282" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb51-283"><a href="#cb51-283" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-284"><a href="#cb51-284" aria-hidden="true" tabindex="-1"></a><span class="co"># MAIN EXECUTION</span></span>
-<span id="cb51-285"><a href="#cb51-285" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb51-286"><a href="#cb51-286" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> xarray <span class="im">as</span> xr</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> scipy <span class="im">import</span> signal</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cupy <span class="im">as</span> cp</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cupyx.scipy.signal <span class="im">as</span> cp_signal</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> glob</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tqdm.auto <span class="im">import</span> tqdm</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-11"><a href="#cb55-11" aria-hidden="true" tabindex="-1"></a><span class="co"># CONFIGURATION</span></span>
+<span id="cb55-12"><a href="#cb55-12" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-13"><a href="#cb55-13" aria-hidden="true" tabindex="-1"></a>raw_data_dir <span class="op">=</span> r.DATA_DIRECTORY</span>
+<span id="cb55-14"><a href="#cb55-14" aria-hidden="true" tabindex="-1"></a>output_dir <span class="op">=</span> os.path.join(raw_data_dir, <span class="st">"processed_correct"</span>)</span>
+<span id="cb55-15"><a href="#cb55-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> os.path.exists(output_dir):</span>
+<span id="cb55-16"><a href="#cb55-16" aria-hidden="true" tabindex="-1"></a>    os.makedirs(output_dir)</span>
+<span id="cb55-17"><a href="#cb55-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-18"><a href="#cb55-18" aria-hidden="true" tabindex="-1"></a>YEARS_TO_PROCESS <span class="op">=</span> <span class="bu">range</span>(<span class="dv">1958</span>, <span class="dv">2025</span>)</span>
+<span id="cb55-19"><a href="#cb55-19" aria-hidden="true" tabindex="-1"></a>cp.cuda.set_allocator(cp.cuda.MemoryPool().malloc)</span>
+<span id="cb55-20"><a href="#cb55-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-21"><a href="#cb55-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Band-pass filter parameters (2-6 day synoptic scale)</span></span>
+<span id="cb55-22"><a href="#cb55-22" aria-hidden="true" tabindex="-1"></a>FS <span class="op">=</span> <span class="fl">24.0</span></span>
+<span id="cb55-23"><a href="#cb55-23" aria-hidden="true" tabindex="-1"></a>LOWCUT_DAYS <span class="op">=</span> <span class="fl">6.0</span>  <span class="co"># Low-frequency cutoff</span></span>
+<span id="cb55-24"><a href="#cb55-24" aria-hidden="true" tabindex="-1"></a>HIGHCUT_DAYS <span class="op">=</span> <span class="fl">2.0</span>  <span class="co"># High-frequency cutoff</span></span>
+<span id="cb55-25"><a href="#cb55-25" aria-hidden="true" tabindex="-1"></a>ORDER <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb55-26"><a href="#cb55-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-27"><a href="#cb55-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Pre-compute filter coefficients</span></span>
+<span id="cb55-28"><a href="#cb55-28" aria-hidden="true" tabindex="-1"></a><span class="co"># # Purpose: To isolate specific weather patterns. We focus on synoptic-scale storms, which typically last from 2 to 6 days. This filter is designed to remove signals from slower climate variations (longer than 6 days) and faster, smaller-scale "noise" (shorter than 2 days), leaving only the "storm signal."</span></span>
+<span id="cb55-29"><a href="#cb55-29" aria-hidden="true" tabindex="-1"></a>FILTER_B, FILTER_A <span class="op">=</span> signal.butter(</span>
+<span id="cb55-30"><a href="#cb55-30" aria-hidden="true" tabindex="-1"></a>    ORDER, </span>
+<span id="cb55-31"><a href="#cb55-31" aria-hidden="true" tabindex="-1"></a>    [<span class="dv">1</span><span class="op">/</span>LOWCUT_DAYS, <span class="dv">1</span><span class="op">/</span>HIGHCUT_DAYS], </span>
+<span id="cb55-32"><a href="#cb55-32" aria-hidden="true" tabindex="-1"></a>    btype<span class="op">=</span><span class="st">'band'</span>, </span>
+<span id="cb55-33"><a href="#cb55-33" aria-hidden="true" tabindex="-1"></a>    fs<span class="op">=</span>FS</span>
+<span id="cb55-34"><a href="#cb55-34" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb55-35"><a href="#cb55-35" aria-hidden="true" tabindex="-1"></a>FILTER_B_GPU <span class="op">=</span> cp.asarray(FILTER_B)</span>
+<span id="cb55-36"><a href="#cb55-36" aria-hidden="true" tabindex="-1"></a>FILTER_A_GPU <span class="op">=</span> cp.asarray(FILTER_A)</span>
+<span id="cb55-37"><a href="#cb55-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-38"><a href="#cb55-38" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-39"><a href="#cb55-39" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 0: RESOLUTION STANDARDIZATION</span></span>
+<span id="cb55-40"><a href="#cb55-40" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-41"><a href="#cb55-41" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> standardize_resolution():</span>
+<span id="cb55-42"><a href="#cb55-42" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb55-43"><a href="#cb55-43" aria-hidden="true" tabindex="-1"></a><span class="co">    Remap all raw ERA5 data to standard 1.0° x 1.0° grid.</span></span>
+<span id="cb55-44"><a href="#cb55-44" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb55-45"><a href="#cb55-45" aria-hidden="true" tabindex="-1"></a>    standardized_dir <span class="op">=</span> os.path.join(raw_data_dir, <span class="st">"standardized_1deg"</span>)</span>
+<span id="cb55-46"><a href="#cb55-46" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> os.path.exists(standardized_dir):</span>
+<span id="cb55-47"><a href="#cb55-47" aria-hidden="true" tabindex="-1"></a>        os.makedirs(standardized_dir)</span>
+<span id="cb55-48"><a href="#cb55-48" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-49"><a href="#cb55-49" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="op">+</span> <span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
+<span id="cb55-50"><a href="#cb55-50" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"RESOLUTION STANDARDIZATION TO 1.0° x 1.0°"</span>)</span>
+<span id="cb55-51"><a href="#cb55-51" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
+<span id="cb55-52"><a href="#cb55-52" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-53"><a href="#cb55-53" aria-hidden="true" tabindex="-1"></a>    raw_files <span class="op">=</span> <span class="bu">sorted</span>(glob.glob(os.path.join(raw_data_dir, <span class="st">"era5_850hpa_panarctic_*.nc"</span>)))</span>
+<span id="cb55-54"><a href="#cb55-54" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-55"><a href="#cb55-55" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="bu">file</span> <span class="kw">in</span> tqdm(raw_files, desc<span class="op">=</span><span class="st">"Standardizing resolution"</span>):</span>
+<span id="cb55-56"><a href="#cb55-56" aria-hidden="true" tabindex="-1"></a>        filename <span class="op">=</span> os.path.basename(<span class="bu">file</span>)</span>
+<span id="cb55-57"><a href="#cb55-57" aria-hidden="true" tabindex="-1"></a>        output_file <span class="op">=</span> os.path.join(standardized_dir, filename)</span>
+<span id="cb55-58"><a href="#cb55-58" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-59"><a href="#cb55-59" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> os.path.exists(output_file):</span>
+<span id="cb55-60"><a href="#cb55-60" aria-hidden="true" tabindex="-1"></a>            <span class="cf">continue</span></span>
+<span id="cb55-61"><a href="#cb55-61" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-62"><a href="#cb55-62" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Load and squeeze</span></span>
+<span id="cb55-63"><a href="#cb55-63" aria-hidden="true" tabindex="-1"></a>        ds <span class="op">=</span> xr.open_dataset(<span class="bu">file</span>).squeeze()  <span class="co"># Remove singleton dims</span></span>
+<span id="cb55-64"><a href="#cb55-64" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-65"><a href="#cb55-65" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create 1.0° grid</span></span>
+<span id="cb55-66"><a href="#cb55-66" aria-hidden="true" tabindex="-1"></a>        lat_1deg <span class="op">=</span> np.arange(ds.latitude.<span class="bu">min</span>(), ds.latitude.<span class="bu">max</span>() <span class="op">+</span> <span class="fl">1.0</span>, <span class="fl">1.0</span>)</span>
+<span id="cb55-67"><a href="#cb55-67" aria-hidden="true" tabindex="-1"></a>        lon_1deg <span class="op">=</span> np.arange(ds.longitude.<span class="bu">min</span>(), ds.longitude.<span class="bu">max</span>() <span class="op">+</span> <span class="fl">1.0</span>, <span class="fl">1.0</span>)</span>
+<span id="cb55-68"><a href="#cb55-68" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-69"><a href="#cb55-69" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Regrid</span></span>
+<span id="cb55-70"><a href="#cb55-70" aria-hidden="true" tabindex="-1"></a>        ds_regrid <span class="op">=</span> ds.interp(latitude<span class="op">=</span>lat_1deg, longitude<span class="op">=</span>lon_1deg, method<span class="op">=</span><span class="st">'linear'</span>)</span>
+<span id="cb55-71"><a href="#cb55-71" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-72"><a href="#cb55-72" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Ensure clean dimensions</span></span>
+<span id="cb55-73"><a href="#cb55-73" aria-hidden="true" tabindex="-1"></a>        ds_regrid <span class="op">=</span> ds_regrid.squeeze()</span>
+<span id="cb55-74"><a href="#cb55-74" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-75"><a href="#cb55-75" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Save</span></span>
+<span id="cb55-76"><a href="#cb55-76" aria-hidden="true" tabindex="-1"></a>        ds_regrid.to_netcdf(output_file)</span>
+<span id="cb55-77"><a href="#cb55-77" aria-hidden="true" tabindex="-1"></a>        ds.close()</span>
+<span id="cb55-78"><a href="#cb55-78" aria-hidden="true" tabindex="-1"></a>        ds_regrid.close()</span>
+<span id="cb55-79"><a href="#cb55-79" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-80"><a href="#cb55-80" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Standardized files saved to: </span><span class="sc">{</span>standardized_dir<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-81"><a href="#cb55-81" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> standardized_dir</span>
+<span id="cb55-82"><a href="#cb55-82" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-83"><a href="#cb55-83" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-84"><a href="#cb55-84" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 1: CALCULATE CLIMATOLOGY</span></span>
+<span id="cb55-85"><a href="#cb55-85" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-86"><a href="#cb55-86" aria-hidden="true" tabindex="-1"></a><span class="co"># This function calculates the long-term average wind field (uˉ and vˉ) for the entire 1958-2024 period. It does this by opening all the standardized files at once (xr.open_mfdataset) and computing the mean over the time dimension (.mean(dim='valid_time')). This gives the baseline "mean climate" needed for Reynolds decomposition.</span></span>
+<span id="cb55-87"><a href="#cb55-87" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> calculate_climatology(data_dir):</span>
+<span id="cb55-88"><a href="#cb55-88" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb55-89"><a href="#cb55-89" aria-hidden="true" tabindex="-1"></a><span class="co">    Calculate long-term mean u and v for Reynolds decomposition.</span></span>
+<span id="cb55-90"><a href="#cb55-90" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb55-91"><a href="#cb55-91" aria-hidden="true" tabindex="-1"></a>    climatology_file <span class="op">=</span> os.path.join(output_dir, <span class="st">"climatology_1958-2024.nc"</span>)</span>
+<span id="cb55-92"><a href="#cb55-92" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-93"><a href="#cb55-93" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> os.path.exists(climatology_file):</span>
+<span id="cb55-94"><a href="#cb55-94" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="st">"Climatology already exists."</span>)</span>
+<span id="cb55-95"><a href="#cb55-95" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> xr.open_dataset(climatology_file)</span>
+<span id="cb55-96"><a href="#cb55-96" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-97"><a href="#cb55-97" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="op">+</span> <span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
+<span id="cb55-98"><a href="#cb55-98" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"CALCULATING CLIMATOLOGY (1958-2024)"</span>)</span>
+<span id="cb55-99"><a href="#cb55-99" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span>
+<span id="cb55-100"><a href="#cb55-100" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-101"><a href="#cb55-101" aria-hidden="true" tabindex="-1"></a>    all_files <span class="op">=</span> <span class="bu">sorted</span>(glob.glob(os.path.join(data_dir, <span class="st">"era5_850hpa_panarctic_*.nc"</span>)))</span>
+<span id="cb55-102"><a href="#cb55-102" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-103"><a href="#cb55-103" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Loading </span><span class="sc">{</span><span class="bu">len</span>(all_files)<span class="sc">}</span><span class="ss"> files..."</span>)</span>
+<span id="cb55-104"><a href="#cb55-104" aria-hidden="true" tabindex="-1"></a>    ds_all <span class="op">=</span> xr.open_mfdataset(all_files, combine<span class="op">=</span><span class="st">'by_coords'</span>, parallel<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb55-105"><a href="#cb55-105" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-106"><a href="#cb55-106" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Computing time-mean..."</span>)</span>
+<span id="cb55-107"><a href="#cb55-107" aria-hidden="true" tabindex="-1"></a>    u_clim <span class="op">=</span> ds_all[<span class="st">'u'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>).compute()</span>
+<span id="cb55-108"><a href="#cb55-108" aria-hidden="true" tabindex="-1"></a>    v_clim <span class="op">=</span> ds_all[<span class="st">'v'</span>].mean(dim<span class="op">=</span><span class="st">'valid_time'</span>).compute()</span>
+<span id="cb55-109"><a href="#cb55-109" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-110"><a href="#cb55-110" aria-hidden="true" tabindex="-1"></a>    ds_clim <span class="op">=</span> xr.Dataset({</span>
+<span id="cb55-111"><a href="#cb55-111" aria-hidden="true" tabindex="-1"></a>        <span class="st">'u_climatology'</span>: u_clim,</span>
+<span id="cb55-112"><a href="#cb55-112" aria-hidden="true" tabindex="-1"></a>        <span class="st">'v_climatology'</span>: v_clim</span>
+<span id="cb55-113"><a href="#cb55-113" aria-hidden="true" tabindex="-1"></a>    })</span>
+<span id="cb55-114"><a href="#cb55-114" aria-hidden="true" tabindex="-1"></a>    ds_clim.to_netcdf(climatology_file)</span>
+<span id="cb55-115"><a href="#cb55-115" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-116"><a href="#cb55-116" aria-hidden="true" tabindex="-1"></a>    ds_all.close()</span>
+<span id="cb55-117"><a href="#cb55-117" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ds_clim</span>
+<span id="cb55-118"><a href="#cb55-118" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-119"><a href="#cb55-119" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-120"><a href="#cb55-120" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 2: GPU BAND-PASS FILTER</span></span>
+<span id="cb55-121"><a href="#cb55-121" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-122"><a href="#cb55-122" aria-hidden="true" tabindex="-1"></a><span class="co"># This function takes a 3D data array (time, latitude, longitude) and applies the band-pass filter to it on the GPU.</span></span>
+<span id="cb55-123"><a href="#cb55-123" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> bandpass_filter_gpu(data_3d):</span>
+<span id="cb55-124"><a href="#cb55-124" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb55-125"><a href="#cb55-125" aria-hidden="true" tabindex="-1"></a><span class="co">    Apply 2-6 day band-pass filter on GPU.</span></span>
+<span id="cb55-126"><a href="#cb55-126" aria-hidden="true" tabindex="-1"></a><span class="co">    Handles data with extra singleton dimensions.</span></span>
+<span id="cb55-127"><a href="#cb55-127" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb55-128"><a href="#cb55-128" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Squeeze out any singleton dimensions</span></span>
+<span id="cb55-129"><a href="#cb55-129" aria-hidden="true" tabindex="-1"></a>    data_np <span class="op">=</span> np.squeeze(data_3d)</span>
+<span id="cb55-130"><a href="#cb55-130" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-131"><a href="#cb55-131" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Verify we now have 3D data</span></span>
+<span id="cb55-132"><a href="#cb55-132" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> data_np.ndim <span class="op">!=</span> <span class="dv">3</span>:</span>
+<span id="cb55-133"><a href="#cb55-133" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="ss">f"Expected 3D data after squeeze, got </span><span class="sc">{</span>data_np<span class="sc">.</span>ndim<span class="sc">}</span><span class="ss">D: </span><span class="sc">{</span>data_np<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-134"><a href="#cb55-134" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-135"><a href="#cb55-135" aria-hidden="true" tabindex="-1"></a>    <span class="co"># cp.asarray(data_np, ...) copies the wind data from the RAm to the VRAM</span></span>
+<span id="cb55-136"><a href="#cb55-136" aria-hidden="true" tabindex="-1"></a>    data_gpu <span class="op">=</span> cp.asarray(data_np, dtype<span class="op">=</span>cp.float64)</span>
+<span id="cb55-137"><a href="#cb55-137" aria-hidden="true" tabindex="-1"></a>    ntime, nlat, nlon <span class="op">=</span> data_gpu.shape</span>
+<span id="cb55-138"><a href="#cb55-138" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-139"><a href="#cb55-139" aria-hidden="true" tabindex="-1"></a>    <span class="co"># data_reshaped = data_gpu.reshape(...) flattens the spatial dimensions (latitude and longitude) into a single long dimension. This turns the 3D cube of data into a 2D array (time x space). This is done because filtering functions are much more efficient when applied along one dimension of a 2D array.</span></span>
+<span id="cb55-140"><a href="#cb55-140" aria-hidden="true" tabindex="-1"></a>    data_reshaped <span class="op">=</span> data_gpu.reshape(ntime, nlat <span class="op">*</span> nlon)</span>
+<span id="cb55-141"><a href="#cb55-141" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-142"><a href="#cb55-142" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Detrend: Before filtering, it's critical to remove any long-term linear trend from the data. A filter assumes the data mean is constant. If there's a trend (e.g., due to climate change), it can introduce errors at the edges of the filter. This block of code calculates and subtracts the linear trend from each grid point's time series.More details of the calculations under</span></span>
+<span id="cb55-143"><a href="#cb55-143" aria-hidden="true" tabindex="-1"></a>    mean_vals <span class="op">=</span> cp.mean(data_reshaped, axis<span class="op">=</span><span class="dv">0</span>, keepdims<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb55-144"><a href="#cb55-144" aria-hidden="true" tabindex="-1"></a>    data_centered <span class="op">=</span> data_reshaped <span class="op">-</span> mean_vals</span>
+<span id="cb55-145"><a href="#cb55-145" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-146"><a href="#cb55-146" aria-hidden="true" tabindex="-1"></a>    time_indices <span class="op">=</span> cp.arange(ntime, dtype<span class="op">=</span>cp.float64).reshape(<span class="op">-</span><span class="dv">1</span>, <span class="dv">1</span>)</span>
+<span id="cb55-147"><a href="#cb55-147" aria-hidden="true" tabindex="-1"></a>    time_centered <span class="op">=</span> time_indices <span class="op">-</span> cp.mean(time_indices)</span>
+<span id="cb55-148"><a href="#cb55-148" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-149"><a href="#cb55-149" aria-hidden="true" tabindex="-1"></a>    numerator <span class="op">=</span> cp.<span class="bu">sum</span>(time_centered <span class="op">*</span> data_centered, axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb55-150"><a href="#cb55-150" aria-hidden="true" tabindex="-1"></a>    denominator <span class="op">=</span> cp.<span class="bu">sum</span>(time_centered <span class="op">**</span> <span class="dv">2</span>)</span>
+<span id="cb55-151"><a href="#cb55-151" aria-hidden="true" tabindex="-1"></a>    slopes <span class="op">=</span> numerator <span class="op">/</span> denominator</span>
+<span id="cb55-152"><a href="#cb55-152" aria-hidden="true" tabindex="-1"></a>    trends <span class="op">=</span> time_centered <span class="op">@</span> slopes.reshape(<span class="dv">1</span>, <span class="op">-</span><span class="dv">1</span>)</span>
+<span id="cb55-153"><a href="#cb55-153" aria-hidden="true" tabindex="-1"></a>    data_detrended <span class="op">=</span> data_centered <span class="op">-</span> trends</span>
+<span id="cb55-154"><a href="#cb55-154" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-155"><a href="#cb55-155" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Apply Filter: cp_signal.filtfilt(...) is the main event. It applies the Butterworth filter we designed earlier. The filtfilt function is special because it applies the filter once forward and then once backward. This technique cancels out any phase distortion, ensuring that the peaks and troughs of the storm signals in the output align perfectly in time with the original data.</span></span>
+<span id="cb55-156"><a href="#cb55-156" aria-hidden="true" tabindex="-1"></a>    data_transposed <span class="op">=</span> data_detrended.T</span>
+<span id="cb55-157"><a href="#cb55-157" aria-hidden="true" tabindex="-1"></a>    filtered_transposed <span class="op">=</span> cp_signal.filtfilt(</span>
+<span id="cb55-158"><a href="#cb55-158" aria-hidden="true" tabindex="-1"></a>        FILTER_B_GPU, FILTER_A_GPU, data_transposed, axis<span class="op">=</span><span class="dv">1</span>,</span>
+<span id="cb55-159"><a href="#cb55-159" aria-hidden="true" tabindex="-1"></a>        padlen<span class="op">=</span><span class="bu">min</span>(<span class="dv">3</span> <span class="op">*</span> <span class="bu">max</span>(<span class="bu">len</span>(FILTER_B_GPU), <span class="bu">len</span>(FILTER_A_GPU)), ntime <span class="op">-</span> <span class="dv">1</span>)</span>
+<span id="cb55-160"><a href="#cb55-160" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb55-161"><a href="#cb55-161" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-162"><a href="#cb55-162" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Reshape Back and Return: The code reshapes the 2D filtered data back into a 3D cube, copies it from the GPU back to the CPU's RAM (cp.asnumpy(filtered_3d)), and cleans up the GPU memory for the next chunk of data.</span></span>
+<span id="cb55-163"><a href="#cb55-163" aria-hidden="true" tabindex="-1"></a>    filtered_3d <span class="op">=</span> filtered_transposed.T.reshape(ntime, nlat, nlon)</span>
+<span id="cb55-164"><a href="#cb55-164" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> cp.asnumpy(filtered_3d)</span>
+<span id="cb55-165"><a href="#cb55-165" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-166"><a href="#cb55-166" aria-hidden="true" tabindex="-1"></a>    <span class="kw">del</span> data_gpu, data_reshaped, data_centered, data_detrended</span>
+<span id="cb55-167"><a href="#cb55-167" aria-hidden="true" tabindex="-1"></a>    <span class="kw">del</span> data_transposed, filtered_transposed, filtered_3d</span>
+<span id="cb55-168"><a href="#cb55-168" aria-hidden="true" tabindex="-1"></a>    cp.get_default_memory_pool().free_all_blocks()</span>
+<span id="cb55-169"><a href="#cb55-169" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-170"><a href="#cb55-170" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
+<span id="cb55-171"><a href="#cb55-171" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-172"><a href="#cb55-172" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-173"><a href="#cb55-173" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 3: PROCESS YEAR WITH CORRECT REYNOLDS DECOMPOSITION</span></span>
+<span id="cb55-174"><a href="#cb55-174" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-175"><a href="#cb55-175" aria-hidden="true" tabindex="-1"></a><span class="co"># This function brings everything together to process a single year of data and produce the final storminess metrics.</span></span>
+<span id="cb55-176"><a href="#cb55-176" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> process_year_correct(year, data_dir, climatology):</span>
+<span id="cb55-177"><a href="#cb55-177" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb55-178"><a href="#cb55-178" aria-hidden="true" tabindex="-1"></a><span class="co">    CORRECT IMPLEMENTATION:</span></span>
+<span id="cb55-179"><a href="#cb55-179" aria-hidden="true" tabindex="-1"></a><span class="co">    1. Load data</span></span>
+<span id="cb55-180"><a href="#cb55-180" aria-hidden="true" tabindex="-1"></a><span class="co">    2. Subtract climatology (Reynolds decomposition) → get u', v'</span></span>
+<span id="cb55-181"><a href="#cb55-181" aria-hidden="true" tabindex="-1"></a><span class="co">    3. Apply band-pass filter to u', v' → get u'_filtered, v'_filtered</span></span>
+<span id="cb55-182"><a href="#cb55-182" aria-hidden="true" tabindex="-1"></a><span class="co">    4. Calculate EKE, MKE, TKE</span></span>
+<span id="cb55-183"><a href="#cb55-183" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb55-184"><a href="#cb55-184" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="sc">{</span><span class="st">'='</span><span class="op">*</span><span class="dv">60</span><span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-185"><a href="#cb55-185" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"PROCESSING YEAR </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-186"><a href="#cb55-186" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="st">'='</span><span class="op">*</span><span class="dv">60</span><span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-187"><a href="#cb55-187" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-188"><a href="#cb55-188" aria-hidden="true" tabindex="-1"></a>    year_file <span class="op">=</span> os.path.join(output_dir, <span class="ss">f"storminess_</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">.nc"</span>)</span>
+<span id="cb55-189"><a href="#cb55-189" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-190"><a href="#cb55-190" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> os.path.exists(year_file):</span>
+<span id="cb55-191"><a href="#cb55-191" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Year </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss"> already processed."</span>)</span>
+<span id="cb55-192"><a href="#cb55-192" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"[SKIP] </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb55-193"><a href="#cb55-193" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb55-194"><a href="#cb55-194" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
+<span id="cb55-195"><a href="#cb55-195" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Load Data with Overlap: It loads all 12 months for the target year, plus the previous December and the next January. This overlap is essential to avoid edge effects from the filter. Without this padding, the results for the first few days of January and the last few days of December would be inaccurate.</span></span>
+<span id="cb55-196"><a href="#cb55-196" aria-hidden="true" tabindex="-1"></a>        year_files <span class="op">=</span> <span class="bu">sorted</span>(glob.glob(</span>
+<span id="cb55-197"><a href="#cb55-197" aria-hidden="true" tabindex="-1"></a>            os.path.join(data_dir, <span class="ss">f"era5_850hpa_panarctic_</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">-*.nc"</span>)</span>
+<span id="cb55-198"><a href="#cb55-198" aria-hidden="true" tabindex="-1"></a>        ))</span>
+<span id="cb55-199"><a href="#cb55-199" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-200"><a href="#cb55-200" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">len</span>(year_files) <span class="op">==</span> <span class="dv">0</span>:</span>
+<span id="cb55-201"><a href="#cb55-201" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ss">f"[WARN] No files for </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb55-202"><a href="#cb55-202" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-203"><a href="#cb55-203" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Add overlap</span></span>
+<span id="cb55-204"><a href="#cb55-204" aria-hidden="true" tabindex="-1"></a>        extended_files <span class="op">=</span> []</span>
+<span id="cb55-205"><a href="#cb55-205" aria-hidden="true" tabindex="-1"></a>        prev_dec <span class="op">=</span> os.path.join(data_dir, <span class="ss">f"era5_850hpa_panarctic_</span><span class="sc">{</span>year<span class="op">-</span><span class="dv">1</span><span class="sc">}</span><span class="ss">-12.nc"</span>)</span>
+<span id="cb55-206"><a href="#cb55-206" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> os.path.exists(prev_dec):</span>
+<span id="cb55-207"><a href="#cb55-207" aria-hidden="true" tabindex="-1"></a>            extended_files.append(prev_dec)</span>
+<span id="cb55-208"><a href="#cb55-208" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-209"><a href="#cb55-209" aria-hidden="true" tabindex="-1"></a>        extended_files.extend(year_files)</span>
+<span id="cb55-210"><a href="#cb55-210" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-211"><a href="#cb55-211" aria-hidden="true" tabindex="-1"></a>        next_jan <span class="op">=</span> os.path.join(data_dir, <span class="ss">f"era5_850hpa_panarctic_</span><span class="sc">{</span>year<span class="op">+</span><span class="dv">1</span><span class="sc">}</span><span class="ss">-01.nc"</span>)</span>
+<span id="cb55-212"><a href="#cb55-212" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> os.path.exists(next_jan):</span>
+<span id="cb55-213"><a href="#cb55-213" aria-hidden="true" tabindex="-1"></a>            extended_files.append(next_jan)</span>
+<span id="cb55-214"><a href="#cb55-214" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-215"><a href="#cb55-215" aria-hidden="true" tabindex="-1"></a>        ds <span class="op">=</span> ds <span class="op">=</span> xr.open_mfdataset(extended_files, combine<span class="op">=</span><span class="st">'by_coords'</span>).squeeze(drop<span class="op">=</span><span class="va">True</span>).load()</span>
+<span id="cb55-216"><a href="#cb55-216" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-217"><a href="#cb55-217" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Data shape: </span><span class="sc">{</span>ds[<span class="st">'u'</span>]<span class="sc">.</span>shape<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-218"><a href="#cb55-218" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-219"><a href="#cb55-219" aria-hidden="true" tabindex="-1"></a>        <span class="co"># CRITICAL STEP: Reynolds decomposition FIRST</span></span>
+<span id="cb55-220"><a href="#cb55-220" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Step 1: Reynolds decomposition (u' = u - ū)..."</span>)</span>
+<span id="cb55-221"><a href="#cb55-221" aria-hidden="true" tabindex="-1"></a>        u_clim <span class="op">=</span> climatology[<span class="st">'u_climatology'</span>]</span>
+<span id="cb55-222"><a href="#cb55-222" aria-hidden="true" tabindex="-1"></a>        v_clim <span class="op">=</span> climatology[<span class="st">'v_climatology'</span>]</span>
+<span id="cb55-223"><a href="#cb55-223" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-224"><a href="#cb55-224" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Reynoldss decomposition: Calculate eddy components (deviation from               climatology)</span></span>
+<span id="cb55-225"><a href="#cb55-225" aria-hidden="true" tabindex="-1"></a>        <span class="co"># This is the first critical scientific step. It subtracts the long-term climatology (uˉ, vˉ) from the instantaneous wind data to get the eddy components (u′, v′).</span></span>
+<span id="cb55-226"><a href="#cb55-226" aria-hidden="true" tabindex="-1"></a>        u_prime <span class="op">=</span> ds[<span class="st">'u'</span>] <span class="op">-</span> u_clim</span>
+<span id="cb55-227"><a href="#cb55-227" aria-hidden="true" tabindex="-1"></a>        v_prime <span class="op">=</span> ds[<span class="st">'v'</span>] <span class="op">-</span> v_clim</span>
+<span id="cb55-228"><a href="#cb55-228" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-229"><a href="#cb55-229" aria-hidden="true" tabindex="-1"></a>        <span class="co"># THEN apply band-pass filter to the eddy components (u′ and v′)</span></span>
+<span id="cb55-230"><a href="#cb55-230" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Step 2: Band-pass filtering u', v'..."</span>)</span>
+<span id="cb55-231"><a href="#cb55-231" aria-hidden="true" tabindex="-1"></a>        u_prime_filtered <span class="op">=</span> bandpass_filter_gpu(u_prime.values.astype(np.float64))</span>
+<span id="cb55-232"><a href="#cb55-232" aria-hidden="true" tabindex="-1"></a>        v_prime_filtered <span class="op">=</span> bandpass_filter_gpu(v_prime.values.astype(np.float64))</span>
+<span id="cb55-233"><a href="#cb55-233" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-234"><a href="#cb55-234" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Add to dataset</span></span>
+<span id="cb55-235"><a href="#cb55-235" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'u_eddy'</span>] <span class="op">=</span> (ds[<span class="st">'u'</span>].dims, u_prime_filtered)</span>
+<span id="cb55-236"><a href="#cb55-236" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'v_eddy'</span>] <span class="op">=</span> (ds[<span class="st">'v'</span>].dims, v_prime_filtered)</span>
+<span id="cb55-237"><a href="#cb55-237" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-238"><a href="#cb55-238" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Calculate Kinetic Energy: With the filtered eddy components, it now   calculates the key metrics :</span></span>
+<span id="cb55-239"><a href="#cb55-239" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-240"><a href="#cb55-240" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Calculate instantaneous EKE</span></span>
+<span id="cb55-241"><a href="#cb55-241" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'eke'</span>] <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (ds[<span class="st">'u_eddy'</span>]<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> ds[<span class="st">'v_eddy'</span>]<span class="op">**</span><span class="dv">2</span>)</span>
+<span id="cb55-242"><a href="#cb55-242" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-243"><a href="#cb55-243" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Calculate instantaneous TKE (for proper averaging)</span></span>
+<span id="cb55-244"><a href="#cb55-244" aria-hidden="true" tabindex="-1"></a>        ds[<span class="st">'tke'</span>] <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (ds[<span class="st">'u'</span>]<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> ds[<span class="st">'v'</span>]<span class="op">**</span><span class="dv">2</span>)</span>
+<span id="cb55-245"><a href="#cb55-245" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-246"><a href="#cb55-246" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Extract target year</span></span>
+<span id="cb55-247"><a href="#cb55-247" aria-hidden="true" tabindex="-1"></a>        ds_year <span class="op">=</span> ds.sel(valid_time<span class="op">=</span><span class="bu">slice</span>(<span class="ss">f"</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">-01-01"</span>, <span class="ss">f"</span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">-12-31"</span>))</span>
+<span id="cb55-248"><a href="#cb55-248" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-249"><a href="#cb55-249" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Step 3: Calculating monthly summaries..."</span>)</span>
+<span id="cb55-250"><a href="#cb55-250" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-251"><a href="#cb55-251" aria-hidden="true" tabindex="-1"></a>        <span class="co"># MKE from climatology (same for all months)</span></span>
+<span id="cb55-252"><a href="#cb55-252" aria-hidden="true" tabindex="-1"></a>        mke <span class="op">=</span> <span class="fl">0.5</span> <span class="op">*</span> (u_clim<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> v_clim<span class="op">**</span><span class="dv">2</span>)</span>
+<span id="cb55-253"><a href="#cb55-253" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-254"><a href="#cb55-254" aria-hidden="true" tabindex="-1"></a>        monthly_summaries <span class="op">=</span> []</span>
+<span id="cb55-255"><a href="#cb55-255" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-256"><a href="#cb55-256" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Summarize and Save: It loops through each month of the target year, calculating the final statistical products: the mean and variance of EKE. It bundles these monthly summaries into a new NetCDF file (storminess_{year}.nc) and saves it to disk.</span></span>
+<span id="cb55-257"><a href="#cb55-257" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-258"><a href="#cb55-258" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> month <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1</span>, <span class="dv">13</span>):</span>
+<span id="cb55-259"><a href="#cb55-259" aria-hidden="true" tabindex="-1"></a>            ds_month <span class="op">=</span> ds_year.sel(valid_time<span class="op">=</span>ds_year.valid_time.dt.month <span class="op">==</span> month)</span>
+<span id="cb55-260"><a href="#cb55-260" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb55-261"><a href="#cb55-261" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="bu">len</span>(ds_month.valid_time) <span class="op">==</span> <span class="dv">0</span>:</span>
+<span id="cb55-262"><a href="#cb55-262" aria-hidden="true" tabindex="-1"></a>                <span class="cf">continue</span></span>
+<span id="cb55-263"><a href="#cb55-263" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb55-264"><a href="#cb55-264" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Time-averaged quantities for this month</span></span>
+<span id="cb55-265"><a href="#cb55-265" aria-hidden="true" tabindex="-1"></a>            eke_mean <span class="op">=</span> ds_month[<span class="st">'eke'</span>].mean(<span class="st">'valid_time'</span>)</span>
+<span id="cb55-266"><a href="#cb55-266" aria-hidden="true" tabindex="-1"></a>            eke_variance <span class="op">=</span> ds_month[<span class="st">'eke'</span>].var(<span class="st">'valid_time'</span>)</span>
+<span id="cb55-267"><a href="#cb55-267" aria-hidden="true" tabindex="-1"></a>            tke_mean <span class="op">=</span> ds_month[<span class="st">'tke'</span>].mean(<span class="st">'valid_time'</span>)</span>
+<span id="cb55-268"><a href="#cb55-268" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb55-269"><a href="#cb55-269" aria-hidden="true" tabindex="-1"></a>            ds_summary <span class="op">=</span> xr.Dataset({</span>
+<span id="cb55-270"><a href="#cb55-270" aria-hidden="true" tabindex="-1"></a>                <span class="st">'eke_mean'</span>: eke_mean,</span>
+<span id="cb55-271"><a href="#cb55-271" aria-hidden="true" tabindex="-1"></a>                <span class="st">'eke_variance'</span>: eke_variance,  <span class="co"># PRIMARY STORMINESS INDEX</span></span>
+<span id="cb55-272"><a href="#cb55-272" aria-hidden="true" tabindex="-1"></a>                <span class="st">'mke'</span>: mke,</span>
+<span id="cb55-273"><a href="#cb55-273" aria-hidden="true" tabindex="-1"></a>                <span class="st">'tke_mean'</span>: tke_mean</span>
+<span id="cb55-274"><a href="#cb55-274" aria-hidden="true" tabindex="-1"></a>            })</span>
+<span id="cb55-275"><a href="#cb55-275" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb55-276"><a href="#cb55-276" aria-hidden="true" tabindex="-1"></a>            ds_summary <span class="op">=</span> ds_summary.assign_coords({<span class="st">'month'</span>: month})</span>
+<span id="cb55-277"><a href="#cb55-277" aria-hidden="true" tabindex="-1"></a>            monthly_summaries.append(ds_summary)</span>
+<span id="cb55-278"><a href="#cb55-278" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-279"><a href="#cb55-279" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Combine months</span></span>
+<span id="cb55-280"><a href="#cb55-280" aria-hidden="true" tabindex="-1"></a>        ds_year_summary <span class="op">=</span> xr.concat(monthly_summaries, dim<span class="op">=</span><span class="st">'month'</span>)</span>
+<span id="cb55-281"><a href="#cb55-281" aria-hidden="true" tabindex="-1"></a>        ds_year_summary[<span class="st">'year'</span>] <span class="op">=</span> year</span>
+<span id="cb55-282"><a href="#cb55-282" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-283"><a href="#cb55-283" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Save</span></span>
+<span id="cb55-284"><a href="#cb55-284" aria-hidden="true" tabindex="-1"></a>        ds_year_summary.to_netcdf(year_file)</span>
+<span id="cb55-285"><a href="#cb55-285" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-286"><a href="#cb55-286" aria-hidden="true" tabindex="-1"></a>        ds.close()</span>
+<span id="cb55-287"><a href="#cb55-287" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Saved: </span><span class="sc">{</span>year_file<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb55-288"><a href="#cb55-288" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-289"><a href="#cb55-289" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"[DONE] </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb55-290"><a href="#cb55-290" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb55-291"><a href="#cb55-291" aria-hidden="true" tabindex="-1"></a>    <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
+<span id="cb55-292"><a href="#cb55-292" aria-hidden="true" tabindex="-1"></a>        cp.get_default_memory_pool().free_all_blocks()</span>
+<span id="cb55-293"><a href="#cb55-293" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"[ERROR] </span><span class="sc">{</span>year<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span><span class="bu">str</span>(e)<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb55-294"><a href="#cb55-294" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-295"><a href="#cb55-295" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-296"><a href="#cb55-296" aria-hidden="true" tabindex="-1"></a><span class="co"># MAIN EXECUTION</span></span>
+<span id="cb55-297"><a href="#cb55-297" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb55-298"><a href="#cb55-298" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>============================================================</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"SCIENTIFICALLY CORRECT ARCTIC STORMINESS ANALYSIS"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"SCIENTIFICALLY CORRECT ARCTIC STORMINESS ANALYSIS"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>SCIENTIFICALLY CORRECT ARCTIC STORMINESS ANALYSIS</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>============================================================</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"GPU: </span><span class="sc">{</span>cp<span class="sc">.</span>cuda<span class="sc">.</span>runtime<span class="sc">.</span>getDeviceProperties(<span class="dv">0</span>)[<span class="st">'name'</span>]<span class="sc">.</span>decode()<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"GPU: </span><span class="sc">{</span>cp<span class="sc">.</span>cuda<span class="sc">.</span>runtime<span class="sc">.</span>getDeviceProperties(<span class="dv">0</span>)[<span class="st">'name'</span>]<span class="sc">.</span>decode()<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>GPU: NVIDIA GeForce RTX 3080</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"GPU Memory: </span><span class="sc">{</span>cp<span class="sc">.</span>cuda<span class="sc">.</span>runtime<span class="sc">.</span>getDeviceProperties(<span class="dv">0</span>)[<span class="st">'totalGlobalMem'</span>] <span class="op">/</span> <span class="fl">1e9</span><span class="sc">:.1f}</span><span class="ss"> GB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb63"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"GPU Memory: </span><span class="sc">{</span>cp<span class="sc">.</span>cuda<span class="sc">.</span>runtime<span class="sc">.</span>getDeviceProperties(<span class="dv">0</span>)[<span class="st">'totalGlobalMem'</span>] <span class="op">/</span> <span class="fl">1e9</span><span class="sc">:.1f}</span><span class="ss"> GB"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>GPU Memory: 12.9 GB</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb65"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>============================================================</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb63"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 0: Resolution standardization</span></span>
-<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">STEP 0: Resolution standardization..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb67"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 0: Resolution standardization</span></span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">STEP 0: Resolution standardization..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 STEP 0: Resolution standardization...</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb65"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a>standardized_dir <span class="op">=</span> standardize_resolution()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb69"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>standardized_dir <span class="op">=</span> standardize_resolution()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 ============================================================
@@ -1970,30 +2118,30 @@ RESOLUTION STANDARDIZATION TO 1.0° x 1.0°
 ============================================================
 
 Standardizing resolution:   0%|          | 0/804 [00:00&lt;?, ?it/s]
-Standardizing resolution: 100%|##########| 804/804 [00:00&lt;00:00, 13197.12it/s]
+Standardizing resolution: 100%|##########| 804/804 [00:00&lt;00:00, 13991.51it/s]
 Standardized files saved to: E:/ERA5_data\standardized_1deg</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb67"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Calculate climatology</span></span>
-<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">STEP 1: Calculate climatology..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb71"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Calculate climatology</span></span>
+<span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">STEP 1: Calculate climatology..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 STEP 1: Calculate climatology...</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb69"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>climatology <span class="op">=</span> calculate_climatology(standardized_dir)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb73"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>climatology <span class="op">=</span> calculate_climatology(standardized_dir)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Climatology already exists.</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb71"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Process all years</span></span>
-<span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">STEP 2: Process all years..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb75"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Process all years</span></span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">STEP 2: Process all years..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 STEP 2: Process all years...</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb73"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> []</span>
-<span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb73-3"><a href="#cb73-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> year <span class="kw">in</span> tqdm(YEARS_TO_PROCESS, desc<span class="op">=</span><span class="st">"Years"</span>):</span>
-<span id="cb73-4"><a href="#cb73-4" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> process_year_correct(year, standardized_dir, climatology)</span>
-<span id="cb73-5"><a href="#cb73-5" aria-hidden="true" tabindex="-1"></a>    results.append(result)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb77"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb77-1"><a href="#cb77-1" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> []</span>
+<span id="cb77-2"><a href="#cb77-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb77-3"><a href="#cb77-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> year <span class="kw">in</span> tqdm(YEARS_TO_PROCESS, desc<span class="op">=</span><span class="st">"Years"</span>):</span>
+<span id="cb77-4"><a href="#cb77-4" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> process_year_correct(year, standardized_dir, climatology)</span>
+<span id="cb77-5"><a href="#cb77-5" aria-hidden="true" tabindex="-1"></a>    results.append(result)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 Years:   0%|          | 0/67 [00:00&lt;?, ?it/s]
@@ -2332,48 +2480,86 @@ PROCESSING YEAR 2024
 ============================================================
 Year 2024 already processed.
 
-Years: 100%|##########| 67/67 [00:00&lt;00:00, 14886.02it/s]</code></pre>
+Years: 100%|##########| 67/67 [00:00&lt;00:00, 13416.33it/s]</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb75"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Summary</span></span>
-<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="op">+</span> <span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb79"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Summary</span></span>
+<span id="cb79-2"><a href="#cb79-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="op">+</span> <span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 ============================================================</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb77"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb77-1"><a href="#cb77-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"SUMMARY"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb81"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"SUMMARY"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>SUMMARY</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb79"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb83"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>============================================================</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb81"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Completed: </span><span class="sc">{</span><span class="bu">sum</span>(<span class="st">'[DONE]'</span> <span class="kw">in</span> r <span class="cf">for</span> r <span class="kw">in</span> results)<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb85"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Completed: </span><span class="sc">{</span><span class="bu">sum</span>(<span class="st">'[DONE]'</span> <span class="kw">in</span> r <span class="cf">for</span> r <span class="kw">in</span> results)<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Completed: 0</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb83"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Skipped: </span><span class="sc">{</span><span class="bu">sum</span>(<span class="st">'[SKIP]'</span> <span class="kw">in</span> r <span class="cf">for</span> r <span class="kw">in</span> results)<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb87"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb87-1"><a href="#cb87-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Skipped: </span><span class="sc">{</span><span class="bu">sum</span>(<span class="st">'[SKIP]'</span> <span class="kw">in</span> r <span class="cf">for</span> r <span class="kw">in</span> results)<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Skipped: 67</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb85"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Errors: </span><span class="sc">{</span><span class="bu">sum</span>(<span class="st">'[ERROR]'</span> <span class="kw">in</span> r <span class="cf">for</span> r <span class="kw">in</span> results)<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb89"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb89-1"><a href="#cb89-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Errors: </span><span class="sc">{</span><span class="bu">sum</span>(<span class="st">'[ERROR]'</span> <span class="kw">in</span> r <span class="cf">for</span> r <span class="kw">in</span> results)<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Errors: 0</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb87"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb87-1"><a href="#cb87-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb91"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb91-1"><a href="#cb91-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"="</span><span class="op">*</span><span class="dv">60</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>============================================================</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb89"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb89-1"><a href="#cb89-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Outputs in: </span><span class="sc">{</span>output_dir<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb93"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb93-1"><a href="#cb93-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="ch">\n</span><span class="ss">Outputs in: </span><span class="sc">{</span>output_dir<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 Outputs in: E:/ERA5_data\processed_correct</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb91"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb91-1"><a href="#cb91-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Ready for trend analysis!"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb95"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb95-1"><a href="#cb95-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Ready for trend analysis!"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Ready for trend analysis!</code></pre>
 </div>
 </div>
+<section id="how-the-detrending-is-done-step-2-gpu-band-pass-filter" class="level3">
+<h3 class="anchored" data-anchor-id="how-the-detrending-is-done-step-2-gpu-band-pass-filter">How the detrending is done (STEP 2: GPU BAND-PASS FILTER)</h3>
+<p>The code is performing Ordinary Least Squares (OLS) linear regression on the time series of each individual grid cell. In simple terms, it finds the “line of best fit” through the time series data and then subtracts that line, leaving the data minus its long-term trend.</p>
+<p>This process is crucial because a band-pass filter is designed to work on stationary data (data without a trend). Removing the trend first prevents it from distorting the filter’s output.</p>
+<section id="center-the-variables" class="level4">
+<h4 class="anchored" data-anchor-id="center-the-variables">1. Center the Variables</h4>
+<p>The first step is to “center” both the wind data (<span class="math inline">\(Y\)</span>) and the time vector (<span class="math inline">\(t\)</span>) by subtracting their respective means (<span class="math inline">\(\bar{Y}\)</span> and <span class="math inline">\(\bar{t}\)</span>). This simplifies the math for the next steps.</p>
+<p><code>data_centered</code> = <span class="math inline">\(Y_t - \bar{Y}\)</span></p>
+<p><code>time_centered</code> = <span class="math inline">\(t - \bar{t}\)</span></p>
+</section>
+<section id="calculate-the-trend-slope-beta_1" class="level4">
+<h4 class="anchored" data-anchor-id="calculate-the-trend-slope-beta_1">2. Calculate the Trend Slope (<span class="math inline">\(\beta_1\)</span>)</h4>
+<p>The code then calculates the slope of the best-fit line using the standard OLS formula. The slope, <span class="math inline">\(\beta_1\)</span>, represents the rate of change over time (the trend).</p>
+<ul>
+<li><p><strong>Numerator</strong>: The code calculates the sum of the products of the centered variables. This is related to the covariance between time and your wind data. <span class="math display">\[
+  \text{numerator} = \sum_{t=1}^{n} (t - \bar{t})(Y_t - \bar{Y})
+  \]</span></p></li>
+<li><p><strong>Denominator</strong>: The code calculates the sum of the squared centered time variables. This is related to the variance of the time vector. <span class="math display">\[
+  \text{denominator} = \sum_{t=1}^{n} (t - \bar{t})^2
+  \]</span></p></li>
+<li><p><strong>Slope</strong>: The slope is the ratio of the numerator to the denominator. <span class="math display">\[
+  \beta_1 = \frac{\sum_{t=1}^{n} (t - \bar{t})(Y_t - \bar{Y})}{\sum_{t=1}^{n} (t - \bar{t})^2}
+  \]</span> This is what the line <code>slopes = numerator / denominator</code> computes for every grid cell simultaneously.</p></li>
+</ul>
+</section>
+<section id="reconstruct-and-subtract-the-trend" class="level4">
+<h4 class="anchored" data-anchor-id="reconstruct-and-subtract-the-trend">3. Reconstruct and Subtract the Trend</h4>
+<p>Finally, the code reconstructs the full trend line and subtracts it from the centered data.</p>
+<ul>
+<li><p><strong>Trend Line</strong>: The trend component for each point in time is calculated by multiplying the slope by the centered time vector. <span class="math display">\[
+  \text{Trend}_t = \beta_1 \times (t - \bar{t})
+  \]</span> This is what the line <code>trends = time_centered @ slopes.reshape(1, -1)</code> does.</p></li>
+<li><p><strong>Final Detrended Data</strong>: This trend is then subtracted from the centered wind data. The result is the residuals (<span class="math inline">\(\epsilon_t\)</span>) of the linear regression, which is your original data with the linear trend removed. <span class="math display">\[
+  \text{data_detrended} = (Y_t - \bar{Y}) - \text{Trend}_t
+  \]</span> The final <code>data_detrended</code> variable contains the wind data for each grid cell, now oscillating around zero with no long-term linear trend.</p></li>
+</ul>
+</section>
+</section>
 </section>
 </section>
 
