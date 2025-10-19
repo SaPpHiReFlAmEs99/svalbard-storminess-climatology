@@ -72,6 +72,7 @@ library(zoo)
 library(foreach)
 library(doParallel)
 library(pbapply)
+library(stars)        # For handling raster/gridded data
 
 #library(discordrpc)   # Disable this if you run the code on your pc
 
@@ -2319,41 +2320,25 @@ cat(sprintf("Reduction in degrees of freedom: %.1f%%\n", (1 - neff/N) * 100))
 cat("✓ This confirms that standard statistical tests assuming independence would be invalid.\n")
 ```
 
-```{r}
-library(ggplot2)
-
-ggplot(storm_df, aes(x = date, y = storminess)) +
-  geom_line(color = "#0072B2", linewidth = 0.6) +
-  theme_bw(base_size = 13) +
-  labs(
-    title = "Pan-Arctic Storminess Index (1958–2024)",
-    subtitle = "Area-weighted, monthly means (≥ 60°N)",
-    x = "Date (month-end)",
-    y = expression("Storminess index [m"^4*"/s"^4*"]")
-  ) +
-  scale_x_date(
-    date_breaks = "10 years",
-    date_labels = "%b-%Y",
-    expand = c(0, 0)
-  )
-```
-
-
 # Phase 2: Core Trend and Change-Point Analysis
 
-Following the foundational analysis and the critical confirmation of significant temporal autocorrelation, this phase details the primary quantitative analysis of long-term change in the Pan-Arctic storminess index. [cite_start]The methodological framework explicitly rejects the use of Ordinary Least Squares (OLS) regression for significance testing, as the presence of strong serial correlation ($\rho_1 = 0.540$) violates its core assumption of independent residuals, which would lead to artificially inflated significance levels[cite: 6086].
+Following the foundational analysis and the critical confirmation of significant temporal autocorrelation, this phase details the primary quantitative analysis of long-term change in the Pan-Arctic storminess index. \[cite_start\]The methodological framework explicitly rejects the use of Ordinary Least Squares (OLS) regression for significance testing, as the presence of strong serial correlation ($\rho_1 = 0.540$) violates its core assumption of independent residuals, which would lead to artificially inflated significance levels\[cite: 6086\].
 
-[cite_start]Instead, this analysis employs a robust, non-parametric framework that separates the assessment of trend **significance** from the estimation of trend **magnitude**, ensuring the results are statistically defensible and meet modern standards of rigor in climate science[cite: 6082, 6084].
+\[cite_start\]Instead, this analysis employs a robust, non-parametric framework that separates the assessment of trend **significance** from the estimation of trend **magnitude**, ensuring the results are statistically defensible and meet modern standards of rigor in climate science\[cite: 6082, 6084\].
 
 ## 2.1 Pan-Arctic Trend Analysis
 
-A dual-method approach was applied to the area-weighted Pan-Arctic time series (`storm_ts_obj`) to provide a comprehensive assessment of the 1958–2024 trend.
+A multi-method approach was applied to the area-weighted Pan-Arctic time series (`storm_ts_obj`) to provide a comprehensive and robust assessment of the 1958–2024 trend.
 
-### 2.1.1 Trend Significance: Modified Mann-Kendall Test
+### 2.1.1 Trend Significance assesment
 
-[cite_start]To test the null hypothesis of no monotonic trend, the **modified Mann-Kendall test** was employed, as specified in the analysis framework[cite: 6087]. [cite_start]The R implementation (`mmkh` function) utilizes a variance correction procedure based on the methodology of Hamed and Rao (1998) to account for the full autocorrelation structure of the time series[cite: 6087].
+Two distinct, well-established methods were used to test the null hypothesis of no monotonic trend in the presence of autocorrelation.
 
-The test returned a result of `NA` for both the corrected Z-statistic and the p-value. This outcome does not indicate a computational error but is a diagnostic finding in itself. It signifies that the variance correction algorithm could not converge to a stable solution, a situation that can arise when the trend signal is exceptionally weak relative to the data's high variance and complex, oscillatory autocorrelation structure. In such cases, the test defaults to the null hypothesis. The formal conclusion is therefore an absence of a detectable statistically significant trend.
+1.  **Modified Mann-Kendall Test:** The first approach utilized the `mmkh` function, which implements a variance correction procedure based on the methodology of Hamed and Rao (1998) to account for the full autocorrelation structure. The test returned a result of `NA` for the corrected Z-statistic and p-value. This outcome signifies that the variance correction algorithm could not converge to a stable solution, a situation that can arise when the trend signal is exceptionally weak relative to the data's high variance and complex autocorrelation. In such cases, the test defaults to the null hypothesis of no significant trend.
+
+2.  **Pre-Whitened Mann-Kendall Test:** As a second, complementary approach, the **pre-whitening** method of Yue et al. (2002) was implemented. This standard climatological technique first removes the autoregressive lag-1 component from the time series before applying the standard Mann-Kendall test to the resulting, serially independent residuals. The procedure successfully removed the autocorrelation (residual $\rho_1 = 0.027$). The subsequent Mann-Kendall test on the pre-whitened series yielded a **p-value of 0.4771**.
+
+The results from both methods are in complete agreement. The inconclusive `NA` from the first test and the high, non-significant p-value from the second both lead to the same conclusion: there is no statistical evidence of a significant monotonic trend.
 
 ```{r}
 # ============================================================================
@@ -2361,7 +2346,7 @@ The test returned a result of `NA` for both the corrected Z-statistic and the p-
 # Arctic Storminess Climatology (1958-2024)
 # ============================================================================
 # ============================================================================
-# PHASE 2.1: Trend Analysis (Definitive Corrected Version)
+# Section 2.1: Trend Analysis (Definitive Corrected Version)
 # ============================================================================
 
 # 2. Perform the Modified Mann-Kendall Test using mmkh()
@@ -2400,21 +2385,73 @@ if (is_significant) {
   cat("\nNo significant trend detected (p ≥ 0.05)\n")
 }
 ```
-### 2.1.2 Trend Magnitude: Theil-Sen Slope Estimator
-
-[cite_start]To quantify the magnitude of the trend, the **Theil-Sen slope estimator** was used[cite: 6089]. [cite_start]This non-parametric method calculates the median of the slopes between all possible pairs of points in the time series, making it exceptionally robust to outliers that are common in storm intensity data[cite: 6089].
-
-The analysis yielded a slight positive trend of **0.0045 m⁴/s⁴ per month**. However, the decisive result for statistical interpretation is the 95% confidence interval for this slope, which was calculated to be **[-0.0120, 0.0213]** m⁴/s⁴ per month.
-
-Because this confidence interval contains zero, it confirms that a trend of zero is a statistically plausible value. This finding is fully consistent with the inconclusive result from the modified Mann-Kendall test. Taken together, these two robust methods lead to the definitive conclusion that there is **no statistically significant monotonic trend** in Pan-Arctic storminess over the 1958–2024 period. The small positive trend of 2.6% over the 67-year period is not distinguishable from random natural variability.
-
-This result is visualized in the accompanying time series plot, which displays the monthly storminess index, the calculated Theil-Sen trend line, and the 95% confidence interval for the slope.
-
-![Pan-Arctic Storminess Index (1958–2024)](image_7635e8.png)
 
 ```{r}
 # ============================================================================
-# Section 2.2: Sen's Slope Estimator (Robust Trend Magnitude)
+# Section 2.2: PRE-WHITENING APPROACH (Yue et al., 2002)
+# ============================================================================
+# Removes autocorrelation, tests residuals, then restores trend magnitude
+
+cat("\n", rep("=", 70), "\n")
+cat("METHOD 1: PRE-WHITENED MANN-KENDALL TEST\n")
+cat(rep("=", 70), "\n\n")
+
+library(trend)
+
+# Step 1: Estimate AR(1) coefficient
+rho1 <- acf(storminess_ts_weighted, plot = FALSE)$acf[2]
+cat(sprintf("Step 1: AR(1) coefficient (ρ₁) = %.4f\n", rho1))
+
+# Step 2: Remove autocorrelation (pre-whiten)
+# Y_t' = Y_t - ρ₁ * Y_{t-1}
+n <- length(storminess_ts_weighted)
+prewhitened <- storminess_ts_weighted[2:n] - rho1 * storminess_ts_weighted[1:(n-1)]
+
+cat(sprintf("Step 2: Pre-whitened series created (n = %d)\n", length(prewhitened)))
+
+# Verify autocorrelation removed
+rho1_pw <- acf(prewhitened, plot = FALSE)$acf[2]
+cat(sprintf("         Residual ρ₁ = %.4f (should be ≈ 0)\n", rho1_pw))
+
+# Step 3: Apply standard Mann-Kendall to pre-whitened series
+mk_pw <- mk.test(prewhitened)
+
+cat(sprintf("\nStep 3: Mann-Kendall on Pre-whitened Data:\n"))
+cat(sprintf("  Test statistic: %.4f\n", mk_pw$statistic))
+cat(sprintf("  p-value: %.4f\n", mk_pw$p.value))
+
+# Step 4: Calculate trend using Sen's slope on ORIGINAL data
+# (Pre-whitening is ONLY for significance testing, not magnitude estimation)
+sens_original <- sens.slope(storminess_ts_weighted)
+
+cat(sprintf("\nStep 4: Trend Magnitude (from original data):\n"))
+cat(sprintf("  Sen's slope: %.4f m⁴/s⁴/month\n", sens_original$estimates))
+cat(sprintf("  Annual: %.4f m⁴/s⁴/year\n", sens_original$estimates * 12))
+cat(sprintf("  67-year change: %.2f m⁴/s⁴\n", sens_original$estimates * 804))
+
+# Final conclusion
+if (mk_pw$p.value < 0.05) {
+  cat(sprintf("\n SIGNIFICANT TREND (p = %.4f)\n", mk_pw$p.value))
+  cat(sprintf("  Direction: %s\n", ifelse(mk_pw$statistic > 0, "INCREASING", "DECREASING")))
+} else {
+  cat(sprintf("\nNo significant trend detected (p = %.4f)\n", mk_pw$p.value))
+  cat("Despite autocorrelation correction, trend is not statistically significant.\n")
+}
+```
+
+#### 2.1.2 Trend Magnitude: Theil-Sen Slope Estimator
+
+To quantify the magnitude of the trend, the **Theil-Sen slope estimator** was used. This non-parametric method calculates the median of the slopes between all possible pairs of points, making it exceptionally robust to outliers.
+
+The analysis yielded a slight positive trend of **0.0045 m⁴/s⁴ per month**. However, the decisive result for statistical interpretation is the 95% confidence interval for this slope, which was calculated to be **\[-0.0120, 0.0213\]** m⁴/s⁴ per month.
+
+Because this confidence interval contains zero, it confirms that a trend of zero is a statistically plausible value. This finding is fully consistent with the results from both significance tests. Taken together, this suite of robust methods leads to the definitive conclusion that there is **no statistically significant monotonic trend** in Pan-Arctic storminess over the 1958–2024 period. The small positive trend of 2.6% over the 67-year period is not distinguishable from random natural variability.
+
+This result is visualized in the accompanying time series plot, which displays the monthly storminess index, the calculated Theil-Sen trend line, and the 95% confidence interval for the slope.
+
+```{r}
+# ============================================================================
+# Section 2.3: Sen's Slope Estimator (Robust Trend Magnitude)
 # ============================================================================
 # Sen's slope is the median of all pairwise slopes - robust to outliers
 
@@ -2484,164 +2521,13 @@ ggplot(storm_df, aes(x = date, y = storminess)) +
 # A true, chronologically correct x-axis with real month-end dates (from ERA5).
 ```
 
-```{r}
-# ============================================================================
-# METHOD 1: PRE-WHITENING APPROACH (Yue et al., 2002)
-# ============================================================================
-# Removes autocorrelation, tests residuals, then restores trend magnitude
-
-cat("\n", rep("=", 70), "\n")
-cat("METHOD 1: PRE-WHITENED MANN-KENDALL TEST\n")
-cat(rep("=", 70), "\n\n")
-
-library(trend)
-
-# Step 1: Estimate AR(1) coefficient
-rho1 <- acf(storminess_ts_weighted, plot = FALSE)$acf[2]
-cat(sprintf("Step 1: AR(1) coefficient (ρ₁) = %.4f\n", rho1))
-
-# Step 2: Remove autocorrelation (pre-whiten)
-# Y_t' = Y_t - ρ₁ * Y_{t-1}
-n <- length(storminess_ts_weighted)
-prewhitened <- storminess_ts_weighted[2:n] - rho1 * storminess_ts_weighted[1:(n-1)]
-
-cat(sprintf("Step 2: Pre-whitened series created (n = %d)\n", length(prewhitened)))
-
-# Verify autocorrelation removed
-rho1_pw <- acf(prewhitened, plot = FALSE)$acf[2]
-cat(sprintf("         Residual ρ₁ = %.4f (should be ≈ 0)\n", rho1_pw))
-
-# Step 3: Apply standard Mann-Kendall to pre-whitened series
-mk_pw <- mk.test(prewhitened)
-
-cat(sprintf("\nStep 3: Mann-Kendall on Pre-whitened Data:\n"))
-cat(sprintf("  Test statistic: %.4f\n", mk_pw$statistic))
-cat(sprintf("  p-value: %.4f\n", mk_pw$p.value))
-
-# Step 4: Calculate trend using Sen's slope on ORIGINAL data
-# (Pre-whitening is ONLY for significance testing, not magnitude estimation)
-sens_original <- sens.slope(storminess_ts_weighted)
-
-cat(sprintf("\nStep 4: Trend Magnitude (from original data):\n"))
-cat(sprintf("  Sen's slope: %.4f m⁴/s⁴/month\n", sens_original$estimates))
-cat(sprintf("  Annual: %.4f m⁴/s⁴/year\n", sens_original$estimates * 12))
-cat(sprintf("  67-year change: %.2f m⁴/s⁴\n", sens_original$estimates * 804))
-
-# Final conclusion
-if (mk_pw$p.value < 0.05) {
-  cat(sprintf("\n SIGNIFICANT TREND (p = %.4f)\n", mk_pw$p.value))
-  cat(sprintf("  Direction: %s\n", ifelse(mk_pw$statistic > 0, "INCREASING", "DECREASING")))
-} else {
-  cat(sprintf("\nNo significant trend detected (p = %.4f)\n", mk_pw$p.value))
-  cat("Despite autocorrelation correction, trend is not statistically significant.\n")
-}
-```
-
-```{r}
-# ============================================================================
-# METHOD 2: GENERALIZED LEAST SQUARES WITH AR(1) ERRORS
-# ============================================================================
-
-library(nlme)
-
-cat("\n", rep("=", 70), "\n")
-cat("METHOD 2: GLS REGRESSION WITH AR(1) ERRORS\n")
-cat(rep("=", 70), "\n\n")
-
-# Create time index
-time_index <- 1:length(storminess_ts_weighted)
-data_df <- data.frame(
-  storminess = storminess_ts_weighted,
-  time = time_index
-)
-
-# Fit GLS with AR(1) correlation structure
-gls_model <- gls(storminess ~ time, 
-                 data = data_df,
-                 correlation = corAR1(form = ~ time),
-                 method = "ML")
-
-# Extract results
-gls_summary <- summary(gls_model)
-slope <- coef(gls_model)[2]
-slope_pval <- gls_summary$tTable[2, 4]
-
-cat("GLS Model Results:\n")
-print(gls_summary$tTable)
-
-cat(sprintf("\nTrend Estimates:\n"))
-cat(sprintf("  Slope: %.4f m⁴/s⁴/month\n", slope))
-cat(sprintf("  Annual: %.4f m⁴/s⁴/year\n", slope * 12))
-cat(sprintf("  p-value: %.4f\n", slope_pval))
-cat(sprintf("  Estimated ρ: %.4f\n", 
-            coef(gls_model$modelStruct$corStruct, unconstrained = FALSE)))
-
-if (slope_pval < 0.05) {
-  cat(sprintf("\n SIGNIFICANT TREND (p = %.4f)\n", slope_pval))
-} else {
-  cat(sprintf("\nNo significant trend (p = %.4f)\n", slope_pval))
-}
-
-cat("\n GLS explicitly models AR(1) structure - most rigorous approach.\n")
-```
-
-```{r}
-# ============================================================================
-# METHOD 3: BLOCK BOOTSTRAP CONFIDENCE INTERVALS
-# ============================================================================
-
-library(boot)
-
-cat("\n", rep("=", 70), "\n")
-cat("METHOD 3: BLOCK BOOTSTRAP APPROACH\n")
-cat(rep("=", 70), "\n\n")
-
-# Function to calculate slope
-slope_stat <- function(data, indices) {
-  sens.slope(data[indices])$estimates
-}
-
-# Block length based on autocorrelation
-# Rule of thumb: block_length ≈ 1/(1-ρ₁)
-block_length <- ceiling(1 / (1 - rho1))
-cat(sprintf("Block length: %d months (based on ρ₁ = %.3f)\n", block_length, rho1))
-
-# Block bootstrap with 10,000 replicates
-set.seed(42)
-boot_result <- tsboot(storminess_ts_weighted, 
-                      slope_stat, 
-                      R = 10000, 
-                      l = block_length,
-                      sim = "fixed")
-
-# Calculate confidence interval
-boot_ci <- boot.ci(boot_result, type = "perc")
-
-cat(sprintf("\nBootstrap Results (10,000 replicates):\n"))
-cat(sprintf("  Observed slope: %.4f m⁴/s⁴/month\n", boot_result$t0))
-cat(sprintf("  Bootstrap SE: %.4f\n", sd(boot_result$t)))
-cat(sprintf("  95%% CI: [%.4f, %.4f]\n", 
-            boot_ci$percent[4], boot_ci$percent[5]))
-
-# Test if CI includes zero
-ci_includes_zero <- boot_ci$percent[4] < 0 & boot_ci$percent[5] > 0
-
-if (!ci_includes_zero) {
-  cat("\n✓ Confidence interval does NOT include zero - significant trend\n")
-} else {
-  cat("\nConfidence interval includes zero - no significant trend\n")
-}
-
-cat("\n Block bootstrap preserves autocorrelation structure.\n")
-```
-
 ## 2.2 Regional Sub-Analysis: Svalbard Trend
 
-[cite_start]To investigate trends in a key hotspot of coastal change, a sub-analysis was performed for the Svalbard region[cite: 4, 47, 6202].
+To investigate trends in a key hotspot of coastal change, a sub-analysis was performed for the Svalbard region.
 
 ### 2.2.1 Domain Subsetting and Time Series Generation
 
-A regional domain was defined by a geographical bounding box (74°N to 81°N, 10°E to 35°E). The storminess data array was subsetted to this domain, creating a new regional dataset. [cite_start]Critically, a new area-weighted time series was then generated specifically for this smaller domain to create a physically representative index for the Svalbard region[cite: 6203, 6204].
+A regional domain was defined by a geographical bounding box (74°N to 81°N, 10°E to 35°E). The storminess data array was subsetted to this domain, creating a new regional dataset. Critically, a new area-weighted time series was then generated specifically for this smaller domain to create a physically representative index for the Svalbard region.
 
 ```{r}
 # ============================================================================
@@ -2722,13 +2608,11 @@ storm_df_svalbard <- data.frame(
 
 The full trend analysis pipeline was re-applied to the new Svalbard time series. The regional data exhibited a lag-1 autocorrelation of $\rho_1 = 0.436$, confirming the need for autocorrelation-corrected methods.
 
-* **Trend Significance:** For this analysis, the **pre-whitened Mann-Kendall test** was used. This standard climatological method removes the autoregressive lag-1 component from the time series before applying the standard Mann-Kendall test to the resulting residuals. The test returned a p-value of **0.9933**, indicating a complete absence of a statistically significant trend.
+-   **Trend Significance:** For this analysis, the **pre-whitened Mann-Kendall test** was used. This standard climatological method removes the autoregressive lag-1 component from the time series before applying the standard Mann-Kendall test to the resulting residuals. The test returned a p-value of **0.9933**, indicating a complete absence of a statistically significant trend.
 
-* **Trend Magnitude:** The Theil-Sen slope estimator calculated a trend of **0.0072 m⁴/s⁴ per month**, corresponding to a total change of 3.4% over the baseline period. The 95% confidence interval for this slope was **[-0.0231, 0.0374]**. As with the Pan-Arctic analysis, this interval contains zero, independently confirming the non-significant result from the pre-whitened Mann-Kendall test.
+-   **Trend Magnitude:** The Theil-Sen slope estimator calculated a trend of **0.0072 m⁴/s⁴ per month**, corresponding to a total change of 3.4% over the baseline period. The 95% confidence interval for this slope was **\[-0.0231, 0.0374\]**. As with the Pan-Arctic analysis, this interval contains zero, independently confirming the non-significant result from the pre-whitened Mann-Kendall test.
 
 The conclusion for the Svalbard region is identical to that for the Pan-Arctic as a whole: there is no statistically significant trend in storminess from 1958–2024.
-
-![Svalbard Regional Storminess Index (1958–2024)](image_762ee7.png)
 
 ```{r}
 # ----------------------------------------------------------------------------
@@ -2788,7 +2672,7 @@ ggplot(storm_df_svalbard, aes(x = date, y = storminess)) +
   geom_ribbon(aes(ymin = trend_lower, ymax = trend_upper),
               fill = "#D55E00", alpha = 0.15) +
   geom_line(aes(y = trend), color = "#D55E00", linewidth = 1.1) +
-  theme_bw(base_size = 13) +z
+  theme_bw(base_size = 13) +
   labs(
     title = "Svalbard Regional Storminess Index (1958–2024)",
     subtitle = sprintf(
@@ -2869,6 +2753,38 @@ svalbard_map <- ggplot() +
 print(svalbard_map)
 ```
 
+## 2.3 Spatial Trend Analysis and Field Significance
+
+While the analysis of the domain-averaged time series provides a valuable overview, it can mask complex regional patterns. Therefore, a comprehensive spatial trend analysis was conducted to identify the geographical distribution of storminess trends. This analysis was performed on a grid-by-grid basis over the full Pan-Arctic domain (56°N–90°N) to provide a complete diagnostic picture.
+
+Given that this procedure involves performing thousands of simultaneous hypothesis tests (one for each grid cell), it introduces a significant **multiple testing problem**. A fraction of grid cells are expected to show "significant" trends purely by random chance, making it impossible to assess the physical meaning of the resulting pattern without a formal field significance test. To address this, a multi-stage framework was implemented to test for both **local significance** (at each grid cell) and **field significance** (for the entire map).
+
+### 2.3.1 Grid-Point Trend Calculation
+
+For each of the 12,600 grid cells in the domain, the following procedure was applied to its 804-month time series:
+
+1.  **Autocorrelation and Pre-whitening:** The lag-1 autocorrelation ($\rho_1$) was calculated. The time series was then pre-whitened using the Yue et al. (2002) method to remove this serial correlation.
+2.  **Significance Test:** The standard Mann-Kendall test was applied to the *pre-whitened* residual series to obtain a statistically valid p-value.
+3.  **Magnitude Estimation:** The Theil-Sen slope was calculated on the *original* time series to provide a robust, unbiased estimate of the trend magnitude, expressed in m⁴/s⁴ per decade.
+
+This process yielded three key data grids: the trend magnitude (slope), the statistical significance (p-value), and the lag-1 autocorrelation ($\rho_1$).
+
+![Diagnostic maps of Arctic storminess trends](Figure1_Three_Panel_Diagnostic.png)
+
+### 2.3.2 Field Significance Assessment
+
+To determine if the overall spatial pattern of trends was distinguishable from random chance, two complementary field significance tests were performed.
+
+1.  **False Discovery Rate (FDR):** The Benjamini-Hochberg procedure was applied to the grid of p-values. This method controls the False Discovery Rate—the expected proportion of "significant" results that are actually false positives. While more powerful than traditional family-wise error rate corrections, it is still a secondary check compared to the more robust Monte Carlo approach.
+
+2.  **Monte Carlo Block Bootstrap:** This is the definitive test for field significance in this study. The method generates a null distribution of expected results under the hypothesis of no coherent, long-term trend. This was achieved by:
+
+    -   Generating 500 surrogate "null" data fields by resampling 12-month blocks of the original time series *with replacement*.
+    -   Crucially, the **same sequence** of resampled blocks was applied to every grid cell. This procedure breaks the long-term temporal trend while preserving the data's natural seasonality and, most importantly, its inherent **spatial covariance structure**.
+    -   The full grid-point trend analysis (pre-whitening + MK test) was run on each of the 500 surrogate fields.
+    -   For each run, the total number of grid cells with a p-value \< 0.05 was counted. This created a null distribution of how many significant cells are expected purely by random chance.
+    -   The number of significant cells found in the *actual* data (250) was then compared to this null distribution to calculate the final field significance p-value.
+
 ```{r}
 # ============================================================================
 # PHASE 2.2: SPATIAL TREND ANALYSIS - FULL DOMAIN (56-90°N)
@@ -2883,16 +2799,11 @@ print(svalbard_map)
 #   - lon        : numeric vector (length = n_lon)
 #   - time_dates : Date vector (length = n_time) (optional)
 #
-# Outputs (saved when missing):
+# Outputs :
 #   - E:/ERA5_data/processed/storminess_trend_slope_full_1958-2024.nc
 #   - E:/ERA5_data/processed/storminess_trend_pvalue_full_1958-2024.nc
 #   - E:/ERA5_data/processed/storminess_lag1autocorr_full_1958-2024.nc
 #   - E:/ERA5_data/processed/storminess_trend_counts_mc.RDS   (Monte-Carlo summary)
-#
-# Packages required:
-#   trend, ncdf4, zoo, foreach, doParallel, pbapply
-#
-# Author: adapted for Francesco — ready to run
 ################################################################################
 
 # -------------------------
@@ -2958,7 +2869,30 @@ outputs_exist <- file.exists(slope_path) && file.exists(pval_path) && file.exist
 if (outputs_exist && (!do_montecarlo || file.exists(mc_summary_path))) {
   cat("All output files already exist. Skipping computation.\n")
   cat("If you want to force re-run, delete the output files and run again.\n")
-  quit(save = "no")
+  
+  # Load existing results instead of quitting
+  nc <- nc_open(slope_path)
+  slope_grid <- ncvar_get(nc, "trend_slope"); lat <- ncvar_get(nc, "latitude"); lon <- ncvar_get(nc, "longitude")
+  nc_close(nc)
+  
+  pval_grid <- ncvar_get(nc_open(pval_path), "p_value")
+  rho1_grid <- ncvar_get(nc_open(rho1_path), "lag1_autocorr")
+  
+  if (file.exists(mc_summary_path)) {
+    mc_results <- readRDS(mc_summary_path)
+  } else {
+    mc_results <- NULL
+  }
+  
+  cat("Existing results loaded into workspace.\n")
+  # Make sure results stay in the global environment
+  assign("slope_grid", slope_grid, envir = .GlobalEnv)
+  assign("pval_grid",  pval_grid,  envir = .GlobalEnv)
+  assign("rho1_grid",  rho1_grid,  envir = .GlobalEnv)
+  assign("mc_results", mc_results, envir = .GlobalEnv)
+
+  # Stop script here, without killing R
+  stop(" All output files already exist. Loaded data into workspace — skipping computation.")
 }
 
 # -------------------------
@@ -3236,16 +3170,62 @@ cat("\nDone.\n")
 
 ```
 
-```{r}
+### 2.3.3 Spatial Trend Results
+
+The analysis revealed a complex spatial pattern of both positive and negative trends. While 250 grid cells exhibited trends that were locally significant at the p \< 0.05 level, the decisive Monte Carlo test yielded a **field significance p-value of 0.258**.
+
+This result indicates that there is a 25.8% probability of observing a pattern of local trends as strong or stronger than the one found, purely as a result of natural, random variability within a system that has no underlying long-term trend. As this value is substantially greater than the standard $\alpha = 0.05$ threshold, the null hypothesis of no field-wide trend cannot be rejected.
+
+The final conclusion of the spatial analysis is therefore consistent with the domain-averaged results: there is **no field-wide, statistically significant trend** in Arctic storminess over the 1958–2024 period. The observed regional patterns are statistically consistent with random chance.
+
+```{r stats}
 # ============================================================================
 # Summary Statistics Export
 # ============================================================================
 # --- Load data ---
+
 dir_proc <- "E:/ERA5_data/processed"
 f_slope <- file.path(dir_proc, "storminess_trend_slope_full_1958-2024.nc")
 f_pval  <- file.path(dir_proc, "storminess_trend_pvalue_full_1958-2024.nc")
 f_rho1  <- file.path(dir_proc, "storminess_lag1autocorr_full_1958-2024.nc")
 f_mc    <- file.path(dir_proc, "storminess_trend_counts_mc.RDS")
+
+# --- Load from NetCDF if not in memory ---
+if (!exists("slope")) {
+  nc_s <- nc_open(f_slope)
+  slope <- ncvar_get(nc_s, "trend_slope")
+  lat <- ncvar_get(nc_s, "latitude")
+  lon <- ncvar_get(nc_s, "longitude")
+  nc_close(nc_s)
+}
+
+if (!exists("pval")) {
+  nc_p <- nc_open(f_pval)
+  pval <- ncvar_get(nc_p, "p_value")
+  nc_close(nc_p)
+}
+
+if (!exists("rho1")) {
+  nc_r <- nc_open(f_rho1)
+  rho1 <- ncvar_get(nc_r, "lag1_autocorr")
+  nc_close(nc_r)
+}
+
+if (file.exists(f_mc)) {
+  mc_res <- readRDS(f_mc)
+} else {
+  mc_res <- NULL
+  warning("Monte Carlo summary not found — skipping MC stats.")
+}
+
+# --- Prepare data frame for plotting ---
+df <- expand.grid(lat = lat, lon = lon)
+df$slope <- as.vector(slope)
+df$pval  <- as.vector(pval)
+df$rho1  <- as.vector(rho1)
+
+cat("Loaded slope, pval, rho1, lat, lon successfully.\n")
+
 
 nc <- nc_open(f_slope); slope <- ncvar_get(nc, "trend_slope")
 lat  <- ncvar_get(nc, "latitude"); lon <- ncvar_get(nc, "longitude"); nc_close(nc)
@@ -3285,13 +3265,12 @@ ggplot(df, aes(x = slope)) +
 
 # --- Map of slopes with significance overlay ---
 # Flatten for ggplot
-library(ggplot2)
-library(viridis)
 
 # --- Prepare data for ggplot ---
 df <- expand.grid(lat = lat, lon = lon)
 df$slope <- as.vector(slope)
 df$pval  <- as.vector(pval)
+df$rho1  <- as.vector(rho1)
 df$sig   <- df$pval < 0.05
 
 # --- Map of slopes with significance overlay ---
@@ -3328,24 +3307,57 @@ ggplot() +
   )
 
 # --- Monte-Carlo distribution plot ---
-hist(mc_res$counts, breaks=30, col="grey70",
-     main="Monte-Carlo field-significance test",
-     xlab="Number of significant cells (p < 0.05)")
-abline(v = mc_res$observed_count, col="red", lwd=2)
-text(mc_res$observed_count, max(hist(mc_res$counts, plot=FALSE)$counts)*0.9,
-     labels = sprintf("Observed = %d\np_MC = %.3f",
-                      mc_res$observed_count, mc_res$p_value),
-     pos=4, col="red")
+hist(mc_res$counts,
+     breaks = 30,
+     col = "skyblue",
+     main = "Monte Carlo Field Significance Test",
+     xlab = "Number of significant grid cells (p < 0.05)")
 
+abline(v = mc_res$observed, col = "red", lwd = 2)
+legend("topright", legend = sprintf("Observed = %d\np = %.3f",
+                                    mc_res$observed, mc_res$p_value),
+       bty = "n")
+
+# --- Autocorrelation ---
+ggplot(df, aes(x = lon, y = lat, fill = rho1)) +
+  geom_raster() +
+  scale_fill_viridis(option = "B", name = "Lag-1 ρ₁", limits = c(0, 1)) +
+  coord_fixed(ratio = 1.8, xlim = c(-180, 180), ylim = c(56, 90)) +
+  theme_bw() +
+  labs(
+    title = "Lag-1 Autocorrelation of Storminess (1958–2024)",
+    subtitle = "ρ₁ from pre-whitened AR(1) correction, full Arctic domain"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+# --- Zonal mean trends ---
+zonal <- aggregate(df$slope, by = list(lat = df$lat), FUN = mean, na.rm = TRUE)
+ggplot(zonal, aes(lat, x)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_bw() +
+  labs(x = "Latitude (°N)", y = "Trend (m⁴/s⁴/decade)",
+       title = "Zonal Mean Storminess Trends (1958–2024)")
 ```
 
 ```{r}
+if (!exists("slope_grid") || !exists("pval_grid") || !exists("rho1_grid")) {
+  dir_proc <- "E:/ERA5_data/processed"
+  slope_grid <- ncdf4::ncvar_get(ncdf4::nc_open(file.path(dir_proc, "storminess_trend_slope_full_1958-2024.nc")), "trend_slope")
+  pval_grid  <- ncdf4::ncvar_get(ncdf4::nc_open(file.path(dir_proc, "storminess_trend_pvalue_full_1958-2024.nc")), "p_value")
+  rho1_grid  <- ncdf4::ncvar_get(ncdf4::nc_open(file.path(dir_proc, "storminess_lag1autocorr_full_1958-2024.nc")), "lag1_autocorr")
+  lat        <- ncdf4::ncvar_get(ncdf4::nc_open(file.path(dir_proc, "storminess_trend_slope_full_1958-2024.nc")), "latitude")
+  lon        <- ncdf4::ncvar_get(ncdf4::nc_open(file.path(dir_proc, "storminess_trend_slope_full_1958-2024.nc")), "longitude")
+  cat("Loaded slope_grid, pval_grid, rho1_grid, lat, lon from NetCDF files.\n")
+}
+
 # ============================================================================
 # Figure 1: Three-Panel Diagnostic Plot (Rectangular)
 # ============================================================================
 # --- 1. Load the final data grids from your previous analysis ---
-# (Assuming slope_grid, pval_grid, rho1_grid, lat, lon are in your environment)
-# If not, load them from the NetCDF files you created.
 
 # --- 2. Create the plot ---
 png("Figure1_Three_Panel_Diagnostic.png", 
@@ -3364,7 +3376,7 @@ image.plot(lon, lat, t(slope_grid),
            zlim = c(-max_abs_trend, max_abs_trend),
            legend.lab = "m⁴/s⁴ per decade")
 # Add coastlines
-map("world", add = TRUE, col = "NA", fill = TRUE, border = "black", lwd = 0.5)
+maps::map("world", add = TRUE, col = "NA", fill = TRUE, border = "black", lwd = 0.5)
 # Add significance contour
 contour(lon, lat, t(pval_grid < 0.05), levels = 0.5, add = TRUE, 
         col = "black", lwd = 1.5, drawlabels = FALSE)
@@ -3377,7 +3389,7 @@ image.plot(lon, lat, t(pval_grid),
            col = pval_colors,
            breaks = seq(0, 1, length.out = 51),
            legend.lab = "p-value")
-map("world", add = TRUE, col = "NA", fill = TRUE, border = "black", lwd = 0.5)
+maps::map("world", add = TRUE, col = "NA", fill = TRUE, border = "black", lwd = 0.5)
 contour(lon, lat, t(pval_grid < 0.05), levels = 0.5, add = TRUE,
         col = "black", lwd = 2, drawlabels = FALSE)
 
@@ -3388,7 +3400,7 @@ image.plot(lon, lat, t(rho1_grid),
            col = viridis::viridis(50),
            zlim = c(0, 1),
            legend.lab = "Lag-1 ρ")
-map("world", add = TRUE, col = "NA", fill = TRUE, border = "black", lwd = 0.5)
+maps::map("world", add = TRUE, col = "NA", fill = TRUE, border = "black", lwd = 0.5)
 
 # Overall title
 mtext("Arctic Storminess Trends (1958-2024): Diagnostic Overview", 
@@ -3398,94 +3410,456 @@ dev.off()
 
 ```
 
-```{r}
-# ============================================================================
-# Figure 2: Publication-Quality Polar Map
-# ============================================================================
-# --- 1. Load Data and Keep in Lat/Lon Format ---
-# We DO NOT project the rasters. We load them and convert directly to a data frame.
-cat("Loading raster data in native lat/lon...\n")
-slope_rast_lonlat <- rast("E:/ERA5_data/processed/storminess_trend_slope_full_1958-2024.nc")
-pval_rast_lonlat <- rast("E:/ERA5_data/processed/storminess_trend_pvalue_full_1958-2024.nc")
+### 2.3.4 Creating True Polar Projections in R
 
-slope_df <- as.data.frame(slope_rast_lonlat, xy = TRUE)
-names(slope_df) <- c("x", "y", "slope")
-pval_df <- as.data.frame(pval_rast_lonlat, xy = TRUE)
-names(pval_df) <- c("x", "y", "p_value")
+This section details the methodology developed to create cartographically accurate **polar projection maps** of gridded NetCDF data using **R**. The process involved overcoming several common challenges in geospatial visualization, leading to a robust and reproducible workflow that combines the **`stars`**, **`sf`**, and **`ggplot2`** packages.
 
-plot_df <- left_join(slope_df, pval_df, by = c("x", "y")) %>%
-  mutate(significant = !is.na(p_value) & p_value < 0.05) %>%
-  filter(!is.na(slope))
+#### 2.3.4.1 The Core Challenge: Mapping a Sphere to a Flat Surface
 
-# --- 2. Prepare Coastlines (also in Lat/Lon) ---
-cat("Loading coastline data in native lat/lon...\n")
-world <- ne_countries(scale = "medium", returnclass = "sf")
+Our storminess data is defined in **longitude** and **latitude**, which describe positions on a sphere. Directly plotting these coordinates on a two-dimensional map leads to severe distortion—particularly at high latitudes such as the Arctic. Early attempts (Figure 1) stretched and warped geographical features, misrepresenting spatial patterns in the data.
 
-# Repair geometry just in case, but DO NOT project yet.
-world_valid <- st_make_valid(world)
+To solve this, we needed a **map projection**, a mathematical transformation that represents the Earth’s curved surface on a flat plane. We chose the **Lambert Azimuthal Equal-Area (LAEA)** projection (`+proj=laea +lat_0=90`), centered on the North Pole. This projection is standard for polar regions because it **preserves relative area**, ensuring that spatial patterns in storminess are accurately represented.
 
-# --- 3. Create the Final Polar Plot ---
-cat("Generating final publication-quality polar map...\n")
+#### 2.3.4.2 The Modern Geospatial Workflow in R
 
-polar_trend_map <- ggplot() +
-  # a. Plot the trend data using the original lon/lat columns
-  geom_tile(data = plot_df, aes(x = x, y = y, fill = slope)) +
+Our final workflow integrates modern R packages that work seamlessly together:
 
-  # b. Define the color scale
-  scale_fill_gradientn(
-    name = "Trend\n(m⁴/s⁴ per decade)",
-    colors = rev(brewer.pal(11, "RdBu")),
-    limits = c(-max(abs(plot_df$slope)), max(abs(plot_df$slope))),
-    na.value = "transparent"
-  ) +
+-   **`stars`** — for raster (gridded) data, providing spatial awareness of grid structure, dimensions, and CRS.
 
-  # c. Add the lat/lon coastlines
-  geom_sf(data = world_valid, fill = "grey60", color = "black", linewidth = 0.2) +
+-    **`sf`** — for vector data, such as coastlines.
 
-  # d. Add stippling using the original lon/lat columns
-  geom_point(data = filter(plot_df, significant == TRUE),
-             aes(x = x, y = y),
-             shape = 16, size = 0.5, color = "black") +
+-   **`ggplot2`** — for visualization, using geospatial extensions like `geom_stars()`, `geom_sf()`, and `coord_sf()`.
 
-  # e. **THE DEFINITIVE FIX:**
-  # Apply the polar projection and set the view using DEGREES.
-  # This is the most robust way to crop a polar plot.
-  coord_sf(
-    crs = "+proj=laea +lat_0=90 +lon_0=0", # The target projection
-    default_crs = st_crs(4326),          # Tells ggplot our geom_tile is lat/lon
-    ylim = c(56, 90),                      # Crop the view from 56°N to the pole
-    expand = FALSE
-  ) +
+This workflow followed four main steps: **Prepare**, **Reproject**, **Plot**, and **Refine**.
 
-  # f. Add labels and a clean theme
-  labs(
-    title = "Spatial Trend in Arctic Storminess (1958-2024)",
-    subtitle = "Trend magnitude with stippling for regions of nominal significance (p < 0.05)",
-    caption = "Data: ERA5 | Method: Pre-whitened Mann-Kendall & Theil-Sen Slope"
-  ) +
-  theme_bw() +
-  theme(
-    panel.background = element_rect(fill = "gray90"),
-    panel.border = element_blank(),
-    panel.grid.major = element_line(color = "white", linetype = "dashed", linewidth = 0.5),
-    axis.title = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank()
-  )
+#### 2.3.4.3 Step 1. Creating a Spatially-Aware `stars` Object
 
-# --- 4. Save the Plot ---
-ggsave("Arctic_Storminess_Polar_Trend_Map_FINAL.png",
-       plot = polar_trend_map,
-       width = 10, height = 10, units = "in", dpi = 300)
+The goal was to load our matrices (`slope_grid`, `pval_grid`, `rho1_grid`) into a spatially aware object that `stars` could understand.
 
-cat("✓ Final polar map saved as Arctic_Storminess_Polar_Trend_Map_FINAL.png\n")
-print(polar_trend_map)
+``` r
+# Ensure lon and lat are simple vectors
+lon_vec <- as.vector(lon)
+lat_vec <- as.vector(lat)
+
+# Create a list of data matrices, transposing to [lon, lat] order
+data_list <- list(
+  slope = t(slope_grid),
+  pval  = t(pval_grid),
+  rho1  = t(rho1_grid)
+)
+
+# Explicitly define the dimensions, naming them 'x' and 'y'
+dims <- st_dimensions(x = lon_vec, y = lat_vec)
+
+# Create the stars object and set its original CRS
+storm_stars <- st_as_stars(data_list, dimensions = dims) %>%
+  st_set_crs(4326)
 ```
 
+**Why this works:**\
+The key function `st_dimensions()` explicitly names the spatial dimensions `x` and `y`, allowing `stars` to understand how to position the raster. We then used `st_as_stars()` to combine the data matrices with this metadata and assigned the **WGS84** CRS (`EPSG:4326`).
+
+#### 2.3.4.5 Step 2. Reprojecting All Spatial Data
+
+With a correctly structured `stars` object, we could then reproject it into our target polar view. A crucial lesson was that **all spatial layers must be in the same projection *before* plotting** to ensure they align correctly. This is why our plots were initially missing the coastlines.
+
+**Reprojecting raster data:**
+
+``` r
+arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
+storm_polar <- st_warp(storm_stars, crs = arctic_crs)
+```
+
+We used `st_warp()` to reproject our raster data. This function is essential because it does more than just transform coordinates; it creates a new, perfectly regular grid in the polar projection and intelligently resamples the original data onto it. This process, known as "warping," solves the "curvilinear grid" problem that caused our blank plots in early attempts (Figure 3), where simpler geoms like `geom_tile` failed because the projected grid lines were no longer straight.
+
+**Reprojecting vector data:**
+
+``` r
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world_polar <- st_transform(world, crs = arctic_crs)
+```
+
+For the coastline polygons (all vector data in general), we used the standard `st_transform()` function from the `sf` package to convert them to the same polar projection (spatial coherence).
+
+#### 2.3.4.6 Step 3. Achieving a Perfectly Circular Plot (Masking)
+
+Our final goal was to create a clean, circular map, not a square one. This required a two-part masking technique.
+
+**Masking the data:**
+
+First, we created a circular polygon and used it to subset our `stars` object. This sets all data values outside the circle to `NA`.
+
+``` r
+# Create a circular polygon in the projected CRS
+circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
+  st_buffer(dist = view_radius)
+
+# Apply the mask using single-bracket subsetting
+storm_polar_masked <- storm_polar[circle_mask]
+```
+
+The `[...]` subsetting syntax is the correct way to mask a `stars` object with a polygon. When we plotted this new object, the `NA` values in the corners were rendered as transparent, making the data appear circular.
+
+**Creating the inverse mask:**
+
+As we saw in the penultimate image, masking the data still left the square plot background and the coastlines visible in the corners. The final, decisive step was to create a cosmetic overlay to hide these elements.
+
+``` r
+# Create a square covering the entire plot
+square_box <- st_as_sfc(st_bbox(c(...)))
+
+# Subtract the circle to create a "donut" shape
+inverse_mask <- st_difference(square_box, circle_mask)
+```
+
+We then added this `inverse_mask` as the **very top layer** in our `ggplot` call, filled with white. This acts like a stencil, physically covering the unwanted corners and any map features within them, resulting in the final, perfectly circular plot (Figure 4).
+
+#### 2.3.4.7 Step 4. Final Plotting and Refinements
+
+With all data prepared and masked, the final `ggplot` code assembles the layers.
+
+-   `geom_stars()`: This specialized geom correctly draws the reprojected and masked raster data.
+
+-   `geom_sf()`: This geom draws the reprojected coastlines and, finally, the inverse mask on top.
+
+-   `coord_sf()`: This function's only remaining job is to set the viewing window. The `xlim` and `ylim` are now in meters (the units of our polar projection), defining the map's extent.  
+
+#### 2.3.4.8 Reproducibility Note
+
+All analyses and figures were produced in **R 4.4.0**, using the packages **`sf` (v1.0+)**, **`stars` (v0.6+)**, **`ggplot2` (v3.5+)**, **`rnaturalearth`**, and **`patchwork`**. The full workflow is platform-independent and can be adapted to any gridded dataset (e.g., temperature, precipitation, or sea-level pressure) simply by replacing the input NetCDF files.
+
+The methodology ensures complete **CRS alignment**, **area preservation**, and **visual fidelity**, producing publication-quality polar projection figures suitable for scientific communication and reproducible research.
+
+```{r}
+# This script creates a three-panel polar projection plot of gridded NetCDF data. It uses a modern geospatial workflow in R, combining the stars package for raster data, the sf package for vector data (coastlines, masks, labels), and ggplot2 for plotting.
+
+# This chunk assumes that the gridded data from the NetCDF files has already been loaded into the R environment as matrices (slope_grid, pval_grid, rho1_grid) and that the corresponding coordinate vectors (lon, lat) are also available.
 
 
+# ============================================================================
+# STEP 1: CREATE A SPATIALLY-AWARE `stars` OBJECT
+# ============================================================================
+# This is the most critical step for ensuring our raster data is handled correctly. We convert our raw R matrices into a stars object, which is a data structure that understands its own spatial nature (dimensions, coordinates, and projection). This was key to solving many of our early errors, such as dimensions table does not have x & y.
+
+# Safeguard: Ensure lon and lat are simple vectors, not arrays.
+lon_vec <- as.vector(lon)
+lat_vec <- as.vector(lat)
+
+# Combine our three data matrices into a single list.
+# We use t() to transpose each matrix from [lat, lon] to [lon, lat] order,
+# which matches the standard [x, y] dimension order that `stars` expects.
+data_list <- list(
+  slope = t(slope_grid),
+  pval  = t(pval_grid),
+  rho1  = t(rho1_grid)
+)
+
+# Explicitly define the dimensions object. This is the most robust method.
+# It tells `stars` that there are two dimensions, that they should be named
+# 'x' and 'y', and provides the coordinate values for each.
+dims <- st_dimensions(x = lon_vec, y = lat_vec)
+
+# Create the final `stars` object by combining the data and the dimensions.
+# We then tag it with its original Coordinate Reference System (CRS), which is
+# WGS84 (EPSG code 4326) for standard longitude/latitude data.
+storm_stars <- st_as_stars(data_list, dimensions = dims) %>%
+  st_set_crs(4326)
 
 
+# ============================================================================
+# STEP 2: REPROJECT ALL SPATIAL DATA
+# ============================================================================
+# Here, we transform all our spatial data from the standard longitude/latitude system to our target polar projection. It is crucial that all layers (raster data, coastlines, labels) are in the same projection before we give them to ggplot2.
+
+# Define the target projection: Lambert Azimuthal Equal-Area, centered on the North Pole.
+arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
+
+# "Warp" the raster data. `st_warp` creates a new, regular grid in the polar
+# projection and resamples our data onto it. This is essential for correct plotting.
+storm_polar <- st_warp(storm_stars, crs = arctic_crs)
+
+# Load the world coastline data (vector polygons).
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Transform the vector data to the same polar projection using `st_transform`.
+world_polar <- st_transform(world, crs = arctic_crs)
 
 
+# ============================================================================
+# STEP 3: CREATE CARTOGRAPHIC ELEMENTS
+# ============================================================================
+# This section creates all the cosmetic and contextual elements needed for a map: the circular frame and the latitude/longitude grid lines and labels.
+
+# Define two radii for our "two-ring" masking approach.
+# `view_radius` defines the boundary of the actual data circle.
+view_radius <- 3700000 # 3700 km
+# `plot_radius` defines a larger, invisible boundary to create space for labels.
+plot_radius <- 4400000 # 4400 km
+
+# Create a circular polygon for masking the data.
+circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
+  st_buffer(dist = view_radius)
+
+# Apply the mask to the data. The `[...]` syntax is the correct way to mask
+# a `stars` object, setting all values outside the polygon to NA.
+storm_polar_masked <- storm_polar[circle_mask]
+
+# Create the "inverse mask" to hide the plot corners.
+# This is a square with a circular hole in the middle.
+square_box <- st_as_sfc(st_bbox(c(
+  xmin = -plot_radius, xmax = plot_radius,
+  ymin = -plot_radius, ymax = plot_radius
+), crs = arctic_crs))
+inverse_mask <- st_difference(square_box, circle_mask)
+
+# Create the graticule lines (latitude and longitude grid).
+graticules <- st_graticule(
+  lon = seq(-180, 180, by = 60),
+  lat = c(60, 70, 80),
+  crs = 4326
+) %>%
+  st_transform(crs = arctic_crs) # Project the graticules.
+
+# Create points for the latitude labels, positioned at 180° for visibility.
+lat_labels <- data.frame(
+  lon = 180,
+  lat = c(60, 70, 80)
+) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs) # Project the label points.
+lat_labels$label <- c("60°N", "70°N", "80°N")
+
+# Create points for the longitude labels, positioned outside the data circle.
+lon_labels <- data.frame(
+  lon = seq(0, 300, by = 60),
+  lat = 55 # This latitude falls in the blank space between our two radii.
+) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs) # Project the label points.
+lon_labels$label <- c("0°", "60°E", "120°E", "180°W", "120°W", "60°W")
+
+
+# ============================================================================
+# STEP 4: PREPARE FINAL PLOTTING PARAMETERS
+# ============================================================================
+# This section calculates the final parameters needed for the plot aesthetics, such as the dynamic legend breaks and the set of significant points to overlay.
+
+# Calculate min/max from the masked data for a precise legend.
+max_abs_trend <- max(abs(storm_polar_masked$slope), na.rm = TRUE)
+min_trend <- min(storm_polar_masked$slope, na.rm = TRUE)
+max_trend <- max(storm_polar_masked$slope, na.rm = TRUE)
+
+# Create an `sf` object of points where the p-value is significant.
+# We must convert the `stars` object to `sf` points *before* filtering by an attribute.
+sig_points <- storm_polar_masked %>%
+  st_as_sf(as_points = TRUE, na.rm = TRUE) %>%
+  filter(pval < 0.05)
+
+
+# ============================================================================
+# STEP 5: ASSEMBLE THE PLOTS
+# ============================================================================
+# Finally, we build each of the three panels. The order of the layers is important: we draw the data first, then the contextual layers (coastlines, points, graticules), and finally the cosmetic layers (the inverse mask and labels) on top.
+
+# --- MAP 1: Trend Magnitude ---
+p1 <- ggplot() +
+  # 1. Draw the masked raster data.
+  geom_stars(data = storm_polar_masked, aes(fill = slope), na.rm = TRUE) +
+  # 2. Define the color scale with dynamic breaks.
+   scale_fill_gradientn(
+    name = "Trend\n(m⁴/s⁴ per\ndecade)", 
+    colors = rev(brewer.pal(11, "RdBu")),
+    limits = c(min_trend, max_trend),
+    values = scales::rescale(c(min_trend, 0, max_trend)),  # Force 0 to be white
+    na.value = "transparent",
+    breaks = c(min_trend, 0, max_trend), 
+    labels = scales::number_format(accuracy = 0.1)
+  ) +
+  # 3. Add layers for context.
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = sig_points, shape = 16, size = 0.3, color = "black", alpha = 0.5) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  # 4. Add the inverse mask to create the circular frame.
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  # 5. Add the labels on top of the mask.
+  geom_sf_text(data = lat_labels, aes(label = label), size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label), size = 2.5, color = "black") +
+  # 6. Set the coordinate system to the larger radius to include labels.
+  coord_sf(xlim = c(-plot_radius, plot_radius), ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  # 7. Add title and theme.
+  labs(title = "(a) Trend Magnitude") +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "right", legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    panel.background = element_rect(fill = "gray95", color = NA),
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+# --- MAP 2: Statistical Significance (structure is identical to Map 1) ---
+p2 <- ggplot() +
+  geom_stars(data = storm_polar_masked, aes(fill = pval), na.rm = TRUE) +
+  scale_fill_gradientn(
+    name = "p-value", colors = c("darkred", "red", "orange", "yellow", "white"),
+    limits = c(0, 1), na.value = "transparent"
+  ) +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = sig_points, shape = 16, size = 0.3, color = "black", alpha = 0.5) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label), size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label), size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius), ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(title = "(b) Statistical Significance") +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "right", legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    panel.background = element_rect(fill = "gray95", color = NA),
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+# --- MAP 3: Autocorrelation (structure is identical to Map 1) ---
+p3 <- ggplot() +
+  geom_stars(data = storm_polar_masked, aes(fill = rho1), na.rm = TRUE) +
+  scale_fill_viridis(name = "Lag-1 ρ", option = "viridis", limits = c(0, 1), na.value = "transparent") +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label), size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label), size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius), ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(title = "(c) Temporal Autocorrelation") +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "right", legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    panel.background = element_rect(fill = "gray95", color = NA),
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+# --- Combine and Save the Final Figure ---
+combined <- p1 + p2 + p3 +
+  plot_layout(ncol = 3) +
+  plot_annotation(
+    title = "Arctic Storminess Trends (1958-2024): Polar Projection Overview",
+    theme = theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5))
+  )
+
+# Print the combined plot to the viewer.
+print(combined)
+
+# Save the final figure to a file.
+ggsave("Figure1_Three_Panel_POLAR.png",
+       combined, width = 20, height = 8, dpi = 1000, bg = "white")
+```
+
+```{r}
+# ============================================================================
+# PHASE 2.3: MOVING BLOCKS BOOTSTRAP FOR PAN-ARCTIC TREND UNCERTAINTY (>= 60°N)
+# ============================================================================
+
+# install.packages("boot") # Run once if needed
+library(boot)
+library(trend) # Needed for sens.slope
+
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 2.3: MOVING BLOCKS BOOTSTRAP (PAN-ARCTIC >= 60°N)\n")
+cat(rep("=", 70), "\n\n")
+
+# --- 1. Prepare Inputs ---
+# Use the refined Pan-Arctic time series object (>= 60°N)
+ts_data <- storm_ts_obj # *** This is the correct object ***
+
+# Check if the object exists
+if (!exists("storm_ts_obj")) {
+  stop("Error: The time series object 'storm_ts_obj' was not found. Please ensure the previous steps were run correctly.")
+}
+
+# Use the lag-1 autocorrelation calculated for this specific time series
+# Make sure 'rho1_60N' holds the ACF result for the >= 60N series
+# If you overwrote the old 'lag1_rho', use that. Let's assume it's 'lag1_rho' for now.
+rho1 <- lag1_rho # From your previous ACF calculation (should be ~0.540)
+if (is.null(rho1)) {
+  stop("Error: Lag-1 autocorrelation 'rho1' not found. Please re-run the ACF analysis for the >= 60N series.")
+}
+
+# Define the function to calculate the statistic (Sen's slope)
+slope_statistic <- function(data, indices) {
+  # We need to create a ts object within the function for sens.slope
+  # Ensure the start year and frequency match your data
+  ts_subset <- ts(data[indices], start = c(1958, 1), frequency = 12)
+  result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
+  if (inherits(result, "try-error") || is.null(result) || is.na(result)) {
+    return(NA) # Return NA if sens.slope fails
+  } else {
+    return(result) # Result is slope per year
+  }
+}
+
+# --- 2. Determine Optimal Block Length ---
+block_length <- ceiling(1 / (1 - rho1))
+cat(sprintf("Using Lag-1 Autocorrelation (ρ₁) = %.3f\n", rho1))
+cat(sprintf("Calculated Optimal Block Length (l): %d months\n", block_length))
+
+# --- 3. Run the Moving Blocks Bootstrap ---
+n_replicates <- 10000
+cat(sprintf("Running Moving Blocks Bootstrap with R = %d replicates...\n", n_replicates))
+set.seed(123) # for reproducibility
+start_boot <- Sys.time()
+
+# Ensure ts_data is a plain numeric vector for tsboot
+ts_data_vector <- as.vector(ts_data)
+
+boot_result <- tsboot(ts_data_vector, # Use the vector here
+                      statistic = slope_statistic,
+                      R = n_replicates,
+                      l = block_length,
+                      sim = "fixed",
+                      parallel = "multicore",
+                      ncpus = max(1, parallel::detectCores() - 1))
+
+end_boot <- Sys.time()
+cat(sprintf("Bootstrap finished in %.1f minutes.\n", difftime(end_boot, start_boot, units = "mins")))
+
+# --- 4. Calculate and Report Confidence Interval ---
+cat("\n--- Bootstrap Results ---\n")
+boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
+
+# The observed slope 't0' is per year because sens.slope returns per unit time (year for ts object)
+observed_slope_per_year <- boot_result$t0
+observed_slope_per_decade <- observed_slope_per_year * 10
+
+cat(sprintf("Observed Trend (Sen's Slope): %.4f m⁴/s⁴ per decade\n", observed_slope_per_decade))
+
+# Check for NA values in replicates which can cause boot.ci to fail
+num_na_replicates <- sum(is.na(boot_result$t))
+if (num_na_replicates > 0) {
+  cat(sprintf("Warning: %d bootstrap replicates resulted in NA slope values.\n", num_na_replicates))
+}
+
+if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent) && all(!is.na(boot_ci$percent[4:5]))) {
+  # CI limits are per year, convert to per decade
+  lower_ci_per_decade <- boot_ci$percent[4] * 10
+  upper_ci_per_decade <- boot_ci$percent[5] * 10
+
+  cat(sprintf("Bootstrap 95%% Confidence Interval: [%.4f, %.4f] m⁴/s⁴ per decade\n",
+              lower_ci_per_decade, upper_ci_per_decade))
+
+  # Check if the interval includes zero
+  if (lower_ci_per_decade < 0 && upper_ci_per_decade > 0) {
+    cat("✓ Confidence interval includes zero, confirming the trend is not statistically significant for the >= 60°N domain.\n")
+  } else {
+    cat("⚠ Confidence interval does NOT include zero. Trend might be significant, check against MK test result.\n")
+  }
+} else {
+  cat("ERROR: Could not calculate confidence interval. Bootstrap results might contain too many NAs.\n")
+  # Print summary of bootstrap replicates for debugging
+  print(summary(boot_result$t))
+  cat("Consider increasing block length or checking input data if many NAs occur.\n")
+}
+```
 
