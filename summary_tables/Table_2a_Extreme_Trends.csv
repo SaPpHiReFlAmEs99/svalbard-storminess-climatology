@@ -1,0 +1,7 @@
+Metric,Region,Lag-1 (ρ₁),Sen's Slope (per decade),PW-MK p-value,95% Bootstrap CI (per decade),Conclusion
+P99 Intensity (m²/s²),Pan-Arctic (≥ 60°N),0.1484828587764198,-0.02134895409242052,0.8768568610577423,"[-0.3804, 0.3713]",Not Significant
+P99 Intensity (m²/s²),Fram Strait,0.123,1.7171179015534166,0.1085,"[-1.6473, 1.5744]",Not Significant
+P99 Intensity (m²/s²),Svalbard/Barents,0.103,0.9119454344062604,0.211,"[-1.3113, 1.2489]",Not Significant
+P95 Frequency (events),Pan-Arctic (≥ 60°N),0.17729475906308642,0.3319407337335747,0.6740531019982656,"[-1.1308, 1.1051]",Not Significant
+P95 Frequency (events),Fram Strait,0.122,2.8537775433016366,0.073,"[-2.6528, 2.5786]",Not Significant
+P95 Frequency (events),Svalbard/Barents,0.021,1.5893476498896344,0.2151,"[-2.1941, 2.0969]",Not Significant

@@ -1,0 +1,16 @@
+Region,Time Scale,Lag-1 (ρ₁),Sen's Slope (m⁴/s⁴ per decade),PW-MK p-value,95% Bootstrap CI (m⁴/s⁴ per decade),Conclusion
+Pan-Arctic (≥ 60°N),Annual,0.54,0.044577710781410707,0.4771,"[-0.0953, 0.0984]",Not Significant
+Pan-Arctic (≥ 60°N),DJF,0.0541491932352789,-2.88889567949186,0.575154033534029,"[-4.9628, 4.8897]",Not Significant
+Pan-Arctic (≥ 60°N),MAM,0.053639510099127,2.50536077181738,0.150188191482625,"[-2.5121, 2.5187]",Not Significant
+Pan-Arctic (≥ 60°N),JJA,0.00559527246196942,0.33075523346144,0.782006475525275,"[-1.4734, 1.4624]",Not Significant
+Pan-Arctic (≥ 60°N),SON,-0.060569767222915,0.304157593705327,0.520901704446243,"[-2.9781, 2.7782]",Not Significant
+Fram Strait,Annual,0.449,0.4437110006462984,0.3032,"[-0.3697, 0.3616]",Not Significant
+Fram Strait,DJF,0.106,21.098957934615846,0.1987,"[-25.4270, 25.7972]",Not Significant
+Fram Strait,MAM,0.118,8.283976525700293,0.3583,"[-11.0948, 11.3240]",Not Significant
+Fram Strait,JJA,-0.131,-1.3925254647489176,0.2781,"[-2.9453, 3.0032]",Not Significant
+Fram Strait,SON,-0.042,8.583111311881893,0.211,"[-12.8124, 12.5701]",Not Significant
+Svalbard/Barents,Annual,0.47,0.23562206309400513,0.6078,"[-0.2971, 0.2848]",Not Significant
+Svalbard/Barents,DJF,0.124,8.357373076967098,0.4182,"[-20.8934, 20.4075]",Not Significant
+Svalbard/Barents,MAM,0.064,8.414522235803872,0.0969,"[-8.4202, 9.0221]",Not Significant
+Svalbard/Barents,JJA,-0.056,-1.1417084614535813,0.3759,"[-2.8236, 2.7435]",Not Significant
+Svalbard/Barents,SON,-0.059,3.9879971273319885,0.3525,"[-9.4208, 9.3794]",Not Significant

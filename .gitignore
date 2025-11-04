@@ -50,3 +50,7 @@ rsconnect/
 
 # Ignore processed climate data
 processed_correct/
+
+# Ignore these files
+GEMINI.md
+.claude

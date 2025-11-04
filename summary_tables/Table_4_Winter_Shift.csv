@@ -1,0 +1,9 @@
+Metric,Region,Season,Lag-1 (ρ₁),Sen's Slope (per decade),PW-MK p-value,95% Bootstrap CI (per decade),Conclusion
+Mean Storminess (m⁴/s⁴),Fram Strait,DJFM,0.133,20.79239989586792,0.1871,"[-22.5149, 23.8111]",Not Significant
+Mean Storminess (m⁴/s⁴),Fram Strait,FMA,0.069,13.663942171734096,0.2192,"[-15.8471, 16.0988]",Not Significant
+Mean Storminess (m⁴/s⁴),Svalbard/Barents,DJFM,0.155,7.4336190339073225,0.4313,"[-18.6681, 19.2539]",Not Significant
+Mean Storminess (m⁴/s⁴),Svalbard/Barents,FMA,0.123,6.795142253513281,0.4996,"[-13.4410, 13.6033]",Not Significant
+P95 Frequency (events),Fram Strait,DJFM,0.015,1.028181783651557,0.2109,"[-1.4328, 1.5197]",Not Significant
+P95 Frequency (events),Fram Strait,FMA,0.175,1.0140040433501158,0.2497,"[-1.1307, 1.1333]",Not Significant
+P95 Frequency (events),Svalbard/Barents,DJFM,0.063,0.5457803843654835,0.5297,"[-1.4975, 1.5528]",Not Significant
+P95 Frequency (events),Svalbard/Barents,FMA,0.17,0.638533414007892,0.4517,"[-1.0838, 1.1183]",Not Significant
