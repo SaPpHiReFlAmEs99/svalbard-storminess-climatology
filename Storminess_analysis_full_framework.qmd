@@ -42,6 +42,7 @@ library(nlme)
 library(ncmeta)
 library(abind)
 library(knitr)
+library(boot)
 
 # Configure Python Environment
 use_virtualenv("arctic-env", required = TRUE)
@@ -384,7 +385,7 @@ library(trend)
 
 # Step 1: Estimate AR(1) coefficient
 rho1 <- acf(storminess_ts_weighted, plot = FALSE)$acf[2]
-cat(sprintf("Step 1: AR(1) coefficient (ρ₁) = %.4f\n", rho1))z
+cat(sprintf("Step 1: AR(1) coefficient (ρ₁) = %.4f\n", rho1))
 
 # Step 2: Remove autocorrelation (pre-whiten)
 # Y_t' = Y_t - ρ₁ * Y_{t-1}
@@ -2002,7 +2003,7 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
   }
 
   # --- e. Report CI ---
-  boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
+  boot_ci <- try(boot::boot.ci(boot_result, type = "perc"), silent = TRUE)
   
   if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
     ci_lower_decade <- boot_ci$percent[4] * 10
@@ -2011,7 +2012,7 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
                 ci_lower_decade, ci_upper_decade))
     
     # Check if CI includes zero
-    if (ci_lower_decade < 0 && ci_upper_decade > 0) {
+    if (isTRUE(ci_lower_decade < 0 && ci_upper_decade > 0)) {
       cat("  → CI includes zero (trend not significant via bootstrap)\n")
     } else {
       cat("  → CI excludes zero (trend significant via bootstrap)\n")
@@ -2168,7 +2169,7 @@ for (i in 1:nrow(results_df)) {
   cat(sprintf("%s: %.4f [%.4f, %.4f] → ", 
               other_season, other_slope, other_ci_lower, other_ci_upper))
   
-  if (overlap) {
+  if (!isFALSE(overlap)) { 
     cat("CIs OVERLAP (no differential trend evidence)\n")
     overlap_count <- overlap_count + 1
   } else {
@@ -2206,7 +2207,8 @@ cat(sprintf("1. Strongest trend magnitude: %s (%.4f m⁴/s⁴ per decade)\n",
 # 2. Is SON significant after FDR correction?
 son_p_fdr <- results_df$p_fdr[son_idx]
 cat(sprintf("2. SON FDR-corrected p-value: %.4f %s\n", 
-            son_p_fdr, ifelse(son_p_fdr < 0.05, "✓ (significant)", "(not significant)")))
+            son_p_fdr, 
+            ifelse(isTRUE(son_p_fdr < 0.05), "✓ (significant)", "(not significant)")))
 
 # 3. CI overlap
 cat(sprintf("3. SON CI overlaps with %d out of 3 other seasons\n", overlap_count))
@@ -2214,7 +2216,7 @@ cat(sprintf("3. SON CI overlaps with %d out of 3 other seasons\n", overlap_count
 # 4. Make overall determination
 evidence_count <- 0
 if (strongest_season == "SON") evidence_count <- evidence_count + 1
-if (son_p_fdr < 0.05) evidence_count <- evidence_count + 1
+if (isTRUE(son_p_fdr < 0.05)) evidence_count <- evidence_count + 1
 if (overlap_count == 0) evidence_count <- evidence_count + 1
 
 cat("\n", rep("-", 70), "\n")
@@ -3903,7 +3905,8 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
     cat(sprintf("  Bootstrap 95%% CI: [%.4f, %.4f] events per decade\n", 
                 ci_lower_decade, ci_upper_decade))
     
-    if (ci_lower_decade < 0 && ci_upper_decade > 0) {
+    # FIX 1: Use isTRUE() to safely handle potential NAs in CI values
+    if (isTRUE(ci_lower_decade < 0 && ci_upper_decade > 0)) {
       cat("  → CI includes zero (trend not significant via bootstrap)\n")
     } else {
       cat("  → CI excludes zero (trend significant via bootstrap)\n")
@@ -3954,8 +3957,10 @@ for (col in numeric_cols) {
 }
 
 results_df$p_fdr <- p.adjust(results_df$p_value, method = "BH")
-results_df$sig_uncorrected <- ifelse(results_df$p_value < 0.05, "✓", "")
-results_df$sig_fdr <- ifelse(results_df$p_fdr < 0.05, "✓", "")
+
+# FIX 2: Use isTRUE() in ifelse() to safely handle NA p-values
+results_df$sig_uncorrected <- ifelse(isTRUE(results_df$p_value < 0.05), "✓", "")
+results_df$sig_fdr <- ifelse(isTRUE(results_df$p_fdr < 0.05), "✓", "")
 
 cat("Spatially-Averaged Seasonal Trend Analysis Results (P95 Frequency):\n\n")
 print(results_df, row.names = FALSE, digits = 4)
@@ -3967,7 +3972,12 @@ cat(rep("=", 70), "\n\n")
 
 son_idx <- which(results_df$season == "SON")
 son_p_fdr <- results_df$p_fdr[son_idx]
-strongest_season <- results_df$season[which.max(results_df$slope_decade)]
+
+# FIX 3b: Handle case where all slopes are NA
+strongest_season <- "NA" # Default
+if (any(!is.na(results_df$slope_decade))) {
+  strongest_season <- results_df$season[which.max(results_df$slope_decade)]
+}
 
 son_ci_lower <- results_df$ci_lower[son_idx]
 son_ci_upper <- results_df$ci_upper[son_idx]
@@ -3977,21 +3987,29 @@ for (i in 1:nrow(results_df)) {
   if (results_df$season[i] == "SON") next
   other_ci_lower <- results_df$ci_lower[i]
   other_ci_upper <- results_df$ci_upper[i]
-  if (!(son_ci_upper < other_ci_lower || son_ci_lower > other_ci_upper)) {
+  
+  # FIX 3a: Use !isFALSE() to treat NA as an overlap
+  # First, calculate overlap (which could be TRUE, FALSE, or NA)
+  overlap <- !(son_ci_upper < other_ci_lower || son_ci_lower > other_ci_upper)
+  
+  # Now, check. !isFALSE() treats TRUE and NA as TRUE (overlap).
+  if (!isFALSE(overlap)) {
     overlap_count <- overlap_count + 1
   }
 }
 
 evidence_count <- 0
 if (strongest_season == "SON") evidence_count <- evidence_count + 1
-if (son_p_fdr < 0.05) evidence_count <- evidence_count + 1
+# FIX 3c: Use isTRUE() to safely handle NA p-value
+if (isTRUE(son_p_fdr < 0.05)) evidence_count <- evidence_count + 1
 if (overlap_count == 0) evidence_count <- evidence_count + 1
 
 cat("Evidence Summary:\n")
 cat(sprintf("1. Strongest trend magnitude: %s (%.4f events/decade)\n", 
             strongest_season, max(results_df$slope_decade, na.rm = TRUE)))
+# FIX 3d: Use isTRUE() in ifelse() for the cat() statement
 cat(sprintf("2. SON FDR-corrected p-value: %.4f %s\n", 
-            son_p_fdr, ifelse(son_p_fdr < 0.05, "✓ (significant)", "(not significant)")))
+            son_p_fdr, ifelse(isTRUE(son_p_fdr < 0.05), "✓ (significant)", "(not significant)")))
 cat(sprintf("3. SON CI overlaps with %d out of 3 other seasons\n", overlap_count))
 
 cat("\n", rep("-", 70), "\n")
@@ -6410,7 +6428,7 @@ cat(rep("-", 70), "\n")
 boot_son_svalbard_path <- file.path(processed_dir, "boot_svalbard_SON.rds")
 if(file.exists(boot_son_svalbard_path)) {
   boot_son <- readRDS(boot_son_svalbard_path)
-  son_ci <- boot.ci(boot_son, type="perc")$percent[4:5] * 10
+  son_ci <- boot::boot.ci(boot_son, type="perc")$percent[4:5] * 10
   son_slope <- boot_son$t0 * 10
   
   djfm_results <- results_df %>% 
@@ -7483,6 +7501,9 @@ cat("  - Spatial domains: 3 regions (Pan-Arctic, Fram Strait, Svalbard/Barents)\
 cat("  - Statistical method: Pre-Whitened Mann-Kendall + Bootstrap CI\n")
 cat("\n")
 ```
+
+
+# Mechanistic diagnostic
 
 ```{r}
 # ============================================================================

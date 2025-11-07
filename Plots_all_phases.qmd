@@ -4,9 +4,9 @@ format: html
 editor: visual
 ---
 
-## Phase 1
+# Phase 1
 
-```{r}
+```{r summary}
 # ============================================================================
 # PHASE 1: DATA QUALITY CONTROL & VALIDATION VISUALIZATIONS
 #
@@ -636,20 +636,17 @@ cat("READY FOR ANALYSIS!\n")
 cat(rep("=", 80), "\n")
 ```
 
-```{r}
+
+
+```{r EKE-MKE-polar-plots}
 # ============================================================================
-# PHASE 1: CLIMATOLOGICAL MAPS - POLAR PROJECTION
+# PHASE 1: CLIMATOLOGICAL MAPS - THREE SEPARATE FIGURES
 #
-# PURPOSE: Create publication-quality polar projection maps showing:
-#   - DJF (Winter) climatological mean fields for MKE, EKE, and MKE/EKE ratio
-#   - Validates Reynolds decomposition visually
-#   - Demonstrates proper data preprocessing
+# PURPOSE: Create 3 separate figures with larger, more visible maps:
+#   Figure 1: Annual Mean (1 row × 3 panels)
+#   Figure 2: Winter Seasons - DJF, DJFM, FMA (3 rows × 3 panels)
+#   Figure 3: Other Seasons - MAM, JJA, SON (3 rows × 3 panels)
 #
-# METHODOLOGY: Follows the documented polar projection workflow:
-#   Step 1: Create spatially-aware stars object
-#   Step 2: Reproject to Lambert Azimuthal Equal-Area
-#   Step 3: Create circular masks
-#   Step 4: Assemble plots with proper layering
 # ============================================================================
 
 # --- LOAD LIBRARIES ---
@@ -660,7 +657,6 @@ library(ggplot2)
 library(rnaturalearth)
 library(patchwork)
 library(viridis)
-library(RColorBrewer)
 library(dplyr)
 library(lubridate)
 library(scales)
@@ -671,393 +667,7 @@ plot_dir <- file.path(processed_dir, "phase1_diagnostics")
 if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 
 cat("\n", rep("=", 80), "\n")
-cat("PHASE 1: CLIMATOLOGICAL MAPS (POLAR PROJECTION)\n")
-cat(rep("=", 80), "\n\n")
-
-# ============================================================================
-# STEP 0: LOAD AND PREPARE DATA
-# ============================================================================
-
-cat("Loading NetCDF data...\n")
-
-nc_mke <- nc_open(file.path(processed_dir, "ERA5_MKE_monthly_1958-2024.nc"))
-nc_eke <- nc_open(file.path(processed_dir, "ERA5_EKE_monthly_1958-2024.nc"))
-
-mke <- ncvar_get(nc_mke, "mke")
-eke <- ncvar_get(nc_eke, "eke")
-lat <- ncvar_get(nc_mke, "latitude")
-lon <- ncvar_get(nc_mke, "longitude")
-
-nc_close(nc_mke)
-nc_close(nc_eke)
-
-cat(sprintf("  Dimensions: [lon=%d, lat=%d, time=%d]\n", 
-            dim(mke)[1], dim(mke)[2], dim(mke)[3]))
-
-# Create date sequence
-n_times <- dim(mke)[3]
-dates <- seq(as.Date("1958-01-01"), by = "month", length.out = n_times)
-
-# Permute to [time, lat, lon]
-cat("  Permuting to [time, lat, lon]...\n")
-mke_permuted <- aperm(mke, c(3, 2, 1))
-eke_permuted <- aperm(eke, c(3, 2, 1))
-
-# Calculate DJF (Winter) climatological means
-cat("  Calculating DJF climatological means...\n")
-djf_indices <- which(month(dates) %in% c(12, 1, 2))
-
-# Result will be [lat, lon]
-mke_djf <- apply(mke_permuted[djf_indices, , ], c(2, 3), mean, na.rm = TRUE)
-eke_djf <- apply(eke_permuted[djf_indices, , ], c(2, 3), mean, na.rm = TRUE)
-ratio_djf <- mke_djf / eke_djf
-
-cat(sprintf("  DJF mean MKE: %.2f ± %.2f m²/s²\n", 
-            mean(mke_djf, na.rm = TRUE), sd(mke_djf, na.rm = TRUE)))
-cat(sprintf("  DJF mean EKE: %.2f ± %.2f m²/s²\n", 
-            mean(eke_djf, na.rm = TRUE), sd(eke_djf, na.rm = TRUE)))
-cat(sprintf("  DJF mean Ratio: %.2f ± %.2f\n", 
-            mean(ratio_djf, na.rm = TRUE), sd(ratio_djf, na.rm = TRUE)))
-
-# ============================================================================
-# STEP 1: CREATE SPATIALLY-AWARE `stars` OBJECT
-# ============================================================================
-
-cat("\nSTEP 1: Creating spatially-aware stars object...\n")
-
-# Ensure vectors are simple
-lon_vec <- as.vector(lon)
-lat_vec <- as.vector(lat)
-
-# Combine data into list (transpose from [lat, lon] to [lon, lat])
-data_list <- list(
-  mke = t(mke_djf),
-  eke = t(eke_djf),
-  ratio = t(ratio_djf)
-)
-
-# Explicitly define dimensions
-dims <- st_dimensions(x = lon_vec, y = lat_vec)
-
-# Create stars object and set CRS
-clim_stars <- st_as_stars(data_list, dimensions = dims) %>%
-  st_set_crs(4326)
-
-cat("  ✓ Created stars object with WGS84 CRS\n")
-
-# ============================================================================
-# STEP 2: REPROJECT ALL SPATIAL DATA
-# ============================================================================
-
-cat("\nSTEP 2: Reprojecting to polar projection...\n")
-
-# Define Lambert Azimuthal Equal-Area projection centered on North Pole
-arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
-
-# Warp raster data to polar projection
-clim_polar <- st_warp(clim_stars, crs = arctic_crs)
-cat("  ✓ Warped raster data to polar projection\n")
-
-# Load and transform coastlines
-world <- ne_countries(scale = "medium", returnclass = "sf")
-world_polar <- st_transform(world, crs = arctic_crs)
-cat("  ✓ Transformed coastlines to polar projection\n")
-
-# ============================================================================
-# STEP 3: CREATE CARTOGRAPHIC ELEMENTS
-# ============================================================================
-
-cat("\nSTEP 3: Creating cartographic elements...\n")
-
-# Define radii for two-ring masking
-view_radius <- 3700000  # 3700 km - data boundary
-plot_radius <- 4400000  # 4400 km - outer boundary for labels
-
-# Create circular mask
-circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
-  st_buffer(dist = view_radius)
-
-# Apply mask to data
-clim_polar_masked <- clim_polar[circle_mask]
-cat("  ✓ Applied circular mask\n")
-
-# Create inverse mask (donut shape to hide corners)
-square_box <- st_as_sfc(st_bbox(c(
-  xmin = -plot_radius, xmax = plot_radius,
-  ymin = -plot_radius, ymax = plot_radius
-), crs = arctic_crs))
-inverse_mask <- st_difference(square_box, circle_mask)
-cat("  ✓ Created inverse mask\n")
-
-# Create graticules (lat/lon grid lines)
-graticules <- st_graticule(
-  lon = seq(-180, 180, by = 60),
-  lat = c(60, 70, 80),
-  crs = 4326
-) %>%
-  st_transform(crs = arctic_crs)
-
-# Create latitude labels (positioned at 180°)
-lat_labels <- data.frame(
-  lon = 180,
-  lat = c(60, 70, 80)
-) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_transform(crs = arctic_crs)
-lat_labels$label <- c("60°N", "70°N", "80°N")
-
-# Create longitude labels (positioned outside data circle)
-lon_labels <- data.frame(
-  lon = seq(0, 300, by = 60),
-  lat = 55  # Between the two radii
-) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_transform(crs = arctic_crs)
-lon_labels$label <- c("0°", "60°E", "120°E", "180°W", "120°W", "60°W")
-
-cat("  ✓ Created graticules and labels\n")
-
-# ============================================================================
-# STEP 4: ASSEMBLE THE PLOTS
-# ============================================================================
-
-cat("\nSTEP 4: Assembling polar projection maps...\n")
-
-# Calculate color scale limits
-mke_range <- range(clim_polar_masked$mke, na.rm = TRUE)
-eke_range <- range(clim_polar_masked$eke, na.rm = TRUE)
-ratio_range <- range(clim_polar_masked$ratio, na.rm = TRUE)
-
-cat(sprintf("  MKE range: %.1f to %.1f m²/s²\n", mke_range[1], mke_range[2]))
-cat(sprintf("  EKE range: %.1f to %.1f m²/s²\n", eke_range[1], eke_range[2]))
-cat(sprintf("  Ratio range: %.2f to %.2f\n", ratio_range[1], ratio_range[2]))
-
-# --- MAP 1: MKE (Mean Kinetic Energy) ---
-cat("  Creating MKE map...\n")
-
-p1 <- ggplot() +
-  # 1. Draw the masked raster data
-  geom_stars(data = clim_polar_masked, aes(fill = mke), na.rm = TRUE) +
-  # 2. Define color scale
-  scale_fill_viridis(
-    name = "MKE\n(m²/s²)",
-    option = "plasma",
-    na.value = "transparent",
-    limits = mke_range,
-    breaks = pretty(mke_range, n = 5)
-  ) +
-  # 3. Add contextual layers
-  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
-  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-  # 4. Add inverse mask (circular frame)
-  geom_sf(data = inverse_mask, fill = "white", color = NA) +
-  # 5. Add labels on top
-  geom_sf_text(data = lat_labels, aes(label = label), 
-               size = 3, color = "black", hjust = 1.2) +
-  geom_sf_text(data = lon_labels, aes(label = label), 
-               size = 3, color = "black") +
-  # 6. Set coordinate system
-  coord_sf(xlim = c(-plot_radius, plot_radius), 
-           ylim = c(-plot_radius, plot_radius), 
-           expand = FALSE) +
-  # 7. Theme and title
-  labs(title = "(a) Mean Kinetic Energy (MKE)") +
-  theme_void(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-    legend.position = "right",
-    legend.key.width = unit(0.5, "cm"),
-    legend.key.height = unit(1.5, "cm"),
-    panel.background = element_rect(fill = "gray95", color = NA),
-    plot.margin = margin(5, 5, 5, 5)
-  )
-
-# --- MAP 2: EKE (Eddy Kinetic Energy) ---
-cat("  Creating EKE map...\n")
-
-p2 <- ggplot() +
-  geom_stars(data = clim_polar_masked, aes(fill = eke), na.rm = TRUE) +
-  scale_fill_viridis(
-    name = "EKE\n(m²/s²)",
-    option = "magma",
-    na.value = "transparent",
-    limits = eke_range,
-    breaks = pretty(eke_range, n = 5)
-  ) +
-  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
-  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-  geom_sf(data = inverse_mask, fill = "white", color = NA) +
-  geom_sf_text(data = lat_labels, aes(label = label), 
-               size = 3, color = "black", hjust = 1.2) +
-  geom_sf_text(data = lon_labels, aes(label = label), 
-               size = 3, color = "black") +
-  coord_sf(xlim = c(-plot_radius, plot_radius), 
-           ylim = c(-plot_radius, plot_radius), 
-           expand = FALSE) +
-  labs(title = "(b) Eddy Kinetic Energy (EKE)") +
-  theme_void(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-    legend.position = "right",
-    legend.key.width = unit(0.5, "cm"),
-    legend.key.height = unit(1.5, "cm"),
-    panel.background = element_rect(fill = "gray95", color = NA),
-    plot.margin = margin(5, 5, 5, 5)
-  )
-
-# --- MAP 3: MKE/EKE Ratio ---
-cat("  Creating Ratio map...\n")
-
-p3 <- ggplot() +
-  geom_stars(data = clim_polar_masked, aes(fill = ratio), na.rm = TRUE) +
-  scale_fill_viridis(
-    name = "MKE/EKE\nRatio",
-    option = "viridis",
-    na.value = "transparent",
-    limits = c(0, 10),  # Cap at 10 for visual clarity
-    oob = scales::squish,  # Squish values outside limits
-    breaks = seq(0, 10, by = 2)
-  ) +
-  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
-  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-  geom_sf(data = inverse_mask, fill = "white", color = NA) +
-  geom_sf_text(data = lat_labels, aes(label = label), 
-               size = 3, color = "black", hjust = 1.2) +
-  geom_sf_text(data = lon_labels, aes(label = label), 
-               size = 3, color = "black") +
-  coord_sf(xlim = c(-plot_radius, plot_radius), 
-           ylim = c(-plot_radius, plot_radius), 
-           expand = FALSE) +
-  labs(title = "(c) MKE/EKE Ratio") +
-  theme_void(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-    legend.position = "right",
-    legend.key.width = unit(0.5, "cm"),
-    legend.key.height = unit(1.5, "cm"),
-    panel.background = element_rect(fill = "gray95", color = NA),
-    plot.margin = margin(5, 5, 5, 5)
-  )
-
-# ============================================================================
-# COMBINE AND SAVE
-# ============================================================================
-
-cat("\nCombining and saving figure...\n")
-
-combined <- p1 + p2 + p3 +
-  plot_layout(ncol = 3) +
-  plot_annotation(
-    title = "Climatological Mean: Winter (DJF) Kinetic Energy Fields (1958-2024)",
-    subtitle = "Lambert Azimuthal Equal-Area Projection | Arctic Domain (≥60°N)",
-    theme = theme(
-      plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 12, hjust = 0.5)
-    )
-  )
-
-# Print to viewer
-print(combined)
-
-# Save high-resolution figure
-output_file <- file.path(plot_dir, "Fig_Phase1_Climatology_DJF_POLAR.png")
-ggsave(output_file,
-       combined, 
-       width = 20, 
-       height = 8, 
-       dpi = 300, 
-       bg = "white")
-
-cat(sprintf("  ✓ Saved: %s\n", basename(output_file)))
-
-# ============================================================================
-# PHYSICAL INTERPRETATION
-# ============================================================================
-
-cat("\n", rep("=", 80), "\n")
-cat("PHYSICAL INTERPRETATION\n")
-cat(rep("=", 80), "\n\n")
-
-cat("EXPECTED SPATIAL PATTERNS:\n\n")
-
-cat("1. MKE (Mean Kinetic Energy):\n")
-cat("   - Highest over continental landmasses (strong surface winds)\n")
-cat("   - Lower over open ocean\n")
-cat("   - Strong gradients near coastlines\n")
-cat("   - Maximum values: typically 60-120 m²/s²\n\n")
-
-cat("2. EKE (Eddy Kinetic Energy):\n")
-cat("   - Concentrated in storm tracks (North Atlantic, North Pacific)\n")
-cat("   - Lower over Arctic Ocean interior\n")
-cat("   - Maxima in regions of high baroclinicity\n")
-cat("   - Maximum values: typically 40-100 m²/s²\n\n")
-
-cat("3. MKE/EKE Ratio:\n")
-cat("   - High (>5) over continents and Arctic interior (mean flow dominates)\n")
-cat("   - Low (2-3) in storm tracks (eddies dominate)\n")
-cat("   - Identifies regions of high vs. low storm activity\n")
-cat("   - Ratio <3 indicates active storm regions\n\n")
-
-cat("REYNOLDS DECOMPOSITION CHECK:\n")
-cat("✓ MKE + EKE = Total Kinetic Energy\n")
-cat("✓ MKE represents climatological circulation\n")
-cat("✓ EKE represents transient weather systems\n")
-cat("✓ Spatial patterns should match physical expectations\n\n")
-
-cat(rep("=", 80), "\n")
-cat("PHASE 1 CLIMATOLOGICAL MAPS COMPLETE!\n")
-cat(rep("=", 80), "\n\n")
-
-cat("SUMMARY:\n")
-cat(sprintf("  - Projection: Lambert Azimuthal Equal-Area (North Pole)\n"))
-cat(sprintf("  - Domain: Arctic (≥60°N), circular view\n"))
-cat(sprintf("  - Season: DJF (Winter)\n"))
-cat(sprintf("  - Period: 1958-2024 climatology\n"))
-cat(sprintf("  - Output: 3-panel figure at 300 DPI\n\n"))
-
-cat("This figure demonstrates:\n")
-cat("  ✓ Proper data preprocessing (Reynolds decomposition)\n")
-cat("  ✓ Physically reasonable spatial patterns\n")
-cat("  ✓ Publication-quality cartography\n")
-cat("  ✓ Ready for Methods section\n\n")
-```
-
-```{r}
-# ============================================================================
-# PHASE 1: CLIMATOLOGICAL MAPS - ALL SEASONS + ANNUAL (POLAR PROJECTION)
-#
-# PURPOSE: Create publication-quality polar projection maps for:
-#   - Annual mean
-#   - DJF (Winter)
-#   - MAM (Spring)
-#   - JJA (Summer)
-#   - SON (Autumn)
-#   - DJFM (Extended Winter)
-#   - FMA (Late Winter-Early Spring)
-#
-# OUTPUT: 7 three-panel figures (MKE, EKE, Ratio) for each temporal period
-# ============================================================================
-
-# --- LOAD LIBRARIES ---
-library(ncdf4)
-library(stars)
-library(sf)
-library(ggplot2)
-library(rnaturalearth)
-library(patchwork)
-library(viridis)
-library(RColorBrewer)
-library(dplyr)
-library(lubridate)
-library(scales)
-
-# --- SETUP ---
-processed_dir <- "E:/ERA5_data/processed"
-plot_dir <- file.path(processed_dir, "phase1_diagnostics")
-if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
-
-cat("\n", rep("=", 80), "\n")
-cat("PHASE 1: CLIMATOLOGICAL MAPS (ALL SEASONS + ANNUAL)\n")
+cat("PHASE 1: THREE-FIGURE CLIMATOLOGY SET\n")
 cat(rep("=", 80), "\n\n")
 
 # ============================================================================
@@ -1065,17 +675,22 @@ cat(rep("=", 80), "\n\n")
 # ============================================================================
 
 season_definitions <- list(
-  Annual = list(months = 1:12, name = "Annual Mean", abbr = "ANN"),
-  DJF = list(months = c(12, 1, 2), name = "Winter (DJF)", abbr = "DJF"),
-  MAM = list(months = c(3, 4, 5), name = "Spring (MAM)", abbr = "MAM"),
-  JJA = list(months = c(6, 7, 8), name = "Summer (JJA)", abbr = "JJA"),
-  SON = list(months = c(9, 10, 11), name = "Autumn (SON)", abbr = "SON"),
-  DJFM = list(months = c(12, 1, 2, 3), name = "Extended Winter (DJFM)", abbr = "DJFM"),
-  FMA = list(months = c(2, 3, 4), name = "Late Winter-Spring (FMA)", abbr = "FMA")
+  Annual = list(months = 1:12, name = "Annual Mean", abbr = "ANN", label = "Annual Mean"),
+  DJF = list(months = c(12, 1, 2), name = "Winter", abbr = "DJF", label = "Winter (DJF)"),
+  DJFM = list(months = c(12, 1, 2, 3), name = "Extended Winter", abbr = "DJFM", label = "Extended Winter (DJFM)"),
+  FMA = list(months = c(2, 3, 4), name = "Late Winter-Spring", abbr = "FMA", label = "Late Winter-Spring (FMA)"),
+  MAM = list(months = c(3, 4, 5), name = "Spring", abbr = "MAM", label = "Spring (MAM)"),
+  JJA = list(months = c(6, 7, 8), name = "Summer", abbr = "JJA", label = "Summer (JJA)"),
+  SON = list(months = c(9, 10, 11), name = "Autumn", abbr = "SON", label = "Autumn (SON)")
 )
 
+# Figure groupings
+fig1_seasons <- c("Annual")
+fig2_seasons <- c("DJF", "DJFM", "FMA")  # Winter-focused
+fig3_seasons <- c("MAM", "JJA", "SON")   # Other seasons
+
 # ============================================================================
-# LOAD AND PREPARE DATA
+# LOAD DATA
 # ============================================================================
 
 cat("Loading NetCDF data...\n")
@@ -1091,271 +706,26 @@ lon <- ncvar_get(nc_mke, "longitude")
 nc_close(nc_mke)
 nc_close(nc_eke)
 
-cat(sprintf("  Dimensions: [lon=%d, lat=%d, time=%d]\n", 
-            dim(mke)[1], dim(mke)[2], dim(mke)[3]))
-
-# Create date sequence
 n_times <- dim(mke)[3]
 dates <- seq(as.Date("1958-01-01"), by = "month", length.out = n_times)
 
-# Permute to [time, lat, lon]
-cat("  Permuting to [time, lat, lon]...\n")
+cat("  Permuting dimensions...\n")
 mke_permuted <- aperm(mke, c(3, 2, 1))
 eke_permuted <- aperm(eke, c(3, 2, 1))
 
-# Free memory
 rm(mke, eke)
 gc(verbose = FALSE)
 
 # ============================================================================
-# PREPARE CARTOGRAPHIC ELEMENTS (SAME FOR ALL MAPS)
+# CALCULATE ALL SEASONAL MEANS AND GLOBAL RANGES
 # ============================================================================
 
-cat("\nPreparing cartographic elements...\n")
+cat("\nCalculating seasonal means and global ranges...\n")
 
-# Define Lambert Azimuthal Equal-Area projection
-arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
-
-# Define radii
-view_radius <- 3700000  # 3700 km
-plot_radius <- 4400000  # 4400 km
-
-# Create circular mask
-circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
-  st_buffer(dist = view_radius)
-
-# Create inverse mask
-square_box <- st_as_sfc(st_bbox(c(
-  xmin = -plot_radius, xmax = plot_radius,
-  ymin = -plot_radius, ymax = plot_radius
-), crs = arctic_crs))
-inverse_mask <- st_difference(square_box, circle_mask)
-
-# Load and transform coastlines
-world <- ne_countries(scale = "medium", returnclass = "sf")
-world_polar <- st_transform(world, crs = arctic_crs)
-
-# Create graticules
-graticules <- st_graticule(
-  lon = seq(-180, 180, by = 60),
-  lat = c(60, 70, 80),
-  crs = 4326
-) %>%
-  st_transform(crs = arctic_crs)
-
-# Create latitude labels
-lat_labels <- data.frame(lon = 180, lat = c(60, 70, 80)) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_transform(crs = arctic_crs)
-lat_labels$label <- c("60°N", "70°N", "80°N")
-
-# Create longitude labels
-lon_labels <- data.frame(lon = seq(0, 300, by = 60), lat = 55) %>%
-  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_transform(crs = arctic_crs)
-lon_labels$label <- c("0°", "60°E", "120°E", "180°W", "120°W", "60°W")
-
-cat("  ✓ Cartographic elements prepared\n")
-
-# ============================================================================
-# FUNCTION: CREATE 3-PANEL FIGURE FOR A GIVEN SEASON
-# ============================================================================
-
-create_seasonal_figure <- function(season_name, season_def) {
-  
-  cat(sprintf("\n--- Processing: %s ---\n", season_def$name))
-  
-  # Calculate seasonal mean
-  months <- season_def$months
-  season_indices <- which(month(dates) %in% months)
-  
-  cat(sprintf("  Selected %d months\n", length(season_indices)))
-  
-  # Calculate means [lat, lon]
-  mke_season <- apply(mke_permuted[season_indices, , ], c(2, 3), mean, na.rm = TRUE)
-  eke_season <- apply(eke_permuted[season_indices, , ], c(2, 3), mean, na.rm = TRUE)
-  ratio_season <- mke_season / eke_season
-  
-  # Print statistics
-  cat(sprintf("  Mean MKE: %.2f ± %.2f m²/s²\n", 
-              mean(mke_season, na.rm = TRUE), sd(mke_season, na.rm = TRUE)))
-  cat(sprintf("  Mean EKE: %.2f ± %.2f m²/s²\n", 
-              mean(eke_season, na.rm = TRUE), sd(eke_season, na.rm = TRUE)))
-  cat(sprintf("  Mean Ratio: %.2f ± %.2f\n", 
-              mean(ratio_season, na.rm = TRUE), sd(ratio_season, na.rm = TRUE)))
-  
-  # Create stars object
-  lon_vec <- as.vector(lon)
-  lat_vec <- as.vector(lat)
-  
-  data_list <- list(
-    mke = t(mke_season),
-    eke = t(eke_season),
-    ratio = t(ratio_season)
-  )
-  
-  dims <- st_dimensions(x = lon_vec, y = lat_vec)
-  clim_stars <- st_as_stars(data_list, dimensions = dims) %>%
-    st_set_crs(4326)
-  
-  # Warp to polar projection
-  cat("  Warping to polar projection...\n")
-  clim_polar <- st_warp(clim_stars, crs = arctic_crs)
-  
-  # Apply mask
-  clim_polar_masked <- clim_polar[circle_mask]
-  
-  # Calculate color scale limits
-  mke_range <- range(clim_polar_masked$mke, na.rm = TRUE)
-  eke_range <- range(clim_polar_masked$eke, na.rm = TRUE)
-  ratio_range <- range(clim_polar_masked$ratio, na.rm = TRUE)
-  
-  # --- MAP 1: MKE ---
-  p1 <- ggplot() +
-    geom_stars(data = clim_polar_masked, aes(fill = mke), na.rm = TRUE) +
-    scale_fill_viridis(
-      name = "MKE\n(m²/s²)",
-      option = "plasma",
-      na.value = "transparent",
-      limits = mke_range,
-      breaks = pretty(mke_range, n = 5)
-    ) +
-    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
-    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-    geom_sf(data = inverse_mask, fill = "white", color = NA) +
-    geom_sf_text(data = lat_labels, aes(label = label), size = 3, color = "black", hjust = 1.2) +
-    geom_sf_text(data = lon_labels, aes(label = label), size = 3, color = "black") +
-    coord_sf(xlim = c(-plot_radius, plot_radius), 
-             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-    labs(title = "(a) Mean Kinetic Energy (MKE)") +
-    theme_void(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-      legend.position = "right",
-      legend.key.width = unit(0.5, "cm"),
-      legend.key.height = unit(1.5, "cm"),
-      panel.background = element_rect(fill = "gray95", color = NA),
-      plot.margin = margin(5, 5, 5, 5)
-    )
-  
-  # --- MAP 2: EKE ---
-  p2 <- ggplot() +
-    geom_stars(data = clim_polar_masked, aes(fill = eke), na.rm = TRUE) +
-    scale_fill_viridis(
-      name = "EKE\n(m²/s²)",
-      option = "magma",
-      na.value = "transparent",
-      limits = eke_range,
-      breaks = pretty(eke_range, n = 5)
-    ) +
-    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
-    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-    geom_sf(data = inverse_mask, fill = "white", color = NA) +
-    geom_sf_text(data = lat_labels, aes(label = label), size = 3, color = "black", hjust = 1.2) +
-    geom_sf_text(data = lon_labels, aes(label = label), size = 3, color = "black") +
-    coord_sf(xlim = c(-plot_radius, plot_radius), 
-             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-    labs(title = "(b) Eddy Kinetic Energy (EKE)") +
-    theme_void(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-      legend.position = "right",
-      legend.key.width = unit(0.5, "cm"),
-      legend.key.height = unit(1.5, "cm"),
-      panel.background = element_rect(fill = "gray95", color = NA),
-      plot.margin = margin(5, 5, 5, 5)
-    )
-  
-  # --- MAP 3: Ratio ---
-  p3 <- ggplot() +
-    geom_stars(data = clim_polar_masked, aes(fill = ratio), na.rm = TRUE) +
-    scale_fill_viridis(
-      name = "MKE/EKE\nRatio",
-      option = "viridis",
-      na.value = "transparent",
-      limits = c(0, 10),
-      oob = scales::squish,
-      breaks = seq(0, 10, by = 2)
-    ) +
-    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
-    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-    geom_sf(data = inverse_mask, fill = "white", color = NA) +
-    geom_sf_text(data = lat_labels, aes(label = label), size = 3, color = "black", hjust = 1.2) +
-    geom_sf_text(data = lon_labels, aes(label = label), size = 3, color = "black") +
-    coord_sf(xlim = c(-plot_radius, plot_radius), 
-             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-    labs(title = "(c) MKE/EKE Ratio") +
-    theme_void(base_size = 12) +
-    theme(
-      plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-      legend.position = "right",
-      legend.key.width = unit(0.5, "cm"),
-      legend.key.height = unit(1.5, "cm"),
-      panel.background = element_rect(fill = "gray95", color = NA),
-      plot.margin = margin(5, 5, 5, 5)
-    )
-  
-  # Combine panels
-  combined <- p1 + p2 + p3 +
-    plot_layout(ncol = 3) +
-    plot_annotation(
-      title = sprintf("Climatological Mean: %s Kinetic Energy Fields (1958-2024)", season_def$name),
-      subtitle = "Lambert Azimuthal Equal-Area Projection | Arctic Domain (≥60°N)",
-      theme = theme(
-        plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
-        plot.subtitle = element_text(size = 12, hjust = 0.5)
-      )
-    )
-  
-  # Save figure
-  output_file <- file.path(plot_dir, 
-                           sprintf("Fig_Phase1_Climatology_%s_POLAR.png", season_def$abbr))
-  
-  cat("  Saving figure...\n")
-  ggsave(output_file, combined, width = 20, height = 8, dpi = 300, bg = "white")
-  
-  cat(sprintf("  ✓ Saved: %s\n", basename(output_file)))
-  
-  return(combined)
-}
-
-# ============================================================================
-# GENERATE ALL FIGURES
-# ============================================================================
-
-cat("\n", rep("=", 80), "\n")
-cat("GENERATING FIGURES FOR ALL SEASONS\n")
-cat(rep("=", 80), "\n")
-
-# Store all figures
-all_figures <- list()
-
-# Loop through all seasons
-for (season_name in names(season_definitions)) {
-  all_figures[[season_name]] <- create_seasonal_figure(
-    season_name, 
-    season_definitions[[season_name]]
-  )
-}
-
-# ============================================================================
-# CREATE SUMMARY STATISTICS TABLE
-# ============================================================================
-
-cat("\n", rep("=", 80), "\n")
-cat("GENERATING SUMMARY STATISTICS\n")
-cat(rep("=", 80), "\n\n")
-
-summary_stats <- data.frame(
-  Season = character(),
-  Mean_MKE = numeric(),
-  SD_MKE = numeric(),
-  Mean_EKE = numeric(),
-  SD_EKE = numeric(),
-  Mean_Ratio = numeric(),
-  SD_Ratio = numeric(),
-  stringsAsFactors = FALSE
-)
+seasonal_data <- list()
+all_mke <- c()
+all_eke <- c()
+all_ratio <- c()
 
 for (season_name in names(season_definitions)) {
   months <- season_definitions[[season_name]]$months
@@ -1365,63 +735,529 @@ for (season_name in names(season_definitions)) {
   eke_season <- apply(eke_permuted[season_indices, , ], c(2, 3), mean, na.rm = TRUE)
   ratio_season <- mke_season / eke_season
   
-  summary_stats <- rbind(summary_stats, data.frame(
-    Season = season_definitions[[season_name]]$name,
-    Mean_MKE = mean(mke_season, na.rm = TRUE),
-    SD_MKE = sd(mke_season, na.rm = TRUE),
-    Mean_EKE = mean(eke_season, na.rm = TRUE),
-    SD_EKE = sd(eke_season, na.rm = TRUE),
-    Mean_Ratio = mean(ratio_season, na.rm = TRUE),
-    SD_Ratio = sd(ratio_season, na.rm = TRUE)
-  ))
+  seasonal_data[[season_name]] <- list(
+    mke = mke_season,
+    eke = eke_season,
+    ratio = ratio_season
+  )
+  
+  all_mke <- c(all_mke, as.vector(mke_season))
+  all_eke <- c(all_eke, as.vector(eke_season))
+  all_ratio <- c(all_ratio, as.vector(ratio_season))
+  
+  cat(sprintf("  %s: MKE=%.1f, EKE=%.1f, Ratio=%.2f\n",
+              season_definitions[[season_name]]$label,
+              mean(mke_season, na.rm = TRUE),
+              mean(eke_season, na.rm = TRUE),
+              mean(ratio_season, na.rm = TRUE)))
 }
 
-# Save summary table
-write.csv(summary_stats, 
-          file.path(plot_dir, "Phase1_Climatology_Summary_Statistics.csv"),
-          row.names = FALSE)
+# CRITICAL: Calculate GLOBAL ranges for uniform color scales across all figures
+mke_global_range <- range(all_mke, na.rm = TRUE)
+eke_global_range <- range(all_eke, na.rm = TRUE)
+ratio_global_range <- c(0, 10)
 
-# Print summary
-cat("Summary Statistics:\n\n")
-print(knitr::kable(summary_stats, format = "markdown", digits = 2))
+cat(sprintf("\n*** GLOBAL COLOR RANGES (used for all 3 figures) ***\n"))
+cat(sprintf("  MKE: %.1f to %.1f m²/s²\n", mke_global_range[1], mke_global_range[2]))
+cat(sprintf("  EKE: %.1f to %.1f m²/s²\n", eke_global_range[1], eke_global_range[2]))
+cat(sprintf("  Ratio: %.1f to %.1f\n\n", ratio_global_range[1], ratio_global_range[2]))
 
 # ============================================================================
-# FINAL SUMMARY
+# PREPARE CARTOGRAPHIC ELEMENTS
+# ============================================================================
+
+cat("Preparing cartographic elements...\n")
+
+arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
+view_radius <- 3700000
+plot_radius <- 4400000
+
+circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
+  st_buffer(dist = view_radius)
+
+square_box <- st_as_sfc(st_bbox(c(
+  xmin = -plot_radius, xmax = plot_radius,
+  ymin = -plot_radius, ymax = plot_radius
+), crs = arctic_crs))
+inverse_mask <- st_difference(square_box, circle_mask)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world_polar <- st_transform(world, crs = arctic_crs)
+
+graticules <- st_graticule(
+  lon = seq(-180, 180, by = 60),
+  lat = c(60, 70, 80),
+  crs = 4326
+) %>%
+  st_transform(crs = arctic_crs)
+
+lat_labels <- data.frame(lon = 180, lat = c(60, 70, 80)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lat_labels$label <- c("60°N", "70°N", "80°N")
+
+lon_labels <- data.frame(lon = seq(0, 300, by = 60), lat = 55) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lon_labels$label <- c("0°", "60°E", "120°E", "180°W", "120°W", "60°W")
+
+cat("  ✓ Cartographic elements prepared\n")
+
+# ============================================================================
+# FUNCTION: CREATE SINGLE MAP WITH GLOBAL COLOR SCALES
+# ============================================================================
+
+create_map <- function(data_masked, variable, variable_name, show_legend = TRUE) {
+  
+  # Use GLOBAL ranges for all maps
+  if (variable == "mke") {
+    color_range <- mke_global_range
+    color_option <- "plasma"
+  } else if (variable == "eke") {
+    color_range <- eke_global_range
+    color_option <- "magma"
+  } else {  # ratio
+    color_range <- ratio_global_range
+    color_option <- "viridis"
+  }
+  
+  p <- ggplot() +
+    geom_stars(data = data_masked, aes(fill = .data[[variable]]), na.rm = TRUE) +
+    scale_fill_viridis(
+      name = variable_name,
+      option = color_option,
+      na.value = "transparent",
+      limits = color_range,
+      breaks = if (variable == "ratio") seq(0, 10, by = 2) else pretty(color_range, n = 5),
+      oob = if (variable == "ratio") scales::squish else scales::censor,
+      guide = if (show_legend) guide_colorbar(barwidth = 1, barheight = 10) else "none"
+    ) +
+    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
+    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+    geom_sf(data = inverse_mask, fill = "white", color = NA) +
+    geom_sf_text(data = lat_labels, aes(label = label), size = 3, color = "black", hjust = 1.2) +
+    geom_sf_text(data = lon_labels, aes(label = label), size = 3, color = "black") +
+    coord_sf(xlim = c(-plot_radius, plot_radius), 
+             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+    labs(title = variable_name) +
+    theme_void(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+      legend.position = if (show_legend) "right" else "none",
+      legend.key.width = unit(0.8, "cm"),
+      legend.key.height = unit(2, "cm"),
+      panel.background = element_rect(fill = "gray95", color = NA),
+      plot.margin = margin(5, 5, 5, 5)
+    )
+  
+  return(p)
+}
+
+# ============================================================================
+# FUNCTION: CREATE SEASON PANEL (3 maps: MKE, EKE, Ratio)
+# ============================================================================
+
+create_season_panel <- function(season_name, show_titles = FALSE) {
+  
+  season_data <- seasonal_data[[season_name]]
+  
+  # Create stars object
+  lon_vec <- as.vector(lon)
+  lat_vec <- as.vector(lat)
+  
+  data_list <- list(
+    mke = t(season_data$mke),
+    eke = t(season_data$eke),
+    ratio = t(season_data$ratio)
+  )
+  
+  dims <- st_dimensions(x = lon_vec, y = lat_vec)
+  clim_stars <- st_as_stars(data_list, dimensions = dims) %>%
+    st_set_crs(4326)
+  
+  # Warp and mask
+  clim_polar <- st_warp(clim_stars, crs = arctic_crs)
+  clim_polar_masked <- clim_polar[circle_mask]
+  
+  # Create 3 maps
+  p_mke <- create_map(clim_polar_masked, "mke", if (show_titles) "MKE (m²/s²)" else NULL, show_legend = TRUE)
+  p_eke <- create_map(clim_polar_masked, "eke", if (show_titles) "EKE (m²/s²)" else NULL, show_legend = TRUE)
+  p_ratio <- create_map(clim_polar_masked, "ratio", if (show_titles) "MKE/EKE Ratio" else NULL, show_legend = TRUE)
+  
+  return(list(mke = p_mke, eke = p_eke, ratio = p_ratio))
+}
+
+# ============================================================================
+# FIGURE 1: ANNUAL MEAN
+# ============================================================================
+
+cat("\n=== FIGURE 1: ANNUAL MEAN ===\n")
+
+annual_maps <- create_season_panel("Annual", show_titles = TRUE)
+
+fig1 <- annual_maps$mke + annual_maps$eke + annual_maps$ratio +
+  plot_layout(ncol = 3) +
+  plot_annotation(
+    title = "Arctic Kinetic Energy Climatology: Annual Mean (1958-2024)",
+    subtitle = "Lambert Azimuthal Equal-Area Projection | Arctic Domain (≥60°N)",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 13, hjust = 0.5)
+    )
+  )
+
+output_file1 <- file.path(plot_dir, "Fig1_Climatology_ANNUAL.png")
+ggsave(output_file1, fig1, width = 20, height = 8, dpi = 300, bg = "white")
+cat(sprintf("  ✓ Saved: %s\n", basename(output_file1)))
+
+# ============================================================================
+# FIGURE 2: WINTER SEASONS (DJF, DJFM, FMA)
+# ============================================================================
+
+cat("\n=== FIGURE 2: WINTER SEASONS ===\n")
+
+djf_maps <- create_season_panel("DJF", show_titles = TRUE)
+djfm_maps <- create_season_panel("DJFM", show_titles = FALSE)
+fma_maps <- create_season_panel("FMA", show_titles = FALSE)
+
+# Create season label plots
+label_djf <- ggplot() +
+  annotate("text", x = 0.5, y = 0.5, label = "Winter\n(DJF)", 
+           size = 6, fontface = "bold", hjust = 0.5, vjust = 0.5) +
+  theme_void() +
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+label_djfm <- ggplot() +
+  annotate("text", x = 0.5, y = 0.5, label = "Extended\nWinter\n(DJFM)", 
+           size = 6, fontface = "bold", hjust = 0.5, vjust = 0.5) +
+  theme_void() +
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+label_fma <- ggplot() +
+  annotate("text", x = 0.5, y = 0.5, label = "Late\nWinter-Spring\n(FMA)", 
+           size = 6, fontface = "bold", hjust = 0.5, vjust = 0.5) +
+  theme_void() +
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+# Row 1: DJF (with label + 3 maps)
+row1 <- label_djf + djf_maps$mke + djf_maps$eke + djf_maps$ratio +
+  plot_layout(ncol = 4, widths = c(0.3, 1, 1, 1))
+
+# Row 2: DJFM (with label + 3 maps)
+row2 <- label_djfm + djfm_maps$mke + djfm_maps$eke + djfm_maps$ratio +
+  plot_layout(ncol = 4, widths = c(0.3, 1, 1, 1))
+
+# Row 3: FMA (with label + 3 maps)
+row3 <- label_fma + fma_maps$mke + fma_maps$eke + fma_maps$ratio +
+  plot_layout(ncol = 4, widths = c(0.3, 1, 1, 1))
+
+fig2 <- row1 / row2 / row3 +
+  plot_annotation(
+    title = "Arctic Kinetic Energy Climatology: Winter Seasons (1958-2024)",
+    subtitle = "Lambert Azimuthal Equal-Area Projection | Uniform color scales with Annual and Other Seasons",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 13, hjust = 0.5)
+    )
+  )
+
+output_file2 <- file.path(plot_dir, "Fig2_Climatology_WINTER_SEASONS.png")
+ggsave(output_file2, fig2, width = 22, height = 20, dpi = 300, bg = "white")
+cat(sprintf("  ✓ Saved: %s\n", basename(output_file2)))
+
+# ============================================================================
+# FIGURE 3: OTHER SEASONS (MAM, JJA, SON)
+# ============================================================================
+
+cat("\n=== FIGURE 3: OTHER SEASONS ===\n")
+
+mam_maps <- create_season_panel("MAM", show_titles = TRUE)
+jja_maps <- create_season_panel("JJA", show_titles = FALSE)
+son_maps <- create_season_panel("SON", show_titles = FALSE)
+
+# Create season label plots
+label_mam <- ggplot() +
+  annotate("text", x = 0.5, y = 0.5, label = "Spring\n(MAM)", 
+           size = 6, fontface = "bold", hjust = 0.5, vjust = 0.5) +
+  theme_void() +
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+label_jja <- ggplot() +
+  annotate("text", x = 0.5, y = 0.5, label = "Summer\n(JJA)", 
+           size = 6, fontface = "bold", hjust = 0.5, vjust = 0.5) +
+  theme_void() +
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+label_son <- ggplot() +
+  annotate("text", x = 0.5, y = 0.5, label = "Autumn\n(SON)", 
+           size = 6, fontface = "bold", hjust = 0.5, vjust = 0.5) +
+  theme_void() +
+  theme(plot.margin = margin(0, 0, 0, 0))
+
+# Row 1: MAM (with label + 3 maps)
+row1 <- label_mam + mam_maps$mke + mam_maps$eke + mam_maps$ratio +
+  plot_layout(ncol = 4, widths = c(0.3, 1, 1, 1))
+
+# Row 2: JJA (with label + 3 maps)
+row2 <- label_jja + jja_maps$mke + jja_maps$eke + jja_maps$ratio +
+  plot_layout(ncol = 4, widths = c(0.3, 1, 1, 1))
+
+# Row 3: SON (with label + 3 maps)
+row3 <- label_son + son_maps$mke + son_maps$eke + son_maps$ratio +
+  plot_layout(ncol = 4, widths = c(0.3, 1, 1, 1))
+
+fig3 <- row1 / row2 / row3 +
+  plot_annotation(
+    title = "Arctic Kinetic Energy Climatology: Spring, Summer, and Autumn (1958-2024)",
+    subtitle = "Lambert Azimuthal Equal-Area Projection | Uniform color scales with Annual and Winter Seasons",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 13, hjust = 0.5)
+    )
+  )
+
+output_file3 <- file.path(plot_dir, "Fig3_Climatology_OTHER_SEASONS.png")
+ggsave(output_file3, fig3, width = 22, height = 20, dpi = 300, bg = "white")
+cat(sprintf("  ✓ Saved: %s\n", basename(output_file3)))
+
+# ============================================================================
+# SUMMARY
 # ============================================================================
 
 cat("\n", rep("=", 80), "\n")
-cat("PHASE 1 CLIMATOLOGICAL MAPS COMPLETE!\n")
+cat("THREE-FIGURE CLIMATOLOGY SET COMPLETE!\n")
 cat(rep("=", 80), "\n\n")
 
 cat("Generated Figures:\n")
-for (season_name in names(season_definitions)) {
-  abbr <- season_definitions[[season_name]]$abbr
-  cat(sprintf("  ✓ Fig_Phase1_Climatology_%s_POLAR.png\n", abbr))
-}
+cat(sprintf("  1. %s\n", basename(output_file1)))
+cat(sprintf("  2. %s\n", basename(output_file2)))
+cat(sprintf("  3. %s\n\n", basename(output_file3)))
 
-cat("\nSummary Statistics:\n")
-cat("  ✓ Phase1_Climatology_Summary_Statistics.csv\n\n")
+cat("Figure specifications:\n")
+cat("  Figure 1: 20\" × 8\"  (1 row × 3 panels)\n")
+cat("  Figure 2: 22\" × 20\" (3 rows × [label + 3 panels])\n")
+cat("  Figure 3: 22\" × 20\" (3 rows × [label + 3 panels])\n")
+cat("  Resolution: 300 DPI for all figures\n\n")
 
-cat("All figures saved to:\n")
-cat(sprintf("  %s\n\n", plot_dir))
+cat(sprintf("  MKE range: %.1f to %.1f m²/s²\n", mke_global_range[1], mke_global_range[2]))
+cat(sprintf("  EKE range: %.1f to %.1f m²/s²\n", eke_global_range[1], eke_global_range[2]))
+cat(sprintf("  Ratio range: %.1f to %.1f\n\n", ratio_global_range[1], ratio_global_range[2]))
 
-cat("Each figure contains 3 panels:\n")
-cat("  (a) MKE - Mean Kinetic Energy\n")
-cat("  (b) EKE - Eddy Kinetic Energy\n")
-cat("  (c) MKE/EKE Ratio\n\n")
+cat(rep("=", 80), "\n")
+```
 
-cat("Seasons analyzed:\n")
-for (season_name in names(season_definitions)) {
-  cat(sprintf("  - %s\n", season_definitions[[season_name]]$name))
-}
+```{r}
+# ============================================================================
+# PHASE 1: PRIMARY TIME SERIES VISUALIZATION
+# Pan-Arctic Storminess Index (1958-2024)
+# ============================================================================
+#
+# PURPOSE: Create the foundational time series plot showing:
+#   - Monthly area-weighted storminess index
+#   - 12-month running mean to reveal interannual variability
+#   - Long-term mean reference line
+#
+# INPUT: Requires 'storm_df' data frame from Phase 1 Section 1.3
+#        with columns: date, storminess
+# ============================================================================
+
+library(ggplot2)
+library(zoo)
+library(scales)
+library(lubridate)
+library(dplyr)
+
+# --- SETUP ---
+plot_dir <- "E:/ERA5_data/processed/phase1_diagnostics"
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 
 cat("\n", rep("=", 80), "\n")
-cat("READY FOR THESIS!\n")
+cat("PHASE 1: PRIMARY TIME SERIES VISUALIZATION\n")
 cat(rep("=", 80), "\n\n")
 
-cat("Use these figures to:\n")
-cat("  ✓ Demonstrate proper Reynolds decomposition\n")
-cat("  ✓ Show seasonal variations in Arctic kinetic energy\n")
-cat("  ✓ Validate data preprocessing in Methods section\n")
-cat("  ✓ Compare with literature climatologies\n\n")
+# ============================================================================
+# STEP 1: CALCULATE DERIVED TIME SERIES COMPONENTS
+# ============================================================================
+
+cat("Calculating derived time series components...\n")
+
+# 1.1 Calculate 12-month centered rolling mean (interannual signal)
+storm_df <- storm_df %>%
+  mutate(
+    rolling_mean_12m = rollmean(storminess, k = 12, fill = NA, align = "center")
+  )
+
+# 1.2 Calculate long-term mean (climatological baseline)
+long_term_mean <- mean(storm_df$storminess, na.rm = TRUE)
+
+# 1.3 Calculate overall statistics for annotation
+min_value <- min(storm_df$storminess, na.rm = TRUE)
+max_value <- max(storm_df$storminess, na.rm = TRUE)
+std_dev <- sd(storm_df$storminess, na.rm = TRUE)
+
+cat(sprintf("  Long-term mean: %.2f m⁴/s⁴\n", long_term_mean))
+cat(sprintf("  Standard deviation: %.2f m⁴/s⁴\n", std_dev))
+cat(sprintf("  Range: %.2f to %.2f m⁴/s⁴\n\n", min_value, max_value))
+
+# ============================================================================
+# STEP 2: CREATE THE PRIMARY TIME SERIES PLOT
+# ============================================================================
+
+cat("Creating primary time series visualization...\n")
+
+p <- ggplot(storm_df, aes(x = date)) +
+  
+  # --- LONG-TERM MEAN LINE ---
+  geom_hline(yintercept = long_term_mean, 
+             linetype = "dashed", color = "black", linewidth = 0.8, 
+             alpha = 0.8) +
+  
+  # --- MONTHLY TIME SERIES (raw data) ---
+  geom_line(aes(y = storminess), 
+            color = "gray30", linewidth = 0.5, alpha = 0.7) +
+  
+  # --- 12-MONTH ROLLING MEAN (smooth interannual signal) ---
+  geom_line(aes(y = rolling_mean_12m), 
+            color = "#D62728", linewidth = 1.3) +
+  
+  # --- SCALES AND LABELS ---
+  scale_x_date(
+    date_breaks = "5 years",
+    date_labels = "%Y",
+    expand = c(0.01, 0)
+  ) +
+  
+  scale_y_continuous(
+    breaks = seq(0, ceiling(max_value/50)*50, by = 50),
+    expand = expansion(mult = c(0.02, 0.05))
+  ) +
+  
+  labs(
+    title = "Pan-Arctic Storminess Index: 1958–2024",
+    subtitle = "Monthly variance of synoptic-scale EKE | Area-weighted average (≥60°N)",
+    x = "Year",
+    y = expression(paste("Storminess Index (m"^4, " s"^{-4}, ")"))
+  ) +
+  
+  # --- THEME ---
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5, 
+                              margin = margin(b = 8)),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, 
+                                 margin = margin(b = 15), color = "gray30"),
+    axis.title.x = element_text(size = 13, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 13, face = "bold", margin = margin(r = 10)),
+    axis.text = element_text(size = 11),
+    panel.grid.minor = element_line(linewidth = 0.2, color = "gray90"),
+    panel.grid.major = element_line(linewidth = 0.4, color = "gray85"),
+    panel.background = element_rect(fill = "#FFF9F0", color = NA),  # Soft beige
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(15, 15, 15, 15)
+  )
+
+# ============================================================================
+# STEP 3: ADD LEGEND FOR LINE TYPES
+# ============================================================================
+
+# Create a manual legend in the upper right corner
+# Use numeric date arithmetic instead of lubridate periods
+legend_x_start <- as.Date("2014-01-01")
+legend_x_end <- as.Date("2016-01-01")  # 2 years later
+legend_x_text <- as.Date("2016-07-01")  # 2.5 years later
+legend_y_top <- max_value * 0.98
+legend_y_spacing <- max_value * 0.05
+
+p <- p +
+  # Monthly values legend
+  annotate("segment", 
+           x = legend_x_start, xend = legend_x_end,
+           y = legend_y_top, yend = legend_y_top,
+           color = "gray30", linewidth = 0.5, alpha = 0.7) +
+  annotate("text", 
+           x = legend_x_text, y = legend_y_top,
+           label = "Monthly values", 
+           hjust = 0, size = 3.5, color = "gray20") +
+  
+  # 12-month running mean legend
+  annotate("segment", 
+           x = legend_x_start, xend = legend_x_end,
+           y = legend_y_top - legend_y_spacing, 
+           yend = legend_y_top - legend_y_spacing,
+           color = "#D62728", linewidth = 1.3) +
+  annotate("text", 
+           x = legend_x_text, 
+           y = legend_y_top - legend_y_spacing,
+           label = "12-month running mean", 
+           hjust = 0, size = 3.5, color = "gray20") +
+
+  # Long-term mean line legend (THIRD item - needs 2x spacing!)
+  annotate("segment", 
+           x = legend_x_start, xend = legend_x_end, 
+           y = legend_y_top - 2 * legend_y_spacing,  
+           yend = legend_y_top - 2 * legend_y_spacing,  
+           linetype = "dashed", color = "black", linewidth = 0.8, alpha = 0.8) +
+  annotate("text", 
+           x = legend_x_text, 
+           y = legend_y_top - 2 * legend_y_spacing, 
+           label = sprintf("Long-term mean: %.1f m⁴ s⁻⁴", long_term_mean),
+           hjust = 0, size = 3.5, color = "gray20")
+
+# ============================================================================
+# STEP 4: SAVE THE PLOT
+# ============================================================================
+
+output_file <- file.path(plot_dir, "Fig_Primary_TimeSeries_Storminess.png")
+
+ggsave(
+  filename = output_file,
+  plot = p,
+  width = 16,
+  height = 8,
+  dpi = 300,
+  bg = "white"
+)
+
+cat(sprintf("  ✓ Primary time series plot saved: %s\n\n", basename(output_file)))
+
+# ============================================================================
+# STEP 5: SUMMARY STATISTICS
+# ============================================================================
+
+cat(rep("=", 80), "\n")
+cat("TIME SERIES VISUALIZATION COMPLETE\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Summary Statistics (1958-2024):\n")
+cat(rep("-", 50), "\n")
+cat(sprintf("  Mean:               %.2f m⁴/s⁴\n", long_term_mean))
+cat(sprintf("  Standard Deviation: %.2f m⁴/s⁴\n", std_dev))
+cat(sprintf("  Minimum:            %.2f m⁴/s⁴\n", min_value))
+cat(sprintf("  Maximum:            %.2f m⁴/s⁴\n", max_value))
+cat(sprintf("  Range:              %.2f m⁴/s⁴\n", max_value - min_value))
+cat(sprintf("  CV (σ/μ):           %.3f (%.1f%%)\n\n", 
+            std_dev / long_term_mean,
+            100 * std_dev / long_term_mean))
+
+cat("Generated File:\n")
+cat(sprintf("  %s\n\n", basename(output_file)))
+
+cat("Plot Features:\n")
+cat("  ✓ Monthly time series (gray line)\n")
+cat("  ✓ 12-month running mean (red line) - reveals interannual variability\n")
+cat("  ✓ Long-term mean reference line (dashed) - shows deviations\n")
+cat("  ✓ Clean beige background for visual comfort\n")
+cat("  ✓ In-plot legend in upper right corner\n")
+cat("  ✓ Professional formatting for publication\n\n")
+
+cat("Interpretation Guide:\n")
+cat("  • Peaks above the dashed line indicate periods of enhanced storminess\n")
+cat("  • Troughs below the dashed line indicate periods of reduced storminess\n")
+cat("  • Red line smoothing reveals multi-year trends and cycles\n")
+cat("  • Gray monthly values show the full range of variability\n\n")
+
+cat(rep("=", 80), "\n")
 ```
+
+
+
