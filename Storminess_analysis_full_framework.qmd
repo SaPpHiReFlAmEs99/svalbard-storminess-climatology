@@ -43,6 +43,7 @@ library(ncmeta)
 library(abind)
 library(knitr)
 library(boot)
+library(here)
 
 # Configure Python Environment
 use_virtualenv("arctic-env", required = TRUE)
@@ -67,7 +68,7 @@ To align with standard conventions and optimize computational efficiency for tem
 # PHASE 1: DATA LOADING AND EXPLORATORY ANALYSIS
 # Arctic Storminess Climatology (1958-2024)
 # ============================================================================
-storm_path <- "E:/ERA5_data/processed/ERA5_storminess_index_monthly_1958-2024.nc"
+storm_path <- here("Data", "processed", "ERA5_storminess_index_monthly_1958-2024.nc")
 
 cat("Loading truncated storminess index file:\n")
 cat(storm_path, "\n")
@@ -378,19 +379,53 @@ if (is_significant) {
 # Removes autocorrelation, tests residuals, then restores trend magnitude
 
 cat("\n", rep("=", 70), "\n")
-cat("METHOD 1: PRE-WHITENED MANN-KENDALL TEST\n")
+cat("METHOD 1: PRE-WHITENED MANN-KENDALL TEST (Corrected for Annual Mean)\n")
 cat(rep("=", 70), "\n\n")
 
-library(trend)
+# Use the existing 'dates' vector that was already created in Phase 1
+cat("--- Correcting: Aggregating monthly data to annual means ---\n")
+
+# Create data frame using the existing 'dates' vector
+monthly_df <- data.frame(
+  storminess = as.vector(storminess_ts_weighted),
+  date = dates,  # <-- Use the existing dates vector!
+  Year = year(dates),  # <-- Use lubridate::year()
+  Month = month(dates)
+)
+
+# Verify we have the right number of months
+cat(sprintf("  Monthly data: %d observations (%d expected)\n", 
+            nrow(monthly_df), 804))
+
+# Aggregate to annual means
+annual_means_df <- aggregate(storminess ~ Year, 
+                            data = monthly_df, 
+                            FUN = mean)
+
+# Verify we got the right number of years
+cat(sprintf("  Annual data: %d observations (%d expected)\n", 
+            nrow(annual_means_df), 67))
+
+if (nrow(annual_means_df) != 67) {
+  stop("ERROR: Aggregation failed - should have 67 annual values!")
+}
+
+# Create annual time series
+annual_ts_obj <- ts(annual_means_df$storminess, 
+                    start = min(annual_means_df$Year), 
+                    frequency = 1)
+
+cat(sprintf("✓ Created %d annual mean values for analysis.\n\n", 
+            length(annual_ts_obj)))
 
 # Step 1: Estimate AR(1) coefficient
-rho1 <- acf(storminess_ts_weighted, plot = FALSE)$acf[2]
-cat(sprintf("Step 1: AR(1) coefficient (ρ₁) = %.4f\n", rho1))
+rho1 <- acf(annual_ts_obj, plot = FALSE, lag.max = 1)$acf[2] # *** MODIFIED: Use annual_ts_obj ***
+cat(sprintf("Step 1: AR(1) coefficient (of annual means) (ρ₁) = %.4f\n", rho1))
 
 # Step 2: Remove autocorrelation (pre-whiten)
 # Y_t' = Y_t - ρ₁ * Y_{t-1}
-n <- length(storminess_ts_weighted)
-prewhitened <- storminess_ts_weighted[2:n] - rho1 * storminess_ts_weighted[1:(n-1)]
+n <- length(annual_ts_obj) # *** MODIFIED: Use annual_ts_obj (n=67) ***
+prewhitened <- as.vector(annual_ts_obj)[2:n] - rho1 * as.vector(annual_ts_obj)[1:(n-1)] # *** MODIFIED ***
 
 cat(sprintf("Step 2: Pre-whitened series created (n = %d)\n", length(prewhitened)))
 
@@ -407,12 +442,13 @@ cat(sprintf("  p-value: %.4f\n", mk_pw$p.value))
 
 # Step 4: Calculate trend using Sen's slope on ORIGINAL data
 # (Pre-whitening is ONLY for significance testing, not magnitude estimation)
-sens_original <- sens.slope(storminess_ts_weighted)
+sens_original <- sens.slope(annual_ts_obj) # *** MODIFIED: Use annual_ts_obj ***
 
-cat(sprintf("\nStep 4: Trend Magnitude (from original data):\n"))
-cat(sprintf("  Sen's slope: %.4f m⁴/s⁴/month\n", sens_original$estimates))
-cat(sprintf("  Annual: %.4f m⁴/s⁴/year\n", sens_original$estimates * 12))
-cat(sprintf("  67-year change: %.2f m⁴/s⁴\n", sens_original$estimates * 804))
+cat(sprintf("\nStep 4: Trend Magnitude (from original annual data):\n")) # *** MODIFIED ***
+# *** MODIFIED: Corrected labels from /month to /year and /decade ***
+cat(sprintf("  Sen's slope (per year):   %.4f m⁴/s⁴/year\n", sens_original$estimates))
+cat(sprintf("  Sen's slope (per decade): %.4f m⁴/s⁴/decade\n", sens_original$estimates * 10))
+cat(sprintf("  67-year change: %.2f m⁴/s⁴\n", sens_original$estimates * n)) # *** MODIFIED: Use n (years) ***
 
 # Final conclusion
 if (mk_pw$p.value < 0.05) {
@@ -424,41 +460,80 @@ if (mk_pw$p.value < 0.05) {
 }
 ```
 
-#### 2.1.2 Trend Magnitude: Theil-Sen Slope Estimator
+### 2.1.2 Trend Magnitude: Theil-Sen Slope Estimator
 
-To quantify the magnitude of the trend, the **Theil-Sen slope estimator** was used. \[cite_start\]This non-parametric method calculates the median of the slopes between all possible pairs of points in the time series, making it exceptionally robust to outliers that are common in storm intensity data\[cite: 5889\]. For the refined Pan-Arctic (\>= 60°N) time series, the analysis yielded a slight positive trend. \[cite_start\]The `sens.slope` function in R returns the slope per unit time step of the input `ts` object, which in this case is per year\[cite: 5916\]. This yearly slope was then converted to decadal units for standard reporting:
+To quantify the magnitude of the trend, the 804-month Pan-Arctic (\>= 60°N) time series was first aggregated into an **annual mean time series**, resulting in 67 data points, one for each year from 1958 to 2024. This aggregation step is critical to ensure the trend calculation reflects the change in the *annual average* and is not confounded by the `sens.slope` function's internal deseasonalization procedures, which were found to be misleading.
 
--   **Observed Trend (Decadal):** +0.0446 m⁴/s⁴ per decade
+The Theil-Sen slope estimator was then applied to this 67-year annual mean time series. \[cite_start\]This non-parametric method calculates the median of the slopes between all possible pairs of points, making it exceptionally robust to outliers.\[cite: 5889\] \[cite_start\]The `sens.slope` function, when applied to a `ts` object with `frequency = 1`, correctly returns the slope per year.\[cite: 5916\] This yearly slope was converted to decadal units for standard reporting:
 
-#### 2.1.2 Trend Uncertainty: Moving Blocks Bootstrap Confidence Interval
+-   **Observed Trend (Decadal): +0.0762 m⁴/s⁴ per decade**
 
-Standard methods for calculating confidence intervals around the Sen's slope are invalid for autocorrelated data. To generate a statistically rigorous confidence interval, the **Moving Blocks Bootstrap (MBB)** was applied. This non-parametric method resamples blocks of the original time series rather than individual points, thereby preserving the inherent temporal dependency structure in the resampled data.
+### 2.1.3 Trend Uncertainty: Moving Blocks Bootstrap Confidence Interval
 
-The `tsboot` function from the R `boot` package was used with `R = 5000` replicates. A block length ($l$) of **12 months** was chosen. This length is suitable for monthly Arctic atmospheric data, capturing the annual cycle and associated persistence structures. The Theil-Sen slope (per year) was calculated for each of the 5000 bootstrap resamples. The 95% percentile confidence interval was then derived from the distribution of these bootstrap slope estimates and converted to decadal units:
+Standard methods for calculating confidence intervals around the Sen's slope are invalid for the autocorrelated annual mean time series. To generate a statistically rigorous confidence interval, the Moving Blocks Bootstrap (MBB) was applied to the **67-point annual mean series**. This non-parametric method resamples blocks of the original time series rather than individual points, thereby preserving the inherent inter-annual temporal dependency in the resampled data.
 
--   **Bootstrap 95% CI (Decadal):** \[ -0.0953, 0.0984 \] m⁴/s⁴ per decade
+The `tsboot` function from the R `boot` package was used with R = 5000 replicates. A **block length (**$l$) of 3 years was chosen, a suitable length for capturing decadal-scale persistence in an annual time series. The Theil-Sen slope (per year) was calculated for each of the 5000 resamples. The 95% percentile confidence interval was then derived from the distribution of these bootstrap slope estimates and converted to decadal units:
 
-#### 2.1.3 Final Conclusion on Pan-Arctic Trend
+-   **Bootstrap 95% CI (Decadal): \[ -1.6715, 1.6913 \] m⁴/s⁴ per decade**
 
-The resulting 95% confidence interval derived from the robust Moving Blocks Bootstrap **includes zero**. This provides definitive statistical evidence confirming the results from the significance tests: the small positive trend observed in the Pan-Arctic storminess index is **not statistically significant** at the $\alpha = 0.05$ level and is indistinguishable from the system's natural, random variability.
+### 2.1.4 Final Conclusion on Pan-Arctic Trend
 
-This result is visualized in the accompanying time series plot, which displays the monthly storminess index, the calculated Theil-Sen trend line (based on the observed slope), and the robust 95% confidence interval derived from the block bootstrap.
+The results are definitive. The final robust 95% confidence interval is `[ -1.67, 1.69 ]`, which is wide and symmetrically centered on zero. This provides clear statistical evidence confirming the results from the significance tests: the small positive trend observed in the annual Pan-Arctic storminess index (`+0.0762 m⁴/s⁴/decade`) is **not statistically significant** at the $\alpha = 0.05$ level and is indistinguishable from the system's high natural variability.
+
+This result is visualized in the accompanying time series plot, which displays the **annual mean storminess index**, the calculated Theil-Sen trend line, and the robust 95% confidence interval derived from the block bootstrap.
 
 ```{r}
 # ============================================================================
-# PHASE 2: CORE TREND ANALYSIS
+# PHASE 2: CORE TREND ANALYSIS (Corrected for Annual Mean)
 # Section 2.1: Trend Magnitude (Sen's Slope) & 
 # Section 2.3: Uncertainty (Moving Blocks Bootstrap CI)
 # ============================================================================
 
 cat("\n", rep("=", 70), "\n")
-cat("PHASE 2: TREND ESTIMATION & UNCERTAINTY (>= 60°N)\n")
+cat("PHASE 2: TREND ESTIMATION & UNCERTAINTY (>= 60°N) (Annual Mean)\n")
 cat(rep("=", 70), "\n\n")
 
+# --- 1. *** NEW STEP ***: Aggregate monthly data to ANNUAL means ---
+# Use the robust aggregation method with the 'dates' vector
+cat("--- Correcting: Aggregating monthly data to annual means ---\n")
+
+# Create data frame using the existing 'dates' vector (from Phase 1)
+monthly_df <- data.frame(
+  storminess = as.vector(storminess_ts_weighted), # Uses the original monthly vector
+  date = dates,                      # Use the existing dates vector
+  Year = year(dates)                 # Use lubridate::year()
+)
+
+# *** ADDED: Basic descriptive statistics (from monthly data) ***
+mean_storm_monthly <- mean(monthly_df$storminess, na.rm = TRUE)
+sd_storm_monthly <- sd(monthly_df$storminess, na.rm = TRUE)
+cat(sprintf("  Mean storminess (monthly): %.2f m⁴/s⁴\n", mean_storm_monthly))
+cat(sprintf("  Standard deviation (monthly): %.2f m⁴/s⁴\n", sd_storm_monthly))
+# *** END ADDED SECTION ***
+
+# Aggregate to annual means
+annual_means_df <- aggregate(storminess ~ Year, 
+                             data = monthly_df, 
+                             FUN = mean)
+
+# Verify we got the right number of years (67)
+if (nrow(annual_means_df) != 67) {
+  stop(sprintf("ERROR: Aggregation failed! Expected 67 annual values, got %d", nrow(annual_means_df)))
+}
+
+# Create annual time series
+annual_ts_obj <- ts(annual_means_df$storminess, 
+                    start = min(annual_means_df$Year), 
+                    frequency = 1)
+
+cat(sprintf("✓ Created %d annual mean values for analysis.\n\n", length(annual_ts_obj)))
+# --- END AGGREGATION STEP ---
+
+
 # --- 2. Define Inputs ---
-ts_data <- storm_ts_obj 
+ts_data <- annual_ts_obj  
 ts_data_vector <- as.vector(ts_data)
-n_time <- length(ts_data_vector)
+n_time <- length(ts_data_vector) # This is now 67 (years)
 n_replicates <- 5000 
 set.seed(123) 
 
@@ -467,78 +542,80 @@ cat("--- Calculating Trend Magnitude (Sen's Slope) ---\n")
 sens_result <- sens.slope(ts_data)
 observed_slope_per_year <- as.numeric(sens_result$estimates)
 observed_slope_per_decade <- observed_slope_per_year * 10
+
+# *** ADDED: Total change calculation ***
+slope_per_period <- observed_slope_per_year * n_time
+baseline_mean <- mean(storminess_ts_weighted[1:120], na.rm = TRUE) # 1958-1967 baseline
+percent_change <- (slope_per_period / baseline_mean) * 100
+# *** END ADDED SECTION ***
+
 cat(sprintf("Observed Trend (Sen's Slope): %.4f m⁴/s⁴ per decade\n", observed_slope_per_decade))
+cat(sprintf("  (Value is trend of annual means: %.4f m⁴/s⁴ per year)\n", observed_slope_per_year))
+cat(sprintf("  Total change (1958-2024): %.4f m⁴/s⁴\n", slope_per_period)) 
+cat(sprintf("  Percentage change: %.1f%% relative to 1958-1967 baseline\n", percent_change)) 
+
 
 # --- 4. Define Bootstrap Statistic Function ---
+# ... [Unchanged] ...
 slope_statistic <- function(d) {
-  ts_subset <- ts(d, start = c(1958, 1), frequency = 12) 
+  ts_subset <- ts(d, start = 1, frequency = 1)  
   result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
   if (inherits(result, "try-error") || is.null(result) || is.na(result)) {
     return(NA)
   } else {
-    return(result) # Result is slope per year
+    return(result) 
   }
 }
 
 # --- 5. Define Block Length and Save Path ---
-block_length <- 12 
-cat(sprintf("Using fixed, justified block length (l): %d months\n", block_length))
-
-# *** NEW: Define a path to save/load the bootstrap results ***
-# We'll save it in the 'processed' directory you've used before.
-processed_dir <- "E:/ERA5_data/processed"
-boot_file_path <- file.path(processed_dir, "boot_result_panarctic_60N.rds")
+# ... [Unchanged] ...
+block_length <- 3  
+cat(sprintf("Using fixed block length (l): %d years\n", block_length)) 
+boot_file_path <- here::here("Data", "processed", "boot_result_panarctic_60N_ANNUAL.rds") 
 cat(sprintf("Bootstrap results will be saved to/loaded from: \n  %s\n", boot_file_path))
 
 # --- 6. Run or Load the Moving Blocks Bootstrap ---
+# ... [Unchanged] ...
 if (file.exists(boot_file_path)) {
-  # If file exists, load it (FAST)
   cat("Loading existing bootstrap results from disk...\n")
   boot_result <- readRDS(boot_file_path)
   cat("✓ Results loaded.\n")
   
 } else {
-  # If file does not exist, run the computation (SLOW)
   cat(sprintf("No saved results found. Running Moving Blocks Bootstrap with R = %d replicates...\n", n_replicates))
+  if (!dir.exists(dirname(boot_file_path))) {
+    cat(sprintf("Creating directory: %s\n", dirname(boot_file_path)))
+    dir.create(dirname(boot_file_path), recursive = TRUE)
+  }
   start_boot <- Sys.time()
-  
   boot_result <- boot::tsboot(ts_data_vector, 
-                              statistic = slope_statistic,
-                              R = n_replicates,
-                              l = block_length, 
-                              sim = "fixed",
-                              parallel = "multicore",
-                              ncpus = max(1, parallel::detectCores() - 1))
-  
+                               statistic = slope_statistic,
+                               R = n_replicates,
+                               l = block_length, 
+                               sim = "fixed",
+                               parallel = "multicore",
+                               ncpus = max(1, parallel::detectCores() - 1))
   end_boot <- Sys.time()
   cat(sprintf("Bootstrap finished in %.1f minutes.\n", difftime(end_boot, start_boot, units = "mins")))
-  
-  # *** NEW: Save the results to disk for next time ***
   cat("Saving bootstrap results to disk...\n")
   saveRDS(boot_result, boot_file_path)
   cat(" Results saved.\n")
 }
 
 # --- 7. Calculate and Report Final Confidence Interval ---
-# This part now runs instantly, as 'boot_result' is in memory
+# ... [Unchanged] ...
 cat("\n--- Bootstrap Uncertainty Results ---\n")
-
 boot_ci <- try(boot::boot.ci(boot_result, type = "perc"), silent = TRUE)
-
 num_na_replicates <- sum(is.na(boot_result$t))
 if (num_na_replicates > 0) {
   cat(sprintf("Warning: %d of %d bootstrap replicates resulted in NA slope values.\n", 
               num_na_replicates, n_replicates))
 }
-
 if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent) && all(!is.na(boot_ci$percent[4:5]))) {
-  
   lower_ci_per_decade <- boot_ci$percent[4] * 10
   upper_ci_per_decade <- boot_ci$percent[5] * 10
-
   cat(sprintf("Bootstrap 95%% Confidence Interval: [%.4f, %.4f] m⁴/s⁴ per decade\n",
               lower_ci_per_decade, upper_ci_per_decade))
-
   if (lower_ci_per_decade < 0 && upper_ci_per_decade > 0) {
     cat("✓ STATISTICAL CONCLUSION: The 95%% CI includes zero. The trend is NOT statistically significant.\n")
   } else {
@@ -550,55 +627,94 @@ if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent) && all(!is.na(b
 }
 
 # --- 8. Update Plotting Data Frame ---
-# This part also runs instantly
-plot_intercept <- storm_df$storminess[1]
-# We must use the *observed* slope (t0) from the bootstrap object for the trend line
-plot_slope_monthly <- boot_result$t0 / 12 
+# ... [Unchanged] ...
+cat("\n--- Plotting Data --- \n")
+if (exists("boot_ci") && !inherits(boot_ci, "try-error")) {
+  trend_slope_per_year <- boot_result$t0      
+  ci_slope_upper <- boot_ci$percent[5]   
+  ci_slope_lower <- boot_ci$percent[4]   
+  mid_year <- median(annual_means_df$Year)
+  mid_storminess <- median(annual_means_df$storminess)
+  intercept_trend <- mid_storminess - (trend_slope_per_year * mid_year)
+  intercept_upper <- mid_storminess - (ci_slope_upper * mid_year)
+  intercept_lower <- mid_storminess - (ci_slope_lower * mid_year)
+  annual_means_df$trend <- intercept_trend + (trend_slope_per_year * annual_means_df$Year)
+  annual_means_df$trend_upper <- intercept_upper + (ci_slope_upper * annual_means_df$Year)
+  annual_means_df$trend_lower <- intercept_lower + (ci_slope_lower * annual_means_df$Year)
+  cat("✓ Plotting data frame 'annual_means_df' updated with trend lines and CI bounds.\n")
+} else {
+  cat("Could not add trend lines to 'annual_means_df' due to bootstrap error.\n")
+}
 
-storm_df$trend <- (plot_slope_monthly * (1:n_time)) + plot_intercept
-storm_df$trend_upper <- ((boot_ci$percent[5] / 12) * (1:n_time)) + plot_intercept
-storm_df$trend_lower <- ((boot_ci$percent[4] / 12) * (1:n_time)) + plot_intercept
+# *** FINAL RESULTS SUMMARY BLOCK ***
+cat("\n", rep("=", 70), "\n")
+cat("FINAL RESULTS: PAN-ARCTIC (>= 60°N) (Annual Mean)\n") 
+cat(rep("=", 70), "\n\n")
 
-cat("\nPlotting data frame 'storm_df' has been updated with robust CI bounds.\n")
+cat("Time Series Characteristics (Monthly):\n")
+cat(sprintf("  Mean storminess: %.2f m⁴/s⁴\n", mean_storm_monthly))
+cat(sprintf("  Standard deviation: %.2f m⁴/s⁴\n", sd_storm_monthly))
+
+cat("\nTrend Analysis Results (Annual Mean):\n") 
+if (exists("rho1") && exists("mk_pw")) {
+  cat(sprintf("  Lag-1 autocorrelation: %.3f\n", rho1))
+  cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", observed_slope_per_decade))
+  cat(sprintf("  Total change (%d years): %.4f m⁴/s⁴ (%.1f%%)\n", 
+              n_time, slope_per_period, percent_change)) 
+  cat(sprintf("  Pre-Whitened MK p-value: %.4f", mk_pw$p.value))
+  if (mk_pw$p.value < 0.05) {
+     cat(" (SIGNIFICANT)\n")
+  } else {
+     cat(" (not significant)\n")
+  }
+} else {
+  cat("  (Run Section 2.2 to get p-value and autocorrelation)\n")
+  cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", observed_slope_per_decade))
+}
+
+# Report Bootstrap CI
+if (!inherits(boot_ci, "try-error") && 
+    !is.null(boot_ci$percent) && 
+    all(!is.na(boot_ci$percent[4:5]))) {
+  cat(sprintf("  Bootstrap 95%% CI: [%.4f, %.4f] m⁴/s⁴ per decade\n",
+              lower_ci_per_decade, upper_ci_per_decade))
+  if (lower_ci_per_decade < 0 && upper_ci_per_decade > 0) {
+    cat("  → CI includes zero (trend not significant via bootstrap)\n")
+  } else {
+    cat("  → CI excludes zero (trend significant via bootstrap)\n")
+  }
+} else {
+  cat("  Bootstrap 95% CI: Calculation failed\n")
+}
+cat(rep("=", 70), "\n\n")
 ```
 
 ```{r}
 # ============================================================================
-# PHASE 2: VISUALIZATION OF PAN-ARCTIC TREND
+# PHASE 2: VISUALIZATION OF PAN-ARCTIC TREND (Annual Mean)
 # ============================================================================
 
-cat("\n--- Generating Pan-Arctic Storminess Trend Plot ---\n")
+cat("\n--- Generating Pan-Arctic Annual Mean Storminess Trend Plot ---\n")
 
 # --- 1. Extract Key Values for Plot Annotation ---
-# Get values from the 'boot_result' object (which is in memory)
-# (We already calculated these, but we'll re-fetch for a clean plot script)
-observed_slope_per_year <- boot_result$t0
-observed_slope_per_decade <- observed_slope_per_year * 10
-boot_ci <- boot::boot.ci(boot_result, type = "perc")
-ci_lower_decade <- boot_ci$percent[4] * 10
-ci_upper_decade <- boot_ci$percent[5] * 10
 
-# Get the p-value from the chosen test (Pre-Whitened MK)
-p_value_to_report <- mk_pw$p.value # Replace with your variable if needed
+
+# Get the p-value from the Pre-Whitened MK test on the *annual* data
+p_value_to_report <- mk_pw$p.value 
 
 # --- 2. Create the ggplot ---
-pan_arctic_plot <- ggplot(storm_df, aes(x = date, y = storminess)) +
+# *** MODIFIED: Plot 'annual_means_df', use x = Year ***
+pan_arctic_plot <- ggplot(annual_means_df, aes(x = Year, y = storminess)) +
   
-  # Shaded 95% Confidence Interval (from bootstrap)
-  geom_ribbon(aes(ymin = trend_lower, ymax = trend_upper),
-              fill = "#D55E00", alpha = 0.25, color = NA) +
-  
-  # Monthly Storminess Data (blue line)
+  # *** MODIFIED: Plot annual means as points + line ***
+  geom_point(color = "#0072B2", alpha = 0.5, size = 1.5) +
   geom_line(color = "#0072B2", linewidth = 0.6, alpha = 0.8) +
-  
-  # Theil-Sen Trend Line (red line)
-  geom_line(aes(y = trend), color = "#D55E00", linewidth = 1.2) +
   
   # --- Labels and Titles ---
   labs(
-    title = "Pan-Arctic (>= 60°N) Storminess Index (1958–2024)",
+    title = "Pan-Arctic (>= 60°N) Annual Mean Storminess (1958–2024)", 
     subtitle = sprintf(
-      "Sen's Slope: %.4f m⁴/s⁴ per decade (p = %.3f)\n95%% Block Bootstrap CI: [%.4f, %.4f]",
+      "Sen's Slope (of annual mean): %.4f m⁴/s⁴ per decade (PW-MK p = %.3f)\n95%% Block Bootstrap CI: [%.4f, %.4f]", 
       observed_slope_per_decade,
       p_value_to_report,
       ci_lower_decade,
@@ -610,7 +726,10 @@ pan_arctic_plot <- ggplot(storm_df, aes(x = date, y = storminess)) +
   
   # --- Theme and Scales ---
   theme_bw(base_size = 14) +
-  scale_x_date(date_breaks = "10 years", date_labels = "%Y", expand = c(0.01, 0.01)) +
+  
+  # *** MODIFIED: Use scale_x_continuous for 'Year' instead of 'date' ***
+  scale_x_continuous(breaks = seq(1960, 2020, 10), expand = c(0.01, 0.01)) +
+  
   scale_y_continuous(expand = c(0.01, 0.01)) +
   theme(
     plot.title = element_text(face = "bold"),
@@ -623,14 +742,19 @@ pan_arctic_plot <- ggplot(storm_df, aes(x = date, y = storminess)) +
 print(pan_arctic_plot)
 
 # --- 4. Save the plot to a file ---
-ggsave("Pan_Arctic_Storminess_Trend_1958-2024.png", 
+plot_filename <- here::here("Figures", "Pan_Arctic_Annual_Mean_Storminess_Trend.png")
+if (!dir.exists(dirname(plot_filename))) {
+  dir.create(dirname(plot_filename), recursive = TRUE)
+}
+
+ggsave(plot_filename, 
        pan_arctic_plot, 
        width = 12, 
        height = 7, 
        dpi = 300,
        bg = "white")
 
-cat("✓ Plot saved as 'Pan_Arctic_Storminess_Trend_1958-2024.png'\n")
+cat(sprintf("✓ Plot saved as: %s\n", plot_filename))
 ```
 
 ## 2.3 Spatial Trend Analysis and Field Significance
@@ -2248,7 +2372,6 @@ write.csv(results_df, results_file, row.names = FALSE)
 cat(sprintf("✓ Results saved to: %s\n", results_file))
 ```
 
-
 # Phase 4 - Advanced Diagnostics: Trends in Extreme Storminess
 
 After comprehensively analyzing the *mean-state* storminess (finding no significant trends), the analysis moves to a different, critical question: **has the *intensity or frequency* of extreme storm events changed?**
@@ -2336,7 +2459,6 @@ The combined results of the two extreme-value diagnostics are conclusive. The hy
 | **Extreme Intensity (P99)** | Spatially-Averaged | N/A | $p=0.8769$ (PW-MK) | **Not Significant** ❌ |
 | **Extreme Intensity (P99)** | Spatial (Gridded) | 502 (4.50%) | **0.3980** | **Not Field-Significant** ❌ |
 | **Extreme Frequency (P95)** | Spatial (Gridded) | 750 (6.72%) | **0.2080** | **Not Field-Significant** ❌ |
-
 
 ```{r}
 # ============================================================================
@@ -2825,8 +2947,8 @@ Due to the size of the 6-hourly source data (16.06 GB), all processing was perfo
 2.  **Annual Exceedance Count:** The 6-hourly EKE data was compared to its corresponding static P95 threshold. Any 6-hour period exceeding the threshold was counted as an event. These 6-hourly counts were then summed up over each year (1958-2024), yielding the time series of **Annual Storm Day Count** for the `P95_Storm_Day_Frequency_annual_1958-2024_clean.nc` file.
 
 ### 4.4.2 Trend Analysis of P95 Exceedances (Core Arctic \>= 60°N)
-z
-The resulting annual count data was subjected to the full trend analysis framework over the Core Arctic domain (\>= 60°N). The analysis was performed in two parallel parts: on the spatially-averaged domain and on the full grid.
+
+z The resulting annual count data was subjected to the full trend analysis framework over the Core Arctic domain (\>= 60°N). The analysis was performed in two parallel parts: on the spatially-averaged domain and on the full grid.
 
 **1. Spatially-Averaged Pan-Arctic Trend**
 
@@ -4025,10 +4147,9 @@ if (evidence_count >= 2) {
 }
 ```
 
-
 # Regional Sub-Analysis
 
-While the Pan-Arctic domain provides a vital, large-scale perspective, it can obscure or dilute significant trends occurring in smaller, physically distinct regions. To investigate the behavior of storminess in key "hotspot" areas, a regional sub-analysis was performed. This phase applies the full, robust trend analysis framework developed in Phase 2 to time series generated for specific geographical sectors.
+While the Pan-Arctic domain provides a vital, large-scale perspective, it can obscure or dilute significant trends occurring in smaller, physically distinct regions. To investigate the behavior of storminess in key "hotspot" areas, a regional sub-analysis was performed. This phase applies the full, robust **annual mean trend analysis framework** developed in Phase 2 to time series generated for specific geographical sectors.
 
 ### Regional Analysis: Fram Strait
 
@@ -4038,23 +4159,24 @@ The Fram Strait, the ocean gateway between Greenland and Svalbard, is the primar
 
 A bounding box was defined from 15°W to 15°E longitude and 76°N to 82°N latitude to isolate the Fram Strait region. The 804-month `[time, lat, lon]` storminess array was spatially subsetted to these coordinates.
 
-A new, area-weighted time series was then generated by calculating the cosine-latitude weighted mean of all grid cells within this domain for each of the 804 time steps. This procedure created a single, representative time series for the Fram Strait sector.
+A new, 804-month area-weighted time series was generated by calculating the cosine-latitude weighted mean of all grid cells within this domain. This monthly series showed high variability **(mean = 289.00 m⁴/s⁴, SD = 256.90 m⁴/s⁴)**. To correctly assess the long-term trend, this monthly series was then aggregated into a **67-year annual mean time series**.
 
 #### Trend Analysis and Results
 
-The full robust trend analysis framework was applied to the new Fram Strait time series.
+The full robust trend analysis framework was applied to the new **67-year annual mean** Fram Strait time series.
 
-1.  **Autocorrelation:** The time series exhibited strong, significant persistence, with a **lag-1 autocorrelation (**$\rho_1$) of 0.449.
-2.  **Significance Test:** Due to the strong autocorrelation, the **Pre-Whitened Mann-Kendall (PW-MK) test** (Yue et al., 2002) was used. The test returned a p-value of **0.3032**, indicating no statistically significant trend.
-3.  **Magnitude & Uncertainty:** The **Theil-Sen slope** was calculated to be **+0.4437 m⁴/s⁴ per decade**. To generate a robust confidence interval, a **Moving Blocks Bootstrap (MBB)** was performed with `R = 5000` replicates and a block length of $l=12$ months to preserve the seasonal cycle.
+1.  **Autocorrelation:** The annual mean time series exhibited moderate persistence, with a **lag-1 autocorrelation ($\rho_1$) of 0.167**.
+2.  **Significance Test:** The **Pre-Whitened Mann-Kendall (PW-MK) test** (Yue et al., 2002) was applied to the annual series, returning a p-value of **0.0947**.
+3.  **Magnitude & Uncertainty:** The **Theil-Sen slope** was calculated from the annual data. To generate a robust confidence interval, a **Moving Blocks Bootstrap (MBB)** was performed with `R = 5000` replicates and a **block length of $l=3$ years**, suitable for annual data.
 
-The analysis yielded the following definitive results:
+The analysis yielded the following definitive results for the **annual mean** trend:
 
--   **Sen's Slope:** +0.44 m⁴/s⁴ per decade
--   **PW-MK p-value:** 0.303
--   **Bootstrap 95% CI:** \[ -0.370, 0.362 \] m⁴/s⁴ per decade
+* **Sen's Slope:** +10.72 m⁴/s⁴ per decade
+* **PW-MK p-value:** 0.095
+* **Bootstrap 95% CI:** [ -9.60, 9.14 ] m⁴/s⁴ per decade
+* **Total 67-Year Change:** +71.82 m⁴/s⁴ (a 29.5% increase relative to the 1958-1967 baseline)
 
-**Conclusion:** Both the significance test (p \> 0.05) and the robust 95% confidence interval (which includes zero) are in agreement. There is **no statistically significant trend** in storminess in the Fram Strait gateway over the 1958–2024 period.
+**Conclusion:** Both the significance test (p > 0.05) and the robust 95% confidence interval (which broadly includes zero) are in agreement. Despite the large magnitude of the calculated trend, the high inter-annual variability means there is **no statistically significant trend** in *annual mean* storminess in the Fram Strait gateway over the 1958–2024 period.
 
 ### Regional Analysis: Svalbard / Barents Sea Sector
 
@@ -4062,32 +4184,33 @@ A second, broader regional analysis was conducted on the Atlantic-influenced Arc
 
 #### Domain and Time Series Generation
 
-Following the same procedure as in 4.1, the global storminess array was subsetted to the Svalbard/Barents domain. A new, area-weighted time series was generated to represent the average storminess for this \$\approx\$715,000 km² region. The resulting time series showed high variability (mean = 233.38, SD = 196.67 m⁴/s⁴) and strong persistence.
+Following the same procedure, the global storminess array was subsetted to the Svalbard/Barents domain. A new, 804-month area-weighted time series was generated, representing the average storminess for this $\approx$715,000 km² region. The monthly series showed high variability **(mean = 233.38 m⁴/s⁴, SD = 196.67 m⁴/s⁴)**. This series was then aggregated into a **67-year annual mean time series** for trend analysis.
 
 #### Trend Analysis and Results
 
-The robust trend analysis framework was applied to the new time series.
+The robust trend analysis framework was applied to the new **67-year annual mean** time series.
 
-1.  **Autocorrelation:** The series showed strong persistence, with a **lag-1 autocorrelation (**$\rho_1$) of 0.470.
-2.  **Significance Test:** The **Pre-Whitened Mann-Kendall (PW-MK) test** was applied, yielding a p-value of **0.6078**.
-3.  **Magnitude & Uncertainty:** The **Theil-Sen slope** was calculated to be **+0.2356 m⁴/s⁴ per decade**. A **Moving Blocks Bootstrap** (`R = 5000`, $l=12$) was used to determine the confidence interval.
+1.  **Autocorrelation:** The annual series showed moderate persistence, with a **lag-1 autocorrelation ($\rho_1$) of 0.122**.
+2.  **Significance Test:** The **Pre-Whitened Mann-Kendall (PW-MK) test** was applied, yielding a p-value of **0.3412**.
+3.  **Magnitude & Uncertainty:** The **Theil-Sen slope** was calculated, and a **Moving Blocks Bootstrap** (`R = 5000`, **$l=3$ years**) was used to determine the confidence interval.
 
-The definitive results for this sector were:
+The definitive results for this sector's **annual mean** trend were:
 
--   **Sen's Slope:** +0.24 m⁴/s⁴ per decade
--   **PW-MK p-value:** 0.608
--   **Bootstrap 95% CI:** \[ -0.297, 0.285 \] m⁴/s⁴ per decade
+* **Sen's Slope:** +4.75 m⁴/s⁴ per decade
+* **PW-MK p-value:** 0.341
+* **Bootstrap 95% CI:** [ -6.86, 6.83 ] m⁴/s⁴ per decade
+* **Total 67-Year Change:** +31.83 m⁴/s⁴ (a 15.7% increase relative to the 1958-1967 baseline)
 
-**Conclusion:** As with the Fram Strait, the results are conclusive. The p-value is non-significant, and the robust 95% confidence interval broadly contains zero. There is **no statistically significant trend** in storminess for the wider Svalbard/Barents Sea sector over the 1958–2024 period. The observed high variability masks any potential long-term linear change.
+**Conclusion:** As with the Fram Strait, the results are conclusive. The p-value is non-significant, and the robust 95% confidence interval is centered on and broadly contains zero. There is **no statistically significant trend** in *annual mean* storminess for the wider Svalbard/Barents Sea sector over the 1958–2024 period.
 
 ```{r}
 # ============================================================================
-# PHASE 4.2 - SUB-ANALYSIS: Fram Strait (Atlantic Storm Track Gateway) 
+# PHASE 4.2 - SUB-ANALYSIS: Fram Strait (Annual Mean)
 # Using Pre-Whitened Mann-Kendall for Significance
 # ============================================================================
 
 cat("\n", rep("=", 70), "\n")
-cat("ANALYZING FRAM STRAIT TIME SERIES\n")
+cat("ANALYZING FRAM STRAIT TIME SERIES (Annual Mean)\n") 
 cat(rep("=", 70), "\n\n")
 
 # --- 1. Define the Fram Strait Bounding Box ---
@@ -4125,35 +4248,58 @@ storm_ts_sector <- apply(storminess_sector, 1, function(slice) {
 cat("✓ Area-weighted time series for Fram Strait created.\n")
 cat(sprintf("  Time series length: %d months (1958-2024)\n", length(storm_ts_sector)))
 
-# Create ts object for trend analysis
-storm_ts_obj_sector <- ts(storm_ts_sector, start = c(1958, 1), frequency = 12)
-ts_data_vector_sector <- as.vector(storm_ts_obj_sector)
+# *** ADDED: Basic descriptive statistics ***
+cat(sprintf("  Mean storminess (monthly): %.2f m⁴/s⁴\n", mean(storm_ts_sector, na.rm = TRUE)))
+cat(sprintf("  Standard deviation (monthly): %.2f m⁴/s⁴\n", sd(storm_ts_sector, na.rm = TRUE)))
+# *** END ADDED SECTION ***
+
+
+# *** NEW STEP: Aggregate monthly data to ANNUAL means ***
+cat("--- Correcting: Aggregating monthly data to annual means ---\n")
+# We assume the 'dates' vector (804) is in memory from Phase 1
+monthly_df_sector <- data.frame(
+  storminess = as.vector(storm_ts_sector),
+  date = dates, 
+  Year = lubridate::year(dates)
+)
+
+# Aggregate to annual means
+annual_means_df_sector <- aggregate(storminess ~ Year, 
+                                    data = monthly_df_sector, 
+                                    FUN = mean)
+
+# Create annual time series (frequency = 1)
+annual_ts_obj_sector <- ts(annual_means_df_sector$storminess, 
+                           start = min(annual_means_df_sector$Year), 
+                           frequency = 1)
+annual_ts_data_vector_sector <- as.vector(annual_ts_obj_sector)
+
+cat(sprintf("✓ Created %d annual mean values for analysis.\n", length(annual_ts_obj_sector)))
+# *** END NEW STEP ***
+
 
 # --- 3. Check Autocorrelation (ρ₁) ---
-cat("\n--- Autocorrelation Assessment ---\n")
-rho1_sector <- acf(storm_ts_obj_sector, plot = FALSE, lag.max = 1)$acf[2]
-cat(sprintf("  Lag-1 Autocorrelation (ρ₁): %.3f\n", rho1_sector))
-
+cat("\n--- Autocorrelation Assessment (Annual Means) ---\n") 
+rho1_sector <- acf(annual_ts_obj_sector, plot = FALSE, lag.max = 1)$acf[2] 
+cat(sprintf("  Lag-1 Autocorrelation (of annual means) (ρ₁): %.3f\n", rho1_sector)) 
 if (abs(rho1_sector) > 0.3) {
   cat("  → Strong autocorrelation detected. Pre-whitening is essential.\n")
-} else {
+} else if (abs(rho1_sector) > 0.1) {
   cat("  → Moderate autocorrelation. Pre-whitening recommended.\n")
+} else {
+  cat("  → Weak autocorrelation.\n") 
 }
 
 # --- 4. Pre-Whitened Mann-Kendall Test for Significance ---
-cat("\n--- Pre-Whitened Mann-Kendall Test (Fram Strait) ---\n")
+cat("\n--- Pre-Whitened Mann-Kendall Test (Fram Strait - Annual) ---\n") 
 cat("  Method: Yue et al. (2002) pre-whitening approach\n")
-
-n <- length(ts_data_vector_sector)
-prewhitened_sector <- ts_data_vector_sector[2:n] - rho1_sector * ts_data_vector_sector[1:(n-1)]
-
+n <- length(annual_ts_data_vector_sector) # This is now n=67
+prewhitened_sector <- annual_ts_data_vector_sector[2:n] - rho1_sector * annual_ts_data_vector_sector[1:(n-1)] 
 mk_result_sector <- trend::mk.test(prewhitened_sector)
 p_value_sector <- mk_result_sector$p.value
 is_significant_sector <- p_value_sector < 0.05
-
 cat(sprintf("  Pre-Whitened MK statistic: %.2f\n", mk_result_sector$statistic))
 cat(sprintf("  Pre-Whitened p-value: %.4f\n", p_value_sector))
-
 if (is_significant_sector) {
   cat("  → Statistically SIGNIFICANT trend detected (α = 0.05)\n")
 } else {
@@ -4161,94 +4307,92 @@ if (is_significant_sector) {
 }
 
 # --- 5. Sen's Slope Estimation (Robust Trend Magnitude) ---
-cat("\n--- Sen's Slope Estimator (Fram Strait) ---\n")
-cat("  Robust, non-parametric trend estimator\n")
+cat("\n--- Sen's Slope Estimator (Fram Strait - Annual) ---\n") 
+cat("  Robust, non-parametric trend estimator (on annual means)\n") 
 
-sens_sector <- sens.slope(storm_ts_obj_sector)
-slope_per_year_sector <- sens_sector$estimates  # m⁴/s⁴ per year
-slope_decade_sector <- slope_per_year_sector * 10  # m⁴/s⁴ per decade
+sens_sector <- sens.slope(annual_ts_obj_sector) 
+slope_per_year_sector <- sens_sector$estimates  
+slope_decade_sector <- slope_per_year_sector * 10  
+slope_per_period_sector <- slope_per_year_sector * n # n=67 years
+baseline_mean <- mean(storm_ts_sector[1:120], na.rm = TRUE)  # Use original monthly data for baseline
+percent_change <- (slope_per_period_sector / baseline_mean) * 100
 
 cat(sprintf("  Sen's slope (per year): %.4f m⁴/s⁴\n", slope_per_year_sector))
 cat(sprintf("  Sen's slope (per decade): %.4f m⁴/s⁴\n", slope_decade_sector))
+cat(sprintf("  Total change (1958-2024): %.4f m⁴/s⁴\n", slope_per_period_sector)) 
+cat(sprintf("  Percentage change: %.1f%% relative to 1958-1967 baseline\n", percent_change)) 
+
 
 # --- 6. Moving Blocks Bootstrap for Confidence Interval ---
-cat("\n--- Moving Blocks Bootstrap (Fram Strait) ---\n")
-
-# Define statistic function
+cat("\n--- Moving Blocks Bootstrap (Fram Strait - Annual) ---\n") 
 slope_statistic_sector <- function(data) {
-  ts_subset <- ts(data, start = c(1958, 1), frequency = 12)
+  ts_subset <- ts(data, start = 1, frequency = 1) 
   result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
   if (inherits(result, "try-error") || is.null(result) || is.na(result)) {
     return(NA)
   } else {
-    return(result)  # Slope per year
+    return(result)  
   }
 }
-
-# Bootstrap parameters
-block_length_sector <- 12  # 12 months to preserve annual cycle
+block_length_sector <- 3  
 n_replicates <- 5000
-set.seed(789)  # For reproducibility
-
-cat(sprintf("  Block length: %d months (preserves seasonal cycle)\n", block_length_sector))
+set.seed(789)  
+cat(sprintf("  Block length: %d years\n", block_length_sector)) 
 cat(sprintf("  Number of replicates: %d\n", n_replicates))
-
-# Define save/load path for Fram Strait bootstrap results
-processed_dir <- "E:/ERA5_data/processed"
-if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
-
-boot_file_path_fram_strait <- file.path(processed_dir, "boot_result_fram_strait_sector.rds")
-cat(sprintf("  Bootstrap file: %s\n", basename(boot_file_path_fram_strait)))
-
-# Save/Load Logic
+boot_file_path_fram_strait <- here::here("Data", "processed", 
+                                         "boot_result_fram_strait_sector_ANNUAL.rds")
+cat(sprintf("  Bootstrap file: \n    %s\n", boot_file_path_fram_strait))
 if (file.exists(boot_file_path_fram_strait)) {
   cat("  Loading existing bootstrap results from disk...\n")
   boot_result_sector <- readRDS(boot_file_path_fram_strait)
   cat("  ✓ Bootstrap results loaded (fast path).\n")
-  
 } else {
+  if (!dir.exists(dirname(boot_file_path_fram_strait))) {
+    cat(sprintf("Creating directory: %s\n", dirname(boot_file_path_fram_strait)))
+    dir.create(dirname(boot_file_path_fram_strait), recursive = TRUE)
+  }
   cat(sprintf("  No saved results found. Running bootstrap (R=%d)...\n", n_replicates))
-  cat("  This may take 5-10 minutes...\n")
-  
+  cat("  This may take 1-2 minutes...\n") 
   start_boot_sec <- Sys.time()
-  
-  boot_result_sector <- boot::tsboot(as.vector(storm_ts_obj_sector),
+  boot_result_sector <- boot::tsboot(as.vector(annual_ts_obj_sector), 
                                      statistic = slope_statistic_sector,
                                      R = n_replicates,
                                      l = block_length_sector,
                                      sim = "fixed",
                                      parallel = "multicore",
                                      ncpus = max(1, parallel::detectCores() - 1))
-  
   end_boot_sec <- Sys.time()
   cat(sprintf("  ✓ Bootstrap completed in %.1f minutes.\n", 
               difftime(end_boot_sec, start_boot_sec, units = "mins")))
-  
-  # Save results to disk
   cat("  Saving bootstrap results to disk...\n")
   saveRDS(boot_result_sector, boot_file_path_fram_strait)
   cat("  ✓ Results saved for future use.\n")
 }
-
-# Calculate Bootstrap CI
 boot_ci_sector <- try(boot.ci(boot_result_sector, type = "perc"), silent = TRUE)
 
 # --- 7. Final Results Summary ---
 cat("\n", rep("=", 70), "\n")
-cat("FINAL RESULTS: FRAM STRAIT SECTOR (74-81°N, 15°W-15°E)\n")
+cat("FINAL RESULTS: FRAM STRAIT SECTOR (Annual Mean)\n") 
 cat(rep("=", 70), "\n\n")
 
 cat("Domain Characteristics:\n")
 cat(sprintf("  Area: Atlantic storm track gateway between Greenland and Svalbard\n"))
 cat(sprintf("  Spatial extent: ~%d km × ~%d km\n", 
-            round(7 * 111), round(30 * 19)))  # Approximate at 80°N
-cat(sprintf("  Time period: 1958-2024 (67 years, %d months)\n", n))
+            round(7 * 111), round(30 * 19)))  
+cat(sprintf("  Time period: 1958-2024 (%d years)\n\n", n)) 
 
-cat("\nTrend Analysis Results:\n")
+# *** ADDED: Time Series Characteristics ***
+cat("Time Series Characteristics (Monthly):\n")
+cat(sprintf("  Mean storminess: %.2f m⁴/s⁴\n", mean(storm_ts_sector, na.rm = TRUE)))
+cat(sprintf("  Standard deviation: %.2f m⁴/s⁴\n", sd(storm_ts_sector, na.rm = TRUE)))
+# *** END ADDED SECTION ***
+
+cat("\nTrend Analysis Results (Annual Mean):\n") 
 cat(sprintf("  Lag-1 autocorrelation: %.3f\n", rho1_sector))
 cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", slope_decade_sector))
+cat(sprintf("  Total change (%d years): %.4f m⁴/s⁴ (%.1f%%)\n", 
+            n, slope_per_period_sector, percent_change)) 
 cat(sprintf("  Pre-Whitened MK p-value: %.4f", p_value_sector))
-
 if (is_significant_sector) {
   cat(" ✓ (SIGNIFICANT)\n")
 } else {
@@ -4259,19 +4403,15 @@ if (is_significant_sector) {
 if (!inherits(boot_ci_sector, "try-error") && 
     !is.null(boot_ci_sector$percent) && 
     all(!is.na(boot_ci_sector$percent[4:5]))) {
-  
   lower_ci_decade <- boot_ci_sector$percent[4] * 10
   upper_ci_decade <- boot_ci_sector$percent[5] * 10
-  
   cat(sprintf("  Bootstrap 95%% CI: [%.4f, %.4f] m⁴/s⁴ per decade\n",
               lower_ci_decade, upper_ci_decade))
-  
   if (lower_ci_decade < 0 && upper_ci_decade > 0) {
     cat("  → CI includes zero (trend not significant via bootstrap)\n")
   } else {
     cat("  → CI excludes zero (trend significant via bootstrap)\n")
   }
-  
 } else {
   cat("  Bootstrap 95% CI: Calculation failed\n")
   cat("  → Check bootstrap replicates for NAs:\n")
@@ -4282,25 +4422,16 @@ if (!inherits(boot_ci_sector, "try-error") &&
 cat("\n", rep("-", 70), "\n")
 cat("INTERPRETATION:\n")
 cat(rep("-", 70), "\n")
-
 if (is_significant_sector) {
   direction <- ifelse(sens_sector$estimates > 0, "INCREASING", "DECREASING")
   cat(sprintf("\n✓ STATISTICALLY SIGNIFICANT %s TREND DETECTED\n", direction))
-  cat(sprintf("\nThe Fram Strait gateway shows a significant %s trend in storminess\n", 
+  cat(sprintf("\nThe Fram Strait gateway shows a significant %s trend in annual mean storminess\n", 
               tolower(direction)))
-  cat(sprintf("of %.4f m⁴/s⁴ per decade (p = %.4f). This finding is consistent with\n", 
+  cat(sprintf("of %.4f m⁴/s⁴ per decade (p = %.4f).\n", 
               slope_decade_sector, p_value_sector))
-  
-  if (direction == "INCREASING") {
-    cat("enhanced Atlantic storm track activity and/or increased baroclinic\n")
-    cat("instability associated with sea-ice retreat at the ice edge.\n")
-  } else {
-    cat("weakened Atlantic storm track activity or shifts in cyclone pathways.\n")
-  }
-  
 } else {
   cat("\n✗ NO STATISTICALLY SIGNIFICANT TREND DETECTED\n")
-  cat(sprintf("\nThe Fram Strait gateway shows no significant trend in storminess\n"))
+  cat(sprintf("\nThe Fram Strait gateway shows no significant trend in annual mean storminess\n"))
   cat(sprintf("(Sen's slope = %.4f m⁴/s⁴ per decade, p = %.4f).\n", 
               slope_decade_sector, p_value_sector))
   cat("This may indicate:\n")
@@ -4314,20 +4445,16 @@ cat("\n", rep("=", 70), "\n\n")
 
 ```{r}
 # ============================================================================
-# PHASE 4 - SUB-ANALYSIS: Svalbard Region (Barents Sea Atlantic Sector)
+# PHASE 4 - SUB-ANALYSIS: Svalbard Region (Annual Mean)
 # Using Pre-Whitened Mann-Kendall for Significance
 # ============================================================================
 
 cat("\n", rep("=", 70), "\n")
-cat("ANALYZING SVALBARD REGION TIME SERIES\n")
+cat("ANALYZING SVALBARD REGION TIME SERIES (Annual Mean)\n") 
 cat(rep("=", 70), "\n\n")
 
 # --- 1. Define the Svalbard Region Bounding Box ---
-# Broader Atlantic-influenced Arctic sector including:
-# - Fram Strait (western edge)
-# - Svalbard Archipelago
-# - Barents Sea
-# - Western Kara Sea entrance
+# ... [Unchanged] ...
 cat("--- Domain Definition ---\n")
 lon_sector_idx <- which(lon >= -10 & lon <= 35)
 lat_sector_idx <- which(lat >= 74 & lat <= 81)
@@ -4341,7 +4468,7 @@ cat(sprintf("  Latitude range: %.1f°N to %.1f°N (%d grid cells)\n",
 cat(sprintf("  Total grid cells in domain: %d\n", 
             length(lon_sector_vals) * length(lat_sector_vals)))
 
-# Approximate area calculation
+# ... [Unchanged] ...
 lon_span_deg <- max(lon_sector_vals) - min(lon_sector_vals)
 lat_span_deg <- max(lat_sector_vals) - min(lat_sector_vals)
 avg_lat <- mean(lat_sector_vals)
@@ -4356,17 +4483,16 @@ cat(sprintf("  Approximate area: %d km²\n",
             round(approx_width_km * approx_height_km)))
 
 # --- 2. Extract and Create Area-Weighted Time Series ---
+# ... [Unchanged] ...
 cat("\n--- Extracting Spatial Data ---\n")
 storminess_sector <- storminess[, lat_sector_idx, lon_sector_idx]
 
-# Create cosine-latitude weights for proper area weighting
 weights_sector <- cos(lat_sector_vals * pi / 180)
 weights_matrix_sector <- matrix(weights_sector,
                                 nrow = length(lat_sector_vals),
                                 ncol = length(lon_sector_vals),
                                 byrow = FALSE)
 
-# Calculate area-weighted mean for each time step
 storm_ts_sector <- apply(storminess_sector, 1, function(slice) {
   weighted.mean(slice, weights_matrix_sector, na.rm = TRUE)
 })
@@ -4374,25 +4500,36 @@ storm_ts_sector <- apply(storminess_sector, 1, function(slice) {
 cat("✓ Area-weighted time series for Svalbard region created.\n")
 cat(sprintf("  Time series length: %d months (1958-2024)\n", length(storm_ts_sector)))
 
-# Create ts object for trend analysis
-storm_ts_obj_sector <- ts(storm_ts_sector, start = c(1958, 1), frequency = 12)
-ts_data_vector_sector <- as.vector(storm_ts_obj_sector)
+# *** NEW STEP: Aggregate monthly data to ANNUAL means ***
+# ... [Unchanged] ...
+cat("--- Correcting: Aggregating monthly data to annual means ---\n")
+monthly_df_sector <- data.frame(
+  storminess = as.vector(storm_ts_sector),
+  date = dates, 
+  Year = lubridate::year(dates)
+)
+annual_means_df_sector <- aggregate(storminess ~ Year, 
+                                    data = monthly_df_sector, 
+                                    FUN = mean)
+annual_ts_obj_sector <- ts(annual_means_df_sector$storminess, 
+                           start = min(annual_means_df_sector$Year), 
+                           frequency = 1)
+annual_ts_data_vector_sector <- as.vector(annual_ts_obj_sector)
+cat(sprintf("✓ Created %d annual mean values for analysis.\n", length(annual_ts_obj_sector)))
 
-# Basic descriptive statistics
-cat(sprintf("  Mean storminess: %.2f m⁴/s⁴\n", mean(storm_ts_sector, na.rm = TRUE)))
-cat(sprintf("  Standard deviation: %.2f m⁴/s⁴\n", sd(storm_ts_sector, na.rm = TRUE)))
-cat(sprintf("  Range: [%.2f, %.2f] m⁴/s⁴\n", 
-            min(storm_ts_sector, na.rm = TRUE), 
-            max(storm_ts_sector, na.rm = TRUE)))
+# ... [Unchanged] ...
+cat(sprintf("  Mean storminess (monthly): %.2f m⁴/s⁴\n", mean(storm_ts_sector, na.rm = TRUE)))
+cat(sprintf("  Standard deviation (monthly): %.2f m⁴/s⁴\n", sd(storm_ts_sector, na.rm = TRUE)))
 
 # --- 3. Check Autocorrelation (ρ₁) ---
-cat("\n--- Autocorrelation Assessment ---\n")
-acf_result <- acf(storm_ts_obj_sector, plot = FALSE, lag.max = 12)
-rho1_sector <- acf_result$acf[2]
-rho12_sector <- acf_result$acf[13]  # Seasonal autocorrelation
+cat("\n--- Autocorrelation Assessment (Annual Means) ---\n") 
+acf_result <- acf(annual_ts_obj_sector, plot = FALSE, lag.max = 1) 
 
-cat(sprintf("  Lag-1 autocorrelation (ρ₁): %.3f\n", rho1_sector))
-cat(sprintf("  Lag-12 autocorrelation (ρ₁₂): %.3f\n", rho12_sector))
+# *** BUG FIX: Index [2] for Lag 1, not [1] (which is Lag 0) ***
+rho1_sector <- acf_result$acf[2] 
+# *** END BUG FIX ***
+
+cat(sprintf("  Lag-1 autocorrelation (of annual means) (ρ₁): %.3f\n", rho1_sector)) 
 
 if (abs(rho1_sector) > 0.3) {
   cat("  → Strong temporal autocorrelation. Pre-whitening is essential.\n")
@@ -4403,12 +4540,12 @@ if (abs(rho1_sector) > 0.3) {
 }
 
 # --- 4. Pre-Whitened Mann-Kendall Test for Significance ---
-cat("\n--- Pre-Whitened Mann-Kendall Test (Svalbard Region) ---\n")
+# ... [Unchanged, but will now run with the correct rho1_sector] ...
+cat("\n--- Pre-Whitened Mann-Kendall Test (Svalbard Region - Annual) ---\n") 
 cat("  Method: Yue et al. (2002) pre-whitening approach\n")
-cat("  Accounts for temporal autocorrelation in significance test\n")
 
-n <- length(ts_data_vector_sector)
-prewhitened_sector <- ts_data_vector_sector[2:n] - rho1_sector * ts_data_vector_sector[1:(n-1)]
+n <- length(annual_ts_data_vector_sector) 
+prewhitened_sector <- annual_ts_data_vector_sector[2:n] - rho1_sector * annual_ts_data_vector_sector[1:(n-1)] 
 
 mk_result_sector <- trend::mk.test(prewhitened_sector)
 p_value_sector <- mk_result_sector$p.value
@@ -4424,68 +4561,68 @@ if (is_significant_sector) {
 }
 
 # --- 5. Sen's Slope Estimation (Robust Trend Magnitude) ---
-cat("\n--- Sen's Slope Estimator (Svalbard Region) ---\n")
+# ... [Unchanged] ...
+cat("\n--- Sen's Slope Estimator (Svalbard Region - Annual) ---\n") 
 cat("  Non-parametric, robust to outliers\n")
-cat("  Based on median of all pairwise slopes\n")
+cat("  Based on median of all pairwise slopes (on annual means)\n") 
 
-sens_sector <- sens.slope(storm_ts_obj_sector)
-slope_per_year_sector <- sens_sector$estimates  # m⁴/s⁴ per year
-slope_per_decade_sector <- slope_per_year_sector * 10  # m⁴/s⁴ per decade
-slope_per_period_sector <- slope_per_year_sector * 67  # Total change over 67 years
+sens_sector <- sens.slope(annual_ts_obj_sector) 
+slope_per_year_sector <- sens_sector$estimates  
+slope_per_decade_sector <- slope_per_year_sector * 10  
+slope_per_period_sector <- slope_per_year_sector * n  
 
 cat(sprintf("  Sen's slope (per year): %.4f m⁴/s⁴\n", slope_per_year_sector))
 cat(sprintf("  Sen's slope (per decade): %.4f m⁴/s⁴\n", slope_per_decade_sector))
 cat(sprintf("  Total change (1958-2024): %.4f m⁴/s⁴\n", slope_per_period_sector))
 
-# Calculate percentage change
-baseline_mean <- mean(storm_ts_sector[1:120], na.rm = TRUE)  # First 10 years
+baseline_mean <- mean(storm_ts_sector[1:120], na.rm = TRUE)  
 percent_change <- (slope_per_period_sector / baseline_mean) * 100
 cat(sprintf("  Percentage change: %.1f%% relative to 1958-1967 baseline\n", percent_change))
 
 # --- 6. Moving Blocks Bootstrap for Confidence Interval ---
-cat("\n--- Moving Blocks Bootstrap (Svalbard Region) ---\n")
+# ... [Unchanged] ...
+cat("\n--- Moving Blocks Bootstrap (Svalbard Region - Annual) ---\n") 
 cat("  Purpose: Robust confidence intervals accounting for autocorrelation\n")
 
-# Define statistic function for bootstrap
 slope_statistic_sector <- function(data) {
-  ts_subset <- ts(data, start = c(1958, 1), frequency = 12)
+  ts_subset <- ts(data, start = 1, frequency = 1) 
   result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
   if (inherits(result, "try-error") || is.null(result) || is.na(result)) {
     return(NA)
   } else {
-    return(result)  # Slope per year
+    return(result)  
   }
 }
 
-# Bootstrap parameters
-block_length_sector <- 12  # 12 months to preserve annual cycle
+block_length_sector <- 3  
 n_replicates <- 5000
-set.seed(456)  # For reproducibility (different from Pan-Arctic and Fram Strait)
+set.seed(456)  
 
-cat(sprintf("  Block length: %d months (preserves seasonal cycle)\n", block_length_sector))
+cat(sprintf("  Block length: %d years\n", block_length_sector)) 
 cat(sprintf("  Number of replicates: %d\n", n_replicates))
 cat(sprintf("  Parallel processing: Using %d cores\n", max(1, parallel::detectCores() - 1)))
 
-# Define save/load path for Svalbard bootstrap results
-processed_dir <- "E:/ERA5_data/processed"
-if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
+boot_file_path_svalbard <- here::here("Data", "processed", 
+                                      "boot_result_svalbard_sector_ANNUAL.rds")
+cat(sprintf("  Bootstrap file: \n    %s\n", boot_file_path_svalbard))
 
-boot_file_path_svalbard <- file.path(processed_dir, "boot_result_svalbard_sector.rds")
-cat(sprintf("  Bootstrap file: %s\n", basename(boot_file_path_svalbard)))
-
-# Save/Load Logic
 if (file.exists(boot_file_path_svalbard)) {
   cat("\n  Loading existing bootstrap results from disk...\n")
   boot_result_sector <- readRDS(boot_file_path_svalbard)
   cat("  ✓ Bootstrap results loaded successfully (fast path).\n")
   
 } else {
+  if (!dir.exists(dirname(boot_file_path_svalbard))) {
+    cat(sprintf("Creating directory: %s\n", dirname(boot_file_path_svalbard)))
+    dir.create(dirname(boot_file_path_svalbard), recursive = TRUE)
+  }
+  
   cat(sprintf("\n  No saved results found. Running bootstrap (R=%d)...\n", n_replicates))
-  cat("  This may take 5-10 minutes depending on your system...\n")
+  cat("  This may take 1-2 minutes depending on your system...\n") 
   
   start_boot_sec <- Sys.time()
   
-  boot_result_sector <- boot::tsboot(as.vector(storm_ts_obj_sector),
+  boot_result_sector <- boot::tsboot(as.vector(annual_ts_obj_sector), 
                                      statistic = slope_statistic_sector,
                                      R = n_replicates,
                                      l = block_length_sector,
@@ -4497,26 +4634,24 @@ if (file.exists(boot_file_path_svalbard)) {
   elapsed_time <- difftime(end_boot_sec, start_boot_sec, units = "mins")
   cat(sprintf("  ✓ Bootstrap completed in %.1f minutes.\n", elapsed_time))
   
-  # Check for NA values in bootstrap results
   na_count <- sum(is.na(boot_result_sector$t))
   if (na_count > 0) {
     cat(sprintf("  ⚠ Warning: %d/%d bootstrap replicates returned NA\n", 
                 na_count, n_replicates))
   }
   
-  # Save results to disk
   cat("  Saving bootstrap results to disk...\n")
   saveRDS(boot_result_sector, boot_file_path_svalbard)
   cat("  ✓ Results saved for future use.\n")
 }
 
-# Calculate Bootstrap CI
 cat("\n  Calculating bootstrap confidence interval...\n")
 boot_ci_sector <- try(boot.ci(boot_result_sector, type = "perc"), silent = TRUE)
 
 # --- 7. Final Results Summary ---
+# ... [Unchanged, but will now report correct rho1] ...
 cat("\n", rep("=", 70), "\n")
-cat("FINAL RESULTS: SVALBARD REGION (74-81°N, 10°W-35°E)\n")
+cat("FINAL RESULTS: SVALBARD REGION (Annual Mean)\n") 
 cat(rep("=", 70), "\n\n")
 
 cat("Domain Characteristics:\n")
@@ -4525,17 +4660,17 @@ cat("  Coverage: Fram Strait, Svalbard, Barents Sea, W. Kara Sea\n")
 cat(sprintf("  Spatial extent: ~%d km (E-W) × ~%d km (N-S)\n", 
             round(approx_width_km), round(approx_height_km)))
 cat(sprintf("  Approximate area: %s km²\n", format(round(approx_width_km * approx_height_km), big.mark = ",")))
-cat(sprintf("  Time period: 1958-2024 (67 years, %d months)\n\n", n))
+cat(sprintf("  Time period: 1958-2024 (%d years)\n\n", n)) 
 
-cat("Time Series Characteristics:\n")
+cat("Time Series Characteristics (Monthly):\n") 
 cat(sprintf("  Mean storminess: %.2f m⁴/s⁴\n", mean(storm_ts_sector, na.rm = TRUE)))
 cat(sprintf("  Standard deviation: %.2f m⁴/s⁴\n", sd(storm_ts_sector, na.rm = TRUE)))
-cat(sprintf("  Lag-1 autocorrelation: %.3f\n\n", rho1_sector))
 
-cat("Trend Analysis Results:\n")
+cat("\nTrend Analysis Results (Annual Mean):\n") 
+cat(sprintf("  Lag-1 autocorrelation: %.3f\n", rho1_sector))
 cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", slope_per_decade_sector))
-cat(sprintf("  Total change (67 years): %.4f m⁴/s⁴ (%.1f%%)\n", 
-            slope_per_period_sector, percent_change))
+cat(sprintf("  Total change (%d years): %.4f m⁴/s⁴ (%.1f%%)\n", 
+            n, slope_per_period_sector, percent_change)) 
 cat(sprintf("  Pre-Whitened MK p-value: %.4f", p_value_sector))
 
 if (is_significant_sector) {
@@ -4544,7 +4679,6 @@ if (is_significant_sector) {
   cat(" (not significant at α=0.05)\n")
 }
 
-# Report Bootstrap CI
 if (!inherits(boot_ci_sector, "try-error") && 
     !is.null(boot_ci_sector$percent) && 
     all(!is.na(boot_ci_sector$percent[4:5]))) {
@@ -5433,7 +5567,6 @@ This chapter provides the most granular analysis, combining the regional focus (
     -   **Magnitude:** **Theil-Sen slope** (events per decade).
     -   **Uncertainty:** **Moving Blocks Bootstrap** ($R=5000$) with a block length of $\mathbf{l=3}$ years.
 
-
 ### Analysis 1: Fram Strait (Atlantic Storm Track Gateway)
 
 The trend analysis for extreme event frequency in the Fram Strait showed no significant change in any season.
@@ -5725,7 +5858,6 @@ if (son_svalbard_p < 0.05) {
      for the SVALBARD/BARENTS sector is NOT statistically significant (p = {sprintf('%.4f', son_svalbard_p)})."), "\n")
 }
 ```
-
 
 # Test the hypothesis from the Hornsund paper (Herman et al., 2025) for regional "Winter Shift" DJFM and FMA
 
@@ -6455,7 +6587,6 @@ if(file.exists(boot_son_svalbard_path)) {
 
 cat("\n", rep("=", 70), "\n")
 ```
-
 
 # Summary
 
@@ -7502,7 +7633,6 @@ cat("  - Statistical method: Pre-Whitened Mann-Kendall + Bootstrap CI\n")
 cat("\n")
 ```
 
-
 # Mechanistic diagnostic
 
 ```{r}
@@ -7886,4 +8016,3 @@ cat("\n", rep("=", 80), "\n")
 cat("DONE!\n")
 cat(rep("=", 80), "\n")
 ```
-

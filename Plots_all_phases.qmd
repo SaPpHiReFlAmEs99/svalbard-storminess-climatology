@@ -636,8 +636,6 @@ cat("READY FOR ANALYSIS!\n")
 cat(rep("=", 80), "\n")
 ```
 
-
-
 ```{r EKE-MKE-polar-plots}
 # ============================================================================
 # PHASE 1: CLIMATOLOGICAL MAPS - THREE SEPARATE FIGURES
@@ -1068,7 +1066,7 @@ library(lubridate)
 library(dplyr)
 
 # --- SETUP ---
-plot_dir <- "E:/ERA5_data/processed/phase1_diagnostics"
+plot_dir <- here("Data", "processed", "phase1_diagnostics")
 if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 
 cat("\n", rep("=", 80), "\n")
@@ -1258,6 +1256,3 @@ cat("  • Gray monthly values show the full range of variability\n\n")
 
 cat(rep("=", 80), "\n")
 ```
-
-
-
