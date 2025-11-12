@@ -2044,7 +2044,8 @@ cat(rep("=", 70), "\n\n")
 # This function performs your chosen analysis: PW-MK, Sen's Slope,
 # and the Block Bootstrap CI, including the save/load logic.
 
-run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
+# *** Added baseline_mean argument and extended calculations ***
+run_seasonal_trend_analysis <- function(seasonal_df, season_name, baseline_mean) {
   
   cat(sprintf("\n--- Analyzing Season: %s ---\n", season_name))
   
@@ -2058,16 +2059,18 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
   n_replicates <- 5000 # Use 5000 for robustness
   set.seed(123 + which(c("DJF", "MAM", "JJA", "SON") == season_name)) # Different seed per season
   
-  cat(sprintf("  N observations: %d years\n", length(ts_vector)))
+  n <- length(ts_vector) 
+  cat(sprintf("  N observations: %d years\n", n))
   
   # --- b. Pre-Whitened Mann-Kendall Test ---
   rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
-  n <- length(ts_vector)
   
   if (n < 10) {
     cat("  WARNING: Insufficient data for reliable trend analysis\n")
+    # *** Added n_obs and slope_per_period ***
     return(list(season = season_name, p_value = NA, slope_decade = NA, 
-                ci_lower = NA, ci_upper = NA, rho1 = rho1))
+                ci_lower = NA, ci_upper = NA, rho1 = rho1, n_obs = n, 
+                slope_per_period = NA, percent_change = NA, baseline_mean = baseline_mean))
   }
   
   prewhitened <- ts_vector[2:n] - rho1 * ts_vector[1:(n-1)]
@@ -2081,7 +2084,13 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
   sens_result <- sens.slope(ts_obj)
   slope_per_year <- sens_result$estimates
   slope_per_decade <- slope_per_year * 10
+  
+  # Extended calculations 
+  slope_per_period <- slope_per_year * n
+  percent_change <- (slope_per_period / baseline_mean) * 100
   cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", slope_per_decade))
+  cat(sprintf("  Total change (%d years): %.4f m⁴/s⁴\n", n, slope_per_period))
+  cat(sprintf("  Percentage change: %.1f%% relative to baseline\n", percent_change))
 
   # --- d. Block Bootstrap CI (with Save/Load) ---
   # For seasonal data (freq=1), the 'decorrelation timescale' is 
@@ -2099,17 +2108,19 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
     }
   }
   
-  # Save/Load logic
-  processed_dir <- "E:/ERA5_data/processed"
-  if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
-  
-  boot_file_path <- file.path(processed_dir, 
-                              sprintf("boot_result_panarctic_60N_%s.rds", season_name))
+  # *** MODIFIED: Use here() for path ***
+  boot_file_path <- here::here("Data", "processed", 
+                               sprintf("boot_result_panarctic_60N_%s.rds", season_name))
   
   if (file.exists(boot_file_path)) {
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
   } else {
+    # *** MODIFIED: Add directory creation check ***
+    if (!dir.exists(dirname(boot_file_path))) {
+      cat(sprintf("  Creating directory: %s\n", dirname(boot_file_path)))
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     cat(sprintf("  Running bootstrap (l=%d, R=%d)...\n", block_length, n_replicates))
     start_boot <- Sys.time()
     boot_result <- boot::tsboot(ts_vector,
@@ -2142,7 +2153,6 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
       cat("  → CI excludes zero (trend significant via bootstrap)\n")
     }
     
-    # Return a summary list
     return(list(
       season = season_name,
       n_obs = n,
@@ -2150,7 +2160,10 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
       p_value = p_value,
       slope_decade = slope_per_decade,
       ci_lower = ci_lower_decade,
-      ci_upper = ci_upper_decade
+      ci_upper = ci_upper_decade,
+      slope_per_period = slope_per_period,
+      percent_change = percent_change,
+      baseline_mean = baseline_mean
     ))
   } else {
     cat("  ERROR: Could not calculate bootstrap CI\n")
@@ -2161,7 +2174,10 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
       p_value = p_value, 
       slope_decade = slope_per_decade, 
       ci_lower = NA, 
-      ci_upper = NA
+      ci_upper = NA,
+      slope_per_period = slope_per_period, # Still return slope
+      percent_change = percent_change, # Still return change
+      baseline_mean = baseline_mean
     ))
   }
 }
@@ -2195,22 +2211,17 @@ cat("✓ Seasons assigned correctly (DJF spans calendar years)\n")
 
 # Aggregate data into seasonal means (one value per year per season)
 seasonal_means_df <- aggregate(storminess ~ Season_Year + Season, 
-                               data = storm_df, 
-                               FUN = mean)
+                                data = storm_df, 
+                                FUN = mean)
 names(seasonal_means_df)[1] <- "Year"
 
 # Remove incomplete seasons at boundaries
-# First DJF (1958) only has Jan-Feb, no December 1957
-# Last DJF (2025) only has December 2024, no Jan-Feb 2025
-# Remove Year==0 (DJF 1958-59, incomplete - no December 1957)
 n_before <- nrow(seasonal_means_df)
-seasonal_means_df <- seasonal_means_df[!(seasonal_means_df$Year == 0 & 
+seasonal_means_df <- seasonal_means_df[!(seasonal_means_df$Year == 1958 & 
                                          seasonal_means_df$Season == "DJF"), ]
-
-# Remove Year==67 (DJF 2024-25, incomplete - no Jan-Feb 2025)  
-seasonal_means_df <- seasonal_means_df[!(seasonal_means_df$Year == 67 & 
+seasonal_means_df <- seasonal_means_df[!(seasonal_means_df$Year == 2025 & 
                                          seasonal_means_df$Season == "DJF"), ]
-n_after <- nrow(seasonal_means_df)  # ← Always executes
+n_after <- nrow(seasonal_means_df)  
 
 cat(sprintf("✓ Data aggregated: %d seasonal values (removed %d incomplete DJF)\n", 
             n_after, n_before - n_after))
@@ -2227,14 +2238,26 @@ seasonal_list <- split(seasonal_means_df, seasonal_means_df$Season)
 # Reorder to standard sequence
 seasonal_list <- seasonal_list[c("DJF", "MAM", "JJA", "SON")]
 
+# Calculate seasonal baselines (1958-1967)
+cat("✓ Calculating 1958-1967 seasonal baseline means...\n")
+baseline_means <- sapply(seasonal_list, function(df) {
+  # Use 1959 for DJF baseline start
+  start_year <- ifelse(df$Season[1] == "DJF", 1959, 1958)
+  mean(df$storminess[df$Year >= start_year & df$Year <= (start_year + 9)], na.rm = TRUE)
+})
+print(baseline_means)
+
+
 # --- 3. Run Analysis for All Seasons ---
 cat(rep("=", 70), "\n")
 cat("RUNNING TREND ANALYSIS FOR EACH SEASON\n")
 cat(rep("=", 70), "\n")
 
-# Use lapply to run our function on each data frame in the list
+# *** MODIFIED: Pass the correct baseline_mean to the function ***
 all_season_results <- lapply(names(seasonal_list), function(season_name) {
-  run_seasonal_trend_analysis(seasonal_list[[season_name]], season_name)
+  run_seasonal_trend_analysis(seasonal_list[[season_name]], 
+                            season_name, 
+                            baseline_means[season_name])
 })
 
 # --- 4. Final Summary with FDR Correction ---
@@ -2245,8 +2268,9 @@ cat(rep("=", 70), "\n\n")
 # Collect results into a data frame
 results_df <- as.data.frame(do.call(rbind, lapply(all_season_results, as.data.frame)))
 
-# Ensure numeric columns are numeric
-numeric_cols <- c("n_obs", "rho1", "p_value", "slope_decade", "ci_lower", "ci_upper")
+# Added new numeric columns 
+numeric_cols <- c("n_obs", "rho1", "p_value", "slope_decade", "ci_lower", "ci_upper",
+                  "slope_per_period", "percent_change", "baseline_mean")
 for (col in numeric_cols) {
   results_df[[col]] <- as.numeric(results_df[[col]])
 }
@@ -2258,9 +2282,23 @@ results_df$p_fdr <- p.adjust(results_df$p_value, method = "BH")
 results_df$sig_uncorrected <- ifelse(results_df$p_value < 0.05, "✓", "")
 results_df$sig_fdr <- ifelse(results_df$p_fdr < 0.05, "✓", "")
 
-# Print the final table
 cat("Seasonal Trend Analysis Results:\n\n")
-print(results_df, row.names = FALSE, digits = 4)
+for (i in 1:nrow(results_df)) {
+  row <- results_df[i, ]
+  cat(rep("-", 40), "\n")
+  cat(sprintf("Season: \t\t%s\n", row$season))
+  cat(rep("-", 40), "\n")
+  cat(sprintf("  Baseline Mean (58-67): \t%.2f m⁴/s⁴\n", row$baseline_mean))
+  cat(sprintf("  N Observations: \t%d years\n", row$n_obs))
+  cat(sprintf("  Lag-1 Autocorr (ρ₁): \t%.3f\n", row$rho1))
+  cat(sprintf("  Sen's Slope (decade): \t%.4f m⁴/s⁴\n", row$slope_decade))
+  cat(sprintf("  Total Change (%dyr): \t%.2f m⁴/s⁴ (%.1f%%)\n", 
+              row$n_obs, row$slope_per_period, row$percent_change))
+  cat(sprintf("  PW-MK p-value: \t%.4f\n", row$p_value))
+  cat(sprintf("  FDR-adjusted p-value: \t%.4f %s\n", row$p_fdr, row$sig_fdr))
+  cat(sprintf("  Bootstrap 95%% CI: \t[%.4f, %.4f]\n\n", row$ci_lower, row$ci_upper))
+}
+
 
 # --- 5. Test CI Overlap (Non-parametric test for differential trends) ---
 cat("\n", rep("=", 70), "\n")
@@ -2324,7 +2362,10 @@ cat("         than other seasons?\n\n")
 cat("Evidence Summary:\n\n")
 
 # 1. Is SON the strongest trend?
-strongest_season <- results_df$season[which.max(results_df$slope_decade)]
+strongest_season <- "NA" # Default
+if (any(!is.na(results_df$slope_decade))) {
+  strongest_season <- results_df$season[which.max(results_df$slope_decade)]
+}
 cat(sprintf("1. Strongest trend magnitude: %s (%.4f m⁴/s⁴ per decade)\n", 
             strongest_season, max(results_df$slope_decade, na.rm = TRUE)))
 
@@ -2367,7 +2408,14 @@ cat("\n", rep("=", 70), "\n\n")
 
 # --- 7. Save Results ---
 cat("Saving results table...\n")
-results_file <- "E:/ERA5_data/processed/seasonal_trends_panarctic_60N.csv"
+# *** MODIFIED: Use here() for path ***
+results_file <- here::here("Data", "processed", "seasonal_trends_panarctic_60N.csv")
+
+# *** MODIFIED: Add directory creation check ***
+if (!dir.exists(dirname(results_file))) {
+  cat(sprintf("  Creating directory: %s\n", dirname(results_file)))
+  dir.create(dirname(results_file), recursive = TRUE)
+}
 write.csv(results_df, results_file, row.names = FALSE)
 cat(sprintf("✓ Results saved to: %s\n", results_file))
 ```
@@ -2486,14 +2534,13 @@ cftime <- import("cftime")
 py <- import_builtins()
 
 # --- 2. Define File Paths ---
-processed_dir <- "E:/ERA5_data/processed"
-input_file <- file.path(processed_dir, 
-                        "ERA5_1958-2024_eddy_components.nc")
-output_file <- file.path(processed_dir, 
-                         "P99_EKE_annual_1958-2024_clean.nc")
+input_file <- here::here("Data", "processed", 
+                         "ERA5_1958-2024_eddy_components.nc")
+output_file <- here::here("Data", "processed", 
+                          "P99_EKE_annual_1958-2024_clean.nc")
 
-cat(sprintf("  Input file: %s (16.06 GB)\n", basename(input_file)))
-cat(sprintf("  Output file: %s\n", basename(output_file)))
+cat(sprintf("  Input file: %s\n", input_file)) # *** MODIFIED: Show full path ***
+cat(sprintf("  Output file: %s\n", output_file)) # *** MODIFIED: Show full path ***
 
 if (file.exists(output_file)) {
   cat(" Output file already exists. Skipping computation.\n")
@@ -2533,6 +2580,13 @@ if (file.exists(output_file)) {
   # --- 7. Trigger Computation and Save ---
   cat("\n--- COMPUTING --- \n")
   cat("This may take 5-20 minutes...\n")
+  
+  # *** MODIFIED: Check if directory exists before saving ***
+  if (!dir.exists(dirname(output_file))) {
+    cat(sprintf("Creating directory: %s\n", dirname(output_file)))
+    dir.create(dirname(output_file), recursive = TRUE)
+  }
+  
   start_time <- Sys.time()
   
   p99_eke_final$to_netcdf(output_file)
@@ -2568,31 +2622,30 @@ cat(rep("=", 70), "\n\n")
 
 # --- Configuration ---
 BLOCK_LENGTH_L <- 3        # CRITICAL: l=3 for annual data (Rule 1)
-BOOT_REPS_R <- 500         # For spatial MC
-BOOT_REPS_TS <- 5000       # For time series bootstrap
-ALPHA <- 0.05              # Significance level
+BOOT_REPS_R <- 500       # For spatial MC
+BOOT_REPS_TS <- 5000     # For time series bootstrap
+ALPHA <- 0.05            # Significance level
 N_CORES <- max(1, parallel::detectCores() - 1)
 
 # --- File Paths ---
-processed_dir <- "E:/ERA5_data/processed"
-input_file_p99 <- file.path(processed_dir, "P99_EKE_annual_1958-2024_clean.nc")
-out_rds_path <- file.path(processed_dir, "P99_EKE_Core_Arctic_Trend_Analysis.rds") 
-slope_path <- file.path(processed_dir, "P99_EKE_trend_slope_arctic_60N.nc")
-pval_path  <- file.path(processed_dir, "P99_EKE_trend_pvalue_arctic_60N.nc")
-rho1_path  <- file.path(processed_dir, "P99_EKE_lag1autocorr_arctic_60N.nc")
-mc_summary_path <- file.path(processed_dir, "P99_EKE_trend_counts_mc_arctic_60N.RDS")
-boot_ts_path <- file.path(processed_dir, "boot_result_P99_INTENSITY_PanArctic_60N.rds")
+input_file_p99 <- here::here("Data", "processed", "P99_EKE_annual_1958-2024_clean.nc")
+out_rds_path <- here::here("Data", "processed", "P99_EKE_Core_Arctic_Trend_Analysis.rds") 
+slope_path <- here::here("Data", "processed", "P99_EKE_trend_slope_arctic_60N.nc")
+pval_path  <- here::here("Data", "processed", "P99_EKE_trend_pvalue_arctic_60N.nc")
+rho1_path  <- here::here("Data", "processed", "P99_EKE_lag1autocorr_arctic_60N.nc")
+mc_summary_path <- here::here("Data", "processed", "P99_EKE_trend_counts_mc_arctic_60N.RDS")
+boot_ts_path <- here::here("Data", "processed", "boot_result_P99_INTENSITY_PanArctic_60N.rds")
 
 
 # --- 2. Load Data ---
-cat(sprintf("Loading P99 EKE data from: %s\n", basename(input_file_p99)))
+cat(sprintf("Loading P99 EKE data from: \n  %s\n", input_file_p99)) # *** MODIFIED ***
 nc_file <- nc_open(input_file_p99)
 lat_full <- ncvar_get(nc_file, "latitude")
 lon_full <- ncvar_get(nc_file, "longitude")
 time_vec <- ncvar_get(nc_file, "time")
 n_lat_full <- length(lat_full)
 n_lon_full <- length(lon_full)
-n_time <- length(time_vec)
+n_time <- length(time_vec) # This is 67
 p99_array_raw <- ncvar_get(nc_file, "eke_p99")
 raw_dims <- dim(p99_array_raw)
 nc_close(nc_file)
@@ -2633,21 +2686,22 @@ calculate_trends_pw_mk <- function(ts_vector) {
   prewhitened_ts <- ts_vector[2:n_pw] - rho1 * ts_vector[1:(n_pw - 1)]
   
   if (length(unique(na.omit(prewhitened_ts))) < 2) {
-      mk_res_p <- 1.0
+     mk_res_p <- 1.0
   } else {
-      mk_res <- trend::mk.test(prewhitened_ts)
-      mk_res_p <- mk_res$p.value
+     mk_res <- trend::mk.test(prewhitened_ts)
+     mk_res_p <- mk_res$p.value
   }
   sens_res <- trend::sens.slope(ts_vector)
   return(c(
-    slope = sens_res$estimates * 10,
+    slope = sens_res$estimates * 10, # slope per decade
     p_value = mk_res_p,
     rho1 = rho1
   ))
 }
 
 # Function 2: For the spatially-averaged time series
-run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m²/s²") {
+# *** Added baseline_mean argument and extended calculations ***
+run_annual_trend_analysis <- function(ts_vector, boot_file_path, baseline_mean, unit_label = "m²/s²") {
   
   ts_vector_clean <- as.vector(na.omit(ts_vector))
   ts_obj <- ts(ts_vector_clean, start = 1958, frequency = 1)
@@ -2666,7 +2720,12 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m
   sens_result <- sens.slope(ts_obj)
   slope_per_year <- sens_result$estimates
   slope_per_decade <- slope_per_year * 10
+  
+  slope_per_period <- slope_per_year * n
+  percent_change <- (slope_per_period / baseline_mean) * 100
   cat(sprintf("  Sen's slope: %.4f %s per decade\n", slope_per_decade, unit_label))
+  cat(sprintf("  Total change (%d years): %.4f %s\n", n, slope_per_period, unit_label))
+  cat(sprintf("  Percentage change: %.1f%% relative to 1958-1967 baseline\n", percent_change))
 
   block_length <- 3 
   
@@ -2681,6 +2740,11 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
   } else {
+    # *** Add directory creation check ***
+    if (!dir.exists(dirname(boot_file_path))) {
+      cat(sprintf("  Creating directory: %s\n", dirname(boot_file_path)))
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     cat(sprintf("  Running bootstrap (l=%d, R=%d)...\n", block_length, BOOT_REPS_TS))
     set.seed(42)
     boot_result <- boot::tsboot(ts_vector_clean,
@@ -2713,10 +2777,14 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m
     cat("  ERROR: Could not calculate bootstrap CI\n")
   }
   
+  # *** Added new fields to return list ***
   return(list(
     n_obs = n, rho1 = rho1, p_value = p_value,
     slope_decade = slope_per_decade,
-    ci_lower = ci_lower_decade, ci_upper = ci_upper_decade
+    ci_lower = ci_lower_decade, ci_upper = ci_upper_decade,
+    slope_per_period = slope_per_period,
+    percent_change = percent_change,
+    baseline_mean = baseline_mean
   ))
 }
 
@@ -2742,9 +2810,15 @@ if (!file.exists(out_rds_path)) {
   
   cat("✓ Area-weighted P99 (Intensity) time series created.\n")
   
+  # *** Calculate baseline mean from 1958-1967 P99 data ***
+  baseline_mean_p99 <- mean(ts_vector_p99_pan_arctic[1:10], na.rm = TRUE)
+  cat(sprintf("  Baseline Mean (1958-1967): %.3f m²/s²\n", baseline_mean_p99))
+  
+  # *** Pass baseline_mean to function ***
   pan_arctic_trend_results <- run_annual_trend_analysis(
     ts_vector = ts_vector_p99_pan_arctic,
     boot_file_path = boot_ts_path,
+    baseline_mean = baseline_mean_p99,
     unit_label = "m²/s²"
   )
   
@@ -2814,9 +2888,9 @@ if (!file.exists(out_rds_path)) {
   
   p_mc <- mean(mc_counts >= n_nominal_sig, na.rm = TRUE)
   mc_results <- list(counts = mc_counts,
-                     observed_count = n_nominal_sig,
-                     p_value = p_mc,
-                     quantile_95 = quantile(mc_counts, 0.95, na.rm = TRUE))
+                       observed_count = n_nominal_sig,
+                       p_value = p_mc,
+                       quantile_95 = quantile(mc_counts, 0.95, na.rm = TRUE))
   saveRDS(mc_results, mc_summary_path)
 
   cat(sprintf("\nMonte Carlo test done.\n"))
@@ -2830,11 +2904,10 @@ if (!file.exists(out_rds_path)) {
   }
 
   # --- 6e. Save NetCDF Outputs ---
-  # (Your existing code to save .nc files goes here)
   cat("\nSaving NetCDF outputs...\n")
   # ... (ncvar_def, nc_create, etc.)
   
-  # --- 6f. Save Master .RDS File ---
+  # --- 6f. Save Master .RDS File ---.
   saveRDS(
     list(
       pan_arctic_trend_results = pan_arctic_trend_results, 
@@ -2864,7 +2937,7 @@ if (!file.exists(out_rds_path)) {
   
   master_results <- readRDS(out_rds_path)
   
-  # Check if the .rds file is the OLD version (missing the new summary)
+  # Check if the .rds file is the OLD version
   if (!"pan_arctic_trend_results" %in% names(master_results)) {
     cat("\n", rep("!", 70), "\n")
     cat("ERROR: The saved .rds file is from an old version of this script.\n")
@@ -2875,17 +2948,31 @@ if (!file.exists(out_rds_path)) {
   
     # --- 7a. Spatially-Averaged Summary ---
     cat("\n", rep("-", 70), "\n")
-    cat("--- SUMMARY: SPATIALLY-AVERAGED TREND (Pan-Arctic >= 60°N) ---\n")
+    cat("--- SUMMARY: SPATIALLY-AVERAGED TREND (Pan-Arctic P99 EKE >= 60°N) ---\n") # *** MODIFIED ***
     cat(rep("-", 70), "\n")
     
     tr <- master_results$pan_arctic_trend_results
-    cat(sprintf("  N observations: %d years\n", tr$n_obs))
-    cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", tr$rho1))
-    cat(sprintf("  PW-MK p-value: %.4f\n", tr$p_value))
-    cat(sprintf("  Sen's slope: %.4f m²/s² per decade\n", tr$slope_decade))
     
-    # --- THIS IS THE FIX ---
-    # Check if CIs are NA (e.g., from a failed bootstrap) before trying to print
+    # *** Check for new fields and print extended summary ***
+    if (!"baseline_mean" %in% names(tr)) {
+       cat("  (Old .rds file. Re-run analysis for full extended summary.)\n")
+       cat(sprintf("  N observations: %d years\n", tr$n_obs))
+       cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", tr$rho1))
+       cat(sprintf("  PW-MK p-value: %.4f\n", tr$p_value))
+       cat(sprintf("  Sen's slope: %.4f m²/s² per decade\n", tr$slope_decade))
+    } else {
+       # --- This is the new, extended summary ---
+       cat(sprintf("  Baseline Mean (1958-1967): %.3f m²/s²\n", tr$baseline_mean))
+       cat(sprintf("  N observations: %d years\n", tr$n_obs))
+       cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", tr$rho1))
+       cat(sprintf("  Sen's slope: %.4f m²/s² per decade\n", tr$slope_decade))
+       cat(sprintf("  Total change (%d years): %.4f m²/s² (%.1f%%)\n", 
+                   tr$n_obs, tr$slope_per_period, tr$percent_change))
+       cat(sprintf("  PW-MK p-value: %.4f", tr$p_value))
+       if (tr$p_value < 0.05) cat(" (SIGNIFICANT)\n") else cat(" (not significant)\n")
+    }
+    
+    # This is the CI printout fix
     if (is.na(tr$ci_lower) || is.na(tr$ci_upper)) {
       cat("  Bootstrap 95%% CI: [NA, NA] (Calculation failed or not run)\n")
     } else if (tr$ci_lower < 0 && tr$ci_upper > 0) {
@@ -2897,37 +2984,41 @@ if (!file.exists(out_rds_path)) {
                   tr$ci_lower, tr$ci_upper))
       cat("  → CI excludes zero (trend significant via bootstrap)\n")
     }
-    # --- END OF FIX ---
-    
+
     # --- 7b. Spatial (Gridded) Field Significance Summary ---
     cat("\n", rep("-", 70), "\n")
     cat("--- SUMMARY: SPATIAL (GRIDDED) FIELD SIGNIFICANCE ---\n")
     cat(rep("-", 70), "\n")
     
     # Load the separate MC summary file
-    mc_summary <- readRDS(mc_summary_path) 
-    
-    n_total_pvals <- sum(!is.na(master_results$pvalue_grid))
+    # *** Check if mc_summary_path file exists before loading ***
+    if(file.exists(mc_summary_path)) {
+      mc_summary <- readRDS(mc_summary_path) 
+      
+      n_total_pvals <- sum(!is.na(master_results$pvalue_grid))
 
-    cat(sprintf("Nominal significant cells (p<0.05): %d / %d (%.2f%%)\n",
-                mc_summary$observed_count, 
-                n_total_pvals, 
-                100 * mc_summary$observed_count / n_total_pvals))
-    
-    cat(sprintf("FDR-significant cells (q<0.05): %d / %d (%.2f%%)\n",
-                master_results$n_fdr_sig, 
-                n_total_pvals, 
-                100 * master_results$n_fdr_sig / n_total_pvals))
-    
-    cat(sprintf("\nMonte Carlo test results loaded.\n"))
-    cat(sprintf("  Observed significant cells = %d\n", mc_summary$observed_count))
-    cat(sprintf("  MC 95th percentile threshold = %.1f cells\n", mc_summary$quantile_95))
-    cat(sprintf("  MC p-value for field significance: %.4f\n", mc_summary$p_value))
+      cat(sprintf("Nominal significant cells (p<0.05): %d / %d (%.2f%%)\n",
+                  mc_summary$observed_count, 
+                  n_total_pvals, 
+                  100 * mc_summary$observed_count / n_total_pvals))
+      
+      cat(sprintf("FDR-significant cells (q<0.05): %d / %d (%.2f%%)\n",
+                  master_results$n_fdr_sig, 
+                  n_total_pvals, 
+                  100 * master_results$n_fdr_sig / n_total_pvals))
+      
+      cat(sprintf("\nMonte Carlo test results loaded.\n"))
+      cat(sprintf("  Observed significant cells = %d\n", mc_summary$observed_count))
+      cat(sprintf("  MC 95th percentile threshold = %.1f cells\n", mc_summary$quantile_95))
+      cat(sprintf("  MC p-value for field significance: %.4f\n", mc_summary$p_value))
 
-    if (mc_summary$p_value < 0.05) {
-      cat("✓ CONCLUSION: The observed trend pattern IS field-significant (MC test).\n")
+      if (mc_summary$p_value < 0.05) {
+        cat("✓ CONCLUSION: The observed trend pattern IS field-significant (MC test).\n")
+      } else {
+        cat("✗ CONCLUSION: The observed trend pattern is NOT field-significant (MC test).\n")
+      }
     } else {
-      cat("✗ CONCLUSION: The observed trend pattern is NOT field-significant (MC test).\n")
+      cat(sprintf("ERROR: Monte Carlo summary file not found.\n  %s\n", mc_summary_path))
     }
     
     cat("\nAnalysis complete. Results loaded from disk.\n")
@@ -2998,15 +3089,15 @@ The observed spatial patterns of trends in extremes are statistically indistingu
 # OUTPUT:  P95_Storm_Day_Frequency_annual_1958-2024_clean.nc
 # ============================================================================
 
-# --- 2. Define File Paths ---
-processed_dir <- "E:/ERA5_data/processed"
-input_file <- file.path(processed_dir,
-                        "ERA5_1958-2024_eddy_components.nc")
-output_file <- file.path(processed_dir,
-                         "P95_Storm_Day_Frequency_annual_1958-2024_clean.nc")
 
-cat(sprintf("  Input file: %s\n", basename(input_file)))
-cat(sprintf("  Output file: %s\n", basename(output_file)))
+# --- 2. Define File Paths ---
+input_file <- here::here("Data", "processed", 
+                         "ERA5_1958-2024_eddy_components.nc")
+output_file <- here::here("Data", "processed", 
+                          "P95_Storm_Day_Frequency_annual_1958-2024_clean.nc")
+
+cat(sprintf("  Input file: %s\n", input_file)) # *** MODIFIED: Show full path ***
+cat(sprintf("  Output file: %s\n", output_file)) # *** MODIFIED: Show full path ***
 
 if (file.exists(output_file)) {
   cat(" Output file already exists. Skipping computation.\n")
@@ -3019,8 +3110,6 @@ if (file.exists(output_file)) {
 
   # --- 5. PART A: Calculate the Static P95 Threshold ---
   cat("2. Calculating STATIC P95 threshold (q=0.95) from all 6-hourly data...\n")
-  
-  # *** THE CRITICAL CHANGE IS HERE ***
   p95_threshold_static <- eke_6hr$quantile(q = 0.95, dim = "time")
   
   cat("   Loading 2D threshold grid into memory...\n")
@@ -3050,6 +3139,13 @@ if (file.exists(output_file)) {
   # --- 9. Trigger Computation and Save ---
   cat("\n--- COMPUTING --- \n")
   cat("This may take 5-20 minutes...\n")
+  
+  # *** MODIFIED: Check if directory exists before saving ***
+  if (!dir.exists(dirname(output_file))) {
+    cat(sprintf("Creating directory: %s\n", dirname(output_file)))
+    dir.create(dirname(output_file), recursive = TRUE)
+  }
+  
   start_time <- Sys.time()
   
   storm_day_counts_final$to_netcdf(output_file)
@@ -3059,7 +3155,7 @@ if (file.exists(output_file)) {
               difftime(end_time, start_time, units = "mins")))
   cat(sprintf("✓ New CLEAN file saved: %s\n", basename(output_file)))
   
-  # --- 10. Verification (Optional) ---
+  # --- 10. Verification ---
   cat("\n--- Verifying New File ---\n")
   ds_check <- xr$open_dataset(output_file)
   print(ds_check)
@@ -3085,25 +3181,23 @@ cat(rep("=", 70), "\n\n")
 
 # --- Configuration ---
 BLOCK_LENGTH_L <- 3        # CRITICAL: l=3 for annual data (Rule 1)
-BOOT_REPS_R <- 500         # For spatial MC
-BOOT_REPS_TS <- 5000       # For time series bootstrap
-ALPHA <- 0.05              # Significance level
+BOOT_REPS_R <- 500       # For spatial MC
+BOOT_REPS_TS <- 5000     # For time series bootstrap
+ALPHA <- 0.05            # Significance level
 N_CORES <- max(1, parallel::detectCores() - 1)
 
-# --- File Paths (using P95) ---
-processed_dir <- "E:/ERA5_data/processed"
-input_file_freq <- file.path(processed_dir, "P95_Storm_Day_Frequency_annual_1958-2024_clean.nc")
-out_rds_path <- file.path(processed_dir, "P95_Freq_EKE_Core_Arctic_Trend_Analysis_ANNUAL.rds")
-slope_path <- file.path(processed_dir, "P95_Freq_EKE_trend_slope_arctic_60N_ANNUAL.nc")
-pval_path  <- file.path(processed_dir, "P95_Freq_EKE_trend_pvalue_arctic_60N_ANNUAL.nc")
-rho1_path  <- file.path(processed_dir, "P95_Freq_EKE_lag1autocorr_arctic_60N_ANNUAL.nc")
-mc_summary_path <- file.path(processed_dir, "P95_Freq_EKE_trend_counts_mc_arctic_60N_ANNUAL.RDS")
-# New file for the averaged time series bootstrap
-boot_ts_path <- file.path(processed_dir, "boot_result_P95_FREQ_PanArctic_60N.rds")
+# --- File Paths (*** MODIFIED with here() ***) ---
+input_file_freq <- here::here("Data", "processed", "P95_Storm_Day_Frequency_annual_1958-2024_clean.nc")
+out_rds_path <- here::here("Data", "processed", "P95_Freq_EKE_Core_Arctic_Trend_Analysis_ANNUAL.rds")
+slope_path <- here::here("Data", "processed", "P95_Freq_EKE_trend_slope_arctic_60N_ANNUAL.nc")
+pval_path  <- here::here("Data", "processed", "P95_Freq_EKE_trend_pvalue_arctic_60N_ANNUAL.nc")
+rho1_path  <- here::here("Data", "processed", "P95_Freq_EKE_lag1autocorr_arctic_60N_ANNUAL.nc")
+mc_summary_path <- here::here("Data", "processed", "P95_Freq_EKE_trend_counts_mc_arctic_60N_ANNUAL.RDS")
+boot_ts_path <- here::here("Data", "processed", "boot_result_P95_FREQ_PanArctic_60N.rds")
 
 
 # --- 2. Load Data ---
-cat(sprintf("Loading EKE Frequency data from: %s\n", basename(input_file_freq)))
+cat(sprintf("Loading EKE Frequency data from: \n  %s\n", input_file_freq)) # *** MODIFIED ***
 nc_file <- nc_open(input_file_freq)
 lat_full <- ncvar_get(nc_file, "latitude")
 lon_full <- ncvar_get(nc_file, "longitude")
@@ -3116,6 +3210,7 @@ raw_dims <- dim(freq_array_raw)
 nc_close(nc_file)
 
 # --- 3. Correct Dimension Order ---
+# ... [Unchanged] ...
 time_idx <- which(raw_dims == n_time)
 lat_idx <- which(raw_dims == n_lat_full)
 lon_idx <- which(raw_dims == n_lon_full)
@@ -3124,6 +3219,7 @@ cat(sprintf("  Array permuted to [time, lat, lon] with dims: [%d, %d, %d]\n",
             dim(freq_array_full)[1], dim(freq_array_full)[2], dim(freq_array_full)[3]))
 
 # --- 4. Refine Domain to Pan-Arctic (>= 60°N) ---
+# ... [Unchanged] ...
 cat("\n--- Refining the domain to >= 60°N ---\n")
 arctic_lat_indices <- which(lat_full >= 60)
 lat_arctic <- lat_full[arctic_lat_indices] 
@@ -3137,6 +3233,7 @@ cat(sprintf("  New array dimensions [time, lat, lon]: [%d, %d, %d]\n",
 # --- 5. Define Trend Functions ---
 
 # Function 1: For the spatial grid
+# ... [Unchanged] ...
 calculate_trends_pw_mk <- function(ts_vector) {
   ts_vector <- as.vector(na.omit(ts_vector))
   if (length(ts_vector) < 10) {
@@ -3151,10 +3248,10 @@ calculate_trends_pw_mk <- function(ts_vector) {
   prewhitened_ts <- ts_vector[2:n_pw] - rho1 * ts_vector[1:(n_pw - 1)]
   
   if (length(unique(na.omit(prewhitened_ts))) < 2) {
-      mk_res_p <- 1.0
+     mk_res_p <- 1.0
   } else {
-      mk_res <- trend::mk.test(prewhitened_ts)
-      mk_res_p <- mk_res$p.value
+     mk_res <- trend::mk.test(prewhitened_ts)
+     mk_res_p <- mk_res$p.value
   }
   sens_res <- trend::sens.slope(ts_vector)
   return(c(
@@ -3165,7 +3262,8 @@ calculate_trends_pw_mk <- function(ts_vector) {
 }
 
 # Function 2: For the spatially-averaged time series
-run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "events") {
+# *** MODIFIED: Added baseline_mean argument and extended calculations ***
+run_annual_trend_analysis <- function(ts_vector, boot_file_path, baseline_mean, unit_label = "events") {
   
   ts_vector_clean <- as.vector(na.omit(ts_vector))
   ts_obj <- ts(ts_vector_clean, start = 1958, frequency = 1)
@@ -3184,7 +3282,14 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "e
   sens_result <- sens.slope(ts_obj)
   slope_per_year <- sens_result$estimates
   slope_per_decade <- slope_per_year * 10
+  
+  # *** ADDED: Extended calculations ***
+  slope_per_period <- slope_per_year * n
+  percent_change <- (slope_per_period / baseline_mean) * 100
   cat(sprintf("  Sen's slope: %.4f %s per decade\n", slope_per_decade, unit_label))
+  cat(sprintf("  Total change (%d years): %.4f %s\n", n, slope_per_period, unit_label))
+  cat(sprintf("  Percentage change: %.1f%% relative to 1958-1967 baseline\n", percent_change))
+  # *** END ADDED SECTION ***
 
   block_length <- 3 # Rule 1: l=3 for annual data
   
@@ -3199,6 +3304,11 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "e
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
   } else {
+    # *** MODIFIED: Add directory creation check ***
+    if (!dir.exists(dirname(boot_file_path))) {
+      cat(sprintf("  Creating directory: %s\n", dirname(boot_file_path)))
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     cat(sprintf("  Running bootstrap (l=%d, R=%d)...\n", block_length, BOOT_REPS_TS))
     set.seed(42)
     boot_result <- boot::tsboot(ts_vector_clean,
@@ -3231,10 +3341,14 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "e
     cat("  ERROR: Could not calculate bootstrap CI\n")
   }
   
+  # *** MODIFIED: Added new fields to return list ***
   return(list(
     n_obs = n, rho1 = rho1, p_value = p_value,
     slope_decade = slope_per_decade,
-    ci_lower = ci_lower_decade, ci_upper = ci_upper_decade
+    ci_lower = ci_lower_decade, ci_upper = ci_upper_decade,
+    slope_per_period = slope_per_period,
+    percent_change = percent_change,
+    baseline_mean = baseline_mean
   ))
 }
 
@@ -3262,14 +3376,21 @@ if (!file.exists(out_rds_path)) {
   
   cat("✓ Area-weighted P95 (Frequency) time series created.\n")
   
+  # *** ADDED: Calculate baseline mean from 1958-1967 P95 data ***
+  baseline_mean_p95 <- mean(ts_vector_p95_pan_arctic[1:10], na.rm = TRUE)
+  cat(sprintf("  Baseline Mean (1958-1967): %.3f %s\n", baseline_mean_p95, "events"))
+  
   # Run the full analysis and store the results
+  # *** MODIFIED: Pass baseline_mean to function ***
   pan_arctic_trend_results <- run_annual_trend_analysis(
     ts_vector = ts_vector_p95_pan_arctic,
     boot_file_path = boot_ts_path,
+    baseline_mean = baseline_mean_p95,
     unit_label = "events" # Units are "storm day events"
   )
   
   # --- 6b. Spatial (Gridded) Trend Analysis ---
+  # ... [Unchanged] ...
   cat("\n--- 6b. SPATIAL (GRIDDED) TREND (Pan-Arctic >= 60°N) ---\n")
   slope_grid <- matrix(NA_real_, nrow = n_lat_arctic, ncol = n_lon_arctic)
   pval_grid  <- matrix(NA_real_, nrow = n_lat_arctic, ncol = n_lon_arctic)
@@ -3291,6 +3412,7 @@ if (!file.exists(out_rds_path)) {
               difftime(Sys.time(), start_time, units = "mins")))
 
   # --- 6c. Field Significance (FDR) ---
+  # ... [Unchanged] ...
   valid_pvals <- !is.na(pval_grid)
   n_total_pvals <- sum(valid_pvals)
   n_nominal_sig <- sum(pval_grid[valid_pvals] < 0.05, na.rm = TRUE)
@@ -3303,6 +3425,7 @@ if (!file.exists(out_rds_path)) {
               n_fdr_sig, n_total_pvals, 100 * n_fdr_sig / n_total_pvals))
 
   # --- 6d. Field Significance (Monte Carlo Block Bootstrap) ---
+  # ... [Unchanged] ...
   cat("\nStarting Monte Carlo field-significance test...\n")
   cat(sprintf("  n_mc = %d, block_length = %d YEARS, n_cores = %d\n",
               BOOT_REPS_R, BLOCK_LENGTH_L, N_CORES))
@@ -3335,9 +3458,9 @@ if (!file.exists(out_rds_path)) {
   
   p_mc <- mean(mc_counts >= n_nominal_sig, na.rm = TRUE)
   mc_results <- list(counts = mc_counts,
-                     observed_count = n_nominal_sig,
-                     p_value = p_mc,
-                     quantile_95 = quantile(mc_counts, 0.95, na.rm = TRUE))
+                       observed_count = n_nominal_sig,
+                       p_value = p_mc,
+                       quantile_95 = quantile(mc_counts, 0.95, na.rm = TRUE))
   saveRDS(mc_results, mc_summary_path)
 
   cat(sprintf("\nMonte Carlo test done.\n"))
@@ -3351,6 +3474,7 @@ if (!file.exists(out_rds_path)) {
   }
 
   # --- 6e. Save NetCDF Outputs ---
+  # ... [Unchanged] ...
   cat("\nSaving NetCDF outputs for the REFINED (>= 60°N) domain...\n")
   lat_dim <- ncdim_def("latitude", "degrees_north", lat_arctic)
   lon_dim <- ncdim_def("longitude", "degrees_east", lon_arctic)
@@ -3373,6 +3497,7 @@ if (!file.exists(out_rds_path)) {
   cat("✓ NetCDF Files saved.\n")
   
   # --- 6f. Save Master .RDS File (NOW INCLUDES ALL RESULTS) ---
+  # ... [Unchanged] ...
   saveRDS(
     list(
       # Spatially-Averaged Results
@@ -3416,14 +3541,30 @@ if (!file.exists(out_rds_path)) {
   
     # --- 7a. (NEW) Spatially-Averaged Summary ---
     cat("\n", rep("-", 70), "\n")
-    cat("--- SUMMARY: SPATIALLY-AVERAGED TREND (Pan-Arctic >= 60°N) ---\n")
+    cat("--- SUMMARY: SPATIALLY-AVERAGED TREND (Pan-Arctic P95 FREQUENCY >= 60°N) ---\n") # *** MODIFIED ***
     cat(rep("-", 70), "\n")
     
     tr <- master_results$pan_arctic_trend_results
-    cat(sprintf("  N observations: %d years\n", tr$n_obs))
-    cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", tr$rho1))
-    cat(sprintf("  PW-MK p-value: %.4f\n", tr$p_value))
-    cat(sprintf("  Sen's slope: %.4f events per decade\n", tr$slope_decade))
+    
+    # *** MODIFIED: Check for new fields and print extended summary ***
+    if (!"baseline_mean" %in% names(tr)) {
+       cat("  (Old .rds file. Re-run analysis for full extended summary.)\n")
+       cat(sprintf("  N observations: %d years\n", tr$n_obs))
+       cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", tr$rho1))
+       cat(sprintf("  PW-MK p-value: %.4f\n", tr$p_value))
+       cat(sprintf("  Sen's slope: %.4f events per decade\n", tr$slope_decade))
+    } else {
+       # --- This is the new, extended summary ---
+       cat(sprintf("  Baseline Mean (1958-1967): %.3f events\n", tr$baseline_mean))
+       cat(sprintf("  N observations: %d years\n", tr$n_obs))
+       cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", tr$rho1))
+       cat(sprintf("  Sen's slope: %.4f events per decade\n", tr$slope_decade))
+       cat(sprintf("  Total change (%d years): %.4f events (%.1f%%)\n", 
+                   tr$n_obs, tr$slope_per_period, tr$percent_change))
+       cat(sprintf("  PW-MK p-value: %.4f", tr$p_value))
+       if (tr$p_value < 0.05) cat(" (SIGNIFICANT)\n") else cat(" (not significant)\n")
+    }
+    # *** END MODIFIED SECTION ***
     
     # --- NA-Proof Fix ---
     if (is.na(tr$ci_lower) || is.na(tr$ci_upper)) {
@@ -3444,30 +3585,34 @@ if (!file.exists(out_rds_path)) {
     cat("--- SUMMARY: SPATIAL (GRIDDED) FIELD SIGNIFICANCE ---\n")
     cat(rep("-", 70), "\n")
     
-    # Load the separate MC summary file
-    mc_summary <- readRDS(mc_summary_path) 
-    
-    n_total_pvals <- sum(!is.na(master_results$pvalue_grid))
+    # *** MODIFIED: Check if mc_summary_path file exists before loading ***
+    if(file.exists(mc_summary_path)) {
+      mc_summary <- readRDS(mc_summary_path) 
+      
+      n_total_pvals <- sum(!is.na(master_results$pvalue_grid))
 
-    cat(sprintf("Nominal significant cells (p<0.05): %d / %d (%.2f%%)\n",
-                mc_summary$observed_count, 
-                n_total_pvals, 
-                100 * mc_summary$observed_count / n_total_pvals))
-    
-    cat(sprintf("FDR-significant cells (q<0.05): %d / %d (%.2f%%)\n",
-                master_results$n_fdr_sig, 
-                n_total_pvals, 
-                100 * master_results$n_fdr_sig / n_total_pvals))
-    
-    cat(sprintf("\nMonte Carlo test results loaded.\n"))
-    cat(sprintf("  Observed significant cells = %d\n", mc_summary$observed_count))
-    cat(sprintf("  MC 95th percentile threshold = %.1f cells\n", mc_summary$quantile_95))
-    cat(sprintf("  MC p-value for field significance: %.4f\n", mc_summary$p_value))
+      cat(sprintf("Nominal significant cells (p<0.05): %d / %d (%.2f%%)\n",
+                  mc_summary$observed_count, 
+                  n_total_pvals, 
+                  100 * mc_summary$observed_count / n_total_pvals))
+      
+      cat(sprintf("FDR-significant cells (q<0.05): %d / %d (%.2f%%)\n",
+                  master_results$n_fdr_sig, 
+                  n_total_pvals, 
+                  100 * master_results$n_fdr_sig / n_total_pvals))
+      
+      cat(sprintf("\nMonte Carlo test results loaded.\n"))
+      cat(sprintf("  Observed significant cells = %d\n", mc_summary$observed_count))
+      cat(sprintf("  MC 95th percentile threshold = %.1f cells\n", mc_summary$quantile_95))
+      cat(sprintf("  MC p-value for field significance: %.4f\n", mc_summary$p_value))
 
-    if (mc_summary$p_value < 0.05) {
-      cat("✓ CONCLUSION: The observed trend pattern IS field-significant (MC test).\n")
+      if (mc_summary$p_value < 0.05) {
+        cat("✓ CONCLUSION: The observed trend pattern IS field-significant (MC test).\n")
+      } else {
+        cat("✗ CONCLUSION: The observed trend pattern is NOT field-significant (MC test).\n")
+      }
     } else {
-      cat("✗ CONCLUSION: The observed trend pattern is NOT field-significant (MC test).\n")
+      cat(sprintf("ERROR: Monte Carlo summary file not found.\n  %s\n", mc_summary_path))
     }
     
     cat("\nAnalysis complete. Results loaded from disk.\n")
@@ -3528,18 +3673,12 @@ cat("\n", rep("=", 70), "\n")
 cat("PHASE 4, SECTION 3.2.2: SEASONAL P95 FREQUENCY (PURE R - CORRECTED)\n")
 cat(rep("=", 70), "\n\n")
 
-# --- MODIFICATION: Load libraries at the top for clarity ---
-library(ncdf4)
-library(abind)
-library(lubridate)
-library(glue)
-
 # -----------------------
 # Configuration / paths
 # -----------------------
-processed_dir <- "E:/ERA5_data/processed"
-input_file    <- file.path(processed_dir, "ERA5_1958-2024_eddy_components.nc")
-output_file   <- file.path(processed_dir, "P95_Storm_Day_Frequency_seasonal_1958-2024_clean.nc")
+# *** MODIFIED: Use here() for robust, absolute paths ***
+input_file  <- here::here("Data", "processed", "ERA5_1958-2024_eddy_components.nc")
+output_file <- here::here("Data", "processed", "P95_Storm_Day_Frequency_seasonal_1958-2024_clean.nc")
 
 cat("Input : ", input_file, "\n")
 cat("Output: ", output_file, "\n\n")
@@ -3560,6 +3699,12 @@ if (file.exists(output_file)) {
   # -----------------------
   # Open file and inspect dims
   # -----------------------
+  # *** MODIFIED: Add directory creation check ***
+  if (!dir.exists(dirname(output_file))) {
+    cat(sprintf("Creating directory: %s\n", dirname(output_file)))
+    dir.create(dirname(output_file), recursive = TRUE)
+  }
+
   nc <- nc_open(input_file)
   on.exit(nc_close(nc), add = TRUE) # Ensure file is closed even on error
   
@@ -3668,7 +3813,7 @@ if (file.exists(output_file)) {
   
   # Determine correct permute order: we want result order [lon, lat, time]
   # If current order is [time, lon, lat], permutation is c(2,3,1)
-  cur_dims <- dim(eke)    # e.g. [ntime, nlon, nlat]
+  cur_dims <- dim(eke)   # e.g. [ntime, nlon, nlat]
   if (length(cur_dims) != 3) stop("EKE has unexpected dims")
   
   # Build permutation mapping by matching lengths
@@ -3863,7 +4008,7 @@ if (file.exists(output_file)) {
   cat("SEASONAL P95 FREQUENCY (PURE R) - COMPLETE\n")
   cat(rep("=", 70), "\n\n")
 
-} # --- End of 'else' block ---
+}
 ```
 
 ```{r}
@@ -3882,8 +4027,8 @@ cat(rep("=", 70), "\n\n")
 
 # --- 2. Load and Process 4D NetCDF Data ---
 cat("--- Loading and processing 4D NetCDF ---\n")
-processed_dir <- "E:/ERA5_data/processed"
-input_file_freq <- file.path(processed_dir, "P95_Storm_Day_Frequency_seasonal_1958-2024_clean.nc")
+# *** MODIFIED: Use here() for path ***
+input_file_freq <- here::here("Data", "processed", "P95_Storm_Day_Frequency_seasonal_1958-2024_clean.nc")
 
 nc_file <- nc_open(input_file_freq)
 lat_full <- ncvar_get(nc_file, "latitude")
@@ -3946,9 +4091,19 @@ for (s_idx in 1:4) {
 
 cat("✓ 4 seasonal time series created.\n")
 
+# *** ADDED: Calculate seasonal baselines (1958-1967) ***
+cat("✓ Calculating 1958-1967 seasonal baseline means...\n")
+baseline_means <- sapply(seasonal_data_list, function(df) {
+  mean(df$storm_day_count[df$Year >= 1958 & df$Year <= 1967], na.rm = TRUE)
+})
+print(baseline_means)
+# *** END ADDED SECTION ***
+
+
 # --- 4. Define the Reusable Trend Analysis Function (from your Phase 3) ---
 # This function is adapted for the new "storm_day_count" variable
-run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
+# *** MODIFIED: Added baseline_mean argument and extended calculations ***
+run_seasonal_trend_analysis <- function(seasonal_df, season_name, baseline_mean) {
   
   cat(sprintf("\n--- Analyzing Season: %s ---\n", season_name))
   
@@ -3960,11 +4115,11 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
   n_replicates <- 5000
   set.seed(123 + which(c("DJF", "MAM", "JJA", "SON") == season_name))
   
-  cat(sprintf("  N observations: %d years\n", length(ts_vector)))
+  n <- length(ts_vector) # *** MODIFIED: Get n here ***
+  cat(sprintf("  N observations: %d years\n", n))
   
   # --- b. Pre-Whitened Mann-Kendall Test ---
   rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
-  n <- length(ts_vector)
   
   prewhitened <- ts_vector[2:n] - rho1 * ts_vector[1:(n-1)]
   mk_result <- trend::mk.test(prewhitened)
@@ -3976,8 +4131,14 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
   sens_result <- sens.slope(ts_obj)
   slope_per_year <- sens_result$estimates
   slope_per_decade <- slope_per_year * 10
-  # *** UNITS CHANGED ***
+  
+  # *** ADDED: Extended calculations ***
+  slope_per_period <- slope_per_year * n
+  percent_change <- (slope_per_period / baseline_mean) * 100
   cat(sprintf("  Sen's slope: %.4f events per decade\n", slope_per_decade))
+  cat(sprintf("  Total change (%d years): %.4f events\n", n, slope_per_period))
+  cat(sprintf("  Percentage change: %.1f%% relative to baseline\n", percent_change))
+  # *** END ADDED SECTION ***
 
   # --- d. Block Bootstrap CI (with Save/Load) ---
   block_length <- 3 # Rule 1: l=3 for annual data
@@ -3992,15 +4153,19 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
     }
   }
   
-  processed_dir <- "E:/ERA5_data/processed"
-  # *** NEW FILENAME ***
-  boot_file_path <- file.path(processed_dir, 
-                              sprintf("boot_result_P95_FREQ_60N_%s.rds", season_name))
+  # *** MODIFIED: Use here() for path ***
+  boot_file_path <- here::here("Data", "processed", 
+                               sprintf("boot_result_P95_FREQ_60N_%s.rds", season_name))
   
   if (file.exists(boot_file_path)) {
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
   } else {
+    # *** MODIFIED: Add directory creation check ***
+    if (!dir.exists(dirname(boot_file_path))) {
+      cat(sprintf("  Creating directory: %s\n", dirname(boot_file_path)))
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     cat(sprintf("  Running bootstrap (l=%d, R=%d)...\n", block_length, n_replicates))
     start_boot <- Sys.time()
     boot_result <- boot::tsboot(ts_vector,
@@ -4034,6 +4199,7 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
       cat("  → CI excludes zero (trend significant via bootstrap)\n")
     }
     
+    # *** MODIFIED: Added new fields to return list ***
     return(list(
       season = season_name,
       n_obs = n,
@@ -4041,10 +4207,14 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
       p_value = p_value,
       slope_decade = slope_per_decade,
       ci_lower = ci_lower_decade,
-      ci_upper = ci_upper_decade
+      ci_upper = ci_upper_decade,
+      slope_per_period = slope_per_period,
+      percent_change = percent_change,
+      baseline_mean = baseline_mean
     ))
   } else {
     cat("  ERROR: Could not calculate bootstrap CI\n")
+    # *** MODIFIED: Added new fields to return list ***
     return(list(
       season = season_name, 
       n_obs = n,
@@ -4052,7 +4222,10 @@ run_seasonal_trend_analysis <- function(seasonal_df, season_name) {
       p_value = p_value, 
       slope_decade = slope_per_decade, 
       ci_lower = NA, 
-      ci_upper = NA
+      ci_upper = NA,
+      slope_per_period = NA,
+      percent_change = NA,
+      baseline_mean = baseline_mean
     ))
   }
 }
@@ -4062,8 +4235,11 @@ cat("\n", rep("=", 70), "\n")
 cat("RUNNING SPATIALLY-AVERAGED TREND ANALYSIS FOR EACH SEASON\n")
 cat(rep("=", 70), "\n")
 
+# *** MODIFIED: Pass the correct baseline_mean to the function ***
 all_season_results <- lapply(names(seasonal_data_list), function(season_name) {
-  run_seasonal_trend_analysis(seasonal_data_list[[season_name]], season_name)
+  run_seasonal_trend_analysis(seasonal_data_list[[season_name]], 
+                            season_name, 
+                            baseline_means[season_name])
 })
 
 # --- 6. Final Summary with FDR Correction (from your Phase 3) ---
@@ -4073,7 +4249,9 @@ cat(rep("=", 70), "\n\n")
 
 results_df <- as.data.frame(do.call(rbind, lapply(all_season_results, as.data.frame)))
 
-numeric_cols <- c("n_obs", "rho1", "p_value", "slope_decade", "ci_lower", "ci_upper")
+# *** MODIFIED: Added new numeric columns ***
+numeric_cols <- c("n_obs", "rho1", "p_value", "slope_decade", "ci_lower", "ci_upper",
+                  "slope_per_period", "percent_change", "baseline_mean")
 for (col in numeric_cols) {
   results_df[[col]] <- as.numeric(results_df[[col]])
 }
@@ -4084,10 +4262,27 @@ results_df$p_fdr <- p.adjust(results_df$p_value, method = "BH")
 results_df$sig_uncorrected <- ifelse(isTRUE(results_df$p_value < 0.05), "✓", "")
 results_df$sig_fdr <- ifelse(isTRUE(results_df$p_fdr < 0.05), "✓", "")
 
+# *** MODIFIED: Replaced simple print() with detailed summary loop ***
 cat("Spatially-Averaged Seasonal Trend Analysis Results (P95 Frequency):\n\n")
-print(results_df, row.names = FALSE, digits = 4)
+for (i in 1:nrow(results_df)) {
+  row <- results_df[i, ]
+  cat(rep("-", 40), "\n")
+  cat(sprintf("Season: \t\t%s\n", row$season))
+  cat(rep("-", 40), "\n")
+  cat(sprintf("  Baseline Mean (58-67): \t%.3f events\n", row$baseline_mean))
+  cat(sprintf("  N Observations: \t%d years\n", row$n_obs))
+  cat(sprintf("  Lag-1 Autocorr (ρ₁): \t%.3f\n", row$rho1))
+  cat(sprintf("  Sen's Slope (decade): \t%.4f events\n", row$slope_decade))
+  cat(sprintf("  Total Change (%dyr): \t%.2f events (%.1f%%)\n", 
+              row$n_obs, row$slope_per_period, row$percent_change))
+  cat(sprintf("  PW-MK p-value: \t%.4f\n", row$p_value))
+  cat(sprintf("  FDR-adjusted p-value: \t%.4f %s\n", row$p_fdr, row$sig_fdr))
+  cat(sprintf("  Bootstrap 95%% CI: \t[%.4f, %.4f]\n\n", row$ci_lower, row$ci_upper))
+}
+# *** END MODIFIED SECTION ***
 
 # --- 7. Final Hypothesis Test Synthesis (from your Phase 3) ---
+# ... [Unchanged, your NA-fixes are already correct] ...
 cat("\n", rep("=", 70), "\n")
 cat("*** FINAL SYNTHESIS: AUTUMN INTENSIFICATION HYPOTHESIS (P95 FREQUENCY) ***\n")
 cat(rep("=", 70), "\n\n")
@@ -4844,9 +5039,9 @@ seasonal_means_fram$Year_Index <- seasonal_means_fram$Year - min(seasonal_means_
 
 cat("Fitting GLS model with AR(1) correlation structure...\n")
 gls_model_fram <- gls(storminess ~ Year_Index + Autumn + Year_Index:Autumn,
-                      data = seasonal_means_fram,
-                      correlation = corAR1(form = ~ Year_Index | Season),
-                      method = "ML")
+                       data = seasonal_means_fram,
+                       correlation = corAR1(form = ~ Year_Index | Season),
+                       method = "ML")
 
 cat("\n--- GLS Model Results (Fram Strait) ---\n")
 print(summary(gls_model_fram))
@@ -4871,7 +5066,7 @@ cat(rep("=", 70), "\n\n")
 seasonal_list_fram <- split(seasonal_means_fram, seasonal_means_fram$Season)
 seasonal_list_fram <- seasonal_list_fram[c("DJF", "MAM", "JJA", "SON")]
 
-processed_dir <- "E:/ERA5_data/processed"
+processed_dir <- here("Data", "processed")
 boot_paths_fram <- list(
   DJF = file.path(processed_dir, "boot_fram_DJF.rds"),
   MAM = file.path(processed_dir, "boot_fram_MAM.rds"),
@@ -4879,7 +5074,8 @@ boot_paths_fram <- list(
   SON = file.path(processed_dir, "boot_fram_SON.rds")
 )
 
-seasonal_results_fram <- list()
+# Initialize a list to store results
+seasonal_results_list <- list()
 
 # Define the correct statistic function for tsboot
 slope_stat_seasonal <- function(data) {
@@ -4895,31 +5091,33 @@ slope_stat_seasonal <- function(data) {
 
 for (season_name in c("DJF", "MAM", "JJA", "SON")) {
   cat(sprintf("\n--- Analyzing Season: %s ---\n", season_name))
-  
+ 
   season_data <- seasonal_list_fram[[season_name]]
   ts_obj <- ts(season_data$storminess, start = min(season_data$Year), frequency = 1)
   ts_vector <- as.vector(ts_obj) # For pre-whitening
-  
+ 
+  n_obs <- length(ts_obj)
   rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
-  cat(sprintf("  N observations: %d years\n", length(ts_obj)))
+  cat(sprintf("  N observations: %d years\n", n_obs))
   cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", rho1))
-  
+ 
   # *** 1. CORRECTED PRE-WHITENING FORMULA ***
   n_pw <- length(ts_vector)
   prewhitened <- ts_vector[2:n_pw] - rho1 * ts_vector[1:(n_pw-1)]
   mk_result <- mk.test(prewhitened)
   p_value <- mk_result$p.value
-  
+ 
   cat(sprintf("  PW-MK p-value: %.4f\n", p_value))
-  
+ 
   sens_result <- sens.slope(ts_obj)
-  slope_decade <- sens_result$estimates * 10
+  slope_year <- sens_result$estimates
+  slope_decade <- slope_year * 10
   cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", slope_decade))
-  
+ 
   # *** 2. CORRECTED BOOTSTRAP (tsboot) ***
   block_length <- 3 # 3-year block for annual data
   boot_path <- boot_paths_fram[[season_name]]
-  
+ 
   if (file.exists(boot_path)) {
     cat("  Loading existing block bootstrap results...\n")
     boot_result <- readRDS(boot_path)
@@ -4933,11 +5131,16 @@ for (season_name in c("DJF", "MAM", "JJA", "SON")) {
                                 sim = "fixed",
                                 parallel = "multicore",
                                 ncpus = max(1, parallel::detectCores() - 1))
+    
+    # Create the directory if it doesn't exist
+    if (!dir.exists(processed_dir)) {
+      dir.create(processed_dir, recursive = TRUE)
+    }
     saveRDS(boot_result, boot_path)
   }
-  
+ 
   boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
-  
+ 
   if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
     ci_lower <- boot_ci$percent[4] * 10
     ci_upper <- boot_ci$percent[5] * 10
@@ -4946,165 +5149,85 @@ for (season_name in c("DJF", "MAM", "JJA", "SON")) {
   } else {
     ci_lower <- NA; ci_upper <- NA; ci_includes_zero <- NA
   }
-  
-  seasonal_results_fram[[season_name]] <- list(p_value = p_value, slope_decade = slope_decade,
-                                               ci_lower = ci_lower, ci_upper = ci_upper)
+ 
+  # Store all results in the list
+  seasonal_results_list[[season_name]] <- data.frame(
+    season = season_name,
+    n_obs = n_obs,
+    rho1 = rho1,
+    slope_decade = slope_decade,
+    slope_year = slope_year, # Store this for total change calculation
+    p_value = p_value,
+    ci_lower = ci_lower,
+    ci_upper = ci_upper
+  )
 }
 
-# ============================================================================
-# SEASONAL - SVALBARD REGION
-# [CORRECTED BOOTSTRAP AND PRE-WHITENING]
-# ============================================================================
-
+# --- 4. Calculate Baseline Means ---
 cat("\n", rep("=", 70), "\n")
-cat("PHASE 4.3 SEASONAL: SVALBARD REGION SEASONAL ANALYSIS\n")
+cat("CALCULATING BASELINE MEANS (1958-1967)\n")
 cat(rep("=", 70), "\n\n")
 
-# --- 0. Extract Svalbard Region Domain ---
-cat("--- Extracting Svalbard Region Domain ---\n")
-lon_sector_idx <- which(lon >= -10 & lon <= 35)
-lat_sector_idx <- which(lat >= 74 & lat <= 81)
-lon_sector_vals <- lon[lon_sector_idx]
-lat_sector_vals <- lat[lat_sector_idx]
-
-cat(sprintf("  Domain: 74-81°N, 10°W-35°E\n"))
-
-storminess_sector <- storminess[, lat_sector_idx, lon_sector_idx]
-weights_sector <- cos(lat_sector_vals * pi / 180)
-weights_matrix_sector <- matrix(weights_sector,
-                                nrow = length(lat_sector_vals),
-                                ncol = length(lon_sector_vals),
-                                byrow = FALSE)
-storm_ts_sector <- apply(storminess_sector, 1, function(slice) {
-  weighted.mean(slice, weights_matrix_sector, na.rm = TRUE)
-})
-storm_df_sval <- data.frame(
-  date = dates,
-  storminess = storm_ts_sector,
-  Year = as.numeric(format(dates, "%Y")),
-  Month = as.numeric(format(dates, "%m"))
-)
-cat("✓ Svalbard region time series extracted\n\n")
-
-# --- 1. Prepare Seasonal Data ---
-cat("--- Preparing Seasonal Data ---\n")
-storm_df_sval$Season <- NA
-storm_df_sval$Season[storm_df_sval$Month %in% c(3, 4, 5)] <- "MAM"
-storm_df_sval$Season[storm_df_sval$Month %in% c(6, 7, 8)] <- "JJA"
-storm_df_sval$Season[storm_df_sval$Month %in% c(9, 10, 11)] <- "SON"
-storm_df_sval$Season[storm_df_sval$Month %in% c(12, 1, 2)] <- "DJF"
-storm_df_sval$Season_Year <- storm_df_sval$Year
-storm_df_sval$Season_Year[storm_df_sval$Month == 12] <- storm_df_sval$Season_Year[storm_df_sval$Month == 12] + 1
-cat("✓ Seasons assigned correctly\n")
-
-seasonal_means_sval <- aggregate(storminess ~ Season_Year + Season, 
-                                 data = storm_df_sval, FUN = mean)
-names(seasonal_means_sval)[1] <- "Year"
-seasonal_means_sval <- seasonal_means_sval[!(seasonal_means_sval$Year == 1958 & seasonal_means_sval$Season == "DJF"), ]
-seasonal_means_sval <- seasonal_means_sval[!(seasonal_means_sval$Year == 2025 & seasonal_means_sval$Season == "DJF"), ]
-cat("✓ Data aggregated\n\n")
-print(table(seasonal_means_sval$Season))
-
-# --- 2. PRIMARY TEST: GLS with Year:Autumn Interaction ---
-cat(rep("=", 70), "\n")
-cat("PRIMARY TEST: GLS REGRESSION WITH AUTUMN INTERACTION\n")
-cat(rep("=", 70), "\n\n")
-
-seasonal_means_sval$Autumn <- ifelse(seasonal_means_sval$Season == "SON", 1, 0)
-seasonal_means_sval$Year_Index <- seasonal_means_sval$Year - min(seasonal_means_sval$Year)
-
-cat("Fitting GLS model with AR(1) correlation structure...\n")
-gls_model_sval <- gls(storminess ~ Year_Index + Autumn + Year_Index:Autumn,
-                      data = seasonal_means_sval,
-                      correlation = corAR1(form = ~ Year_Index | Season),
-                      method = "ML")
-cat("\n--- GLS Model Results (Svalbard Region) ---\n")
-print(summary(gls_model_sval))
-
-p_beta3_sval <- summary(gls_model_sval)$tTable["Year_Index:Autumn", "p-value"]
-cat("\n--- Interpretation ---\n")
-if (p_beta3_sval < 0.05) {
-  cat("✓ SIGNIFICANT autumn intensification detected (p < 0.05)\n")
-} else {
-  cat("✗ NO significant autumn intensification (p >= 0.05)\n")
-}
-
-# --- 3. CONFIRMATORY TEST: Seasonal Mann-Kendall ---
-cat("\n", rep("=", 70), "\n")
-cat("CONFIRMATORY TEST: SEASONAL MANN-KENDALL ANALYSIS\n")
-cat(rep("=", 70), "\n\n")
-
-seasonal_list_sval <- split(seasonal_means_sval, seasonal_means_sval$Season)
-seasonal_list_sval <- seasonal_list_sval[c("DJF", "MAM", "JJA", "SON")]
-
-boot_paths_sval <- list(
-  DJF = file.path(processed_dir, "boot_svalbard_DJF.rds"),
-  MAM = file.path(processed_dir, "boot_svalbard_MAM.rds"),
-  JJA = file.path(processed_dir, "boot_svalbard_JJA.rds"),
-  SON = file.path(processed_dir, "boot_svalbard_SON.rds")
+# Baseline for MAM, JJA, SON is Years 1958-1967
+# Baseline for DJF is Season_Years 1959-1968 (10 seasons)
+baseline_df_fram <- subset(seasonal_means_fram, 
+  (Season %in% c("MAM", "JJA", "SON") & Year >= 1958 & Year <= 1967) |
+  (Season == "DJF" & Year >= 1959 & Year <= 1968)
 )
 
-seasonal_results_sval <- list()
+baseline_means_fram <- aggregate(storminess ~ Season, data = baseline_df_fram, FUN = mean)
+# Rename columns to "season" and "baseline_mean" to match the merge key
+names(baseline_means_fram) <- c("season", "baseline_mean")
+print(baseline_means_fram)
 
-# Re-using the same statistic function
-# slope_stat_seasonal <- function(data) { ... }
+# --- 5. Assemble Final Results Data Frame ---
+cat("\n", rep("=", 70), "\n")
+cat("ASSEMBLING FINAL RESULTS DATAFRAME\n")
+cat(rep("=", 70), "\n\n")
 
-for (season_name in c("DJF", "MAM", "JJA", "SON")) {
-  cat(sprintf("\n--- Analyzing Season: %s ---\n", season_name))
+# Combine list into a single data frame
+results_df_fram <- do.call(rbind, seasonal_results_list)
+
+# Merge with baseline means
+results_df_fram <- merge(results_df_fram, baseline_means_fram, by = "season")
+
+# Calculate remaining metrics
+results_df_fram$slope_per_period <- results_df_fram$slope_year * results_df_fram$n_obs
+results_df_fram$percent_change <- (results_df_fram$slope_per_period / results_df_fram$baseline_mean) * 100
+
+# Apply FDR correction
+results_df_fram$p_fdr <- p.adjust(results_df_fram$p_value, method = "fdr")
+results_df_fram$sig_fdr <- ifelse(results_df_fram$p_fdr < 0.05, "✓", "")
+
+# Reorder for clarity
+results_df_fram <- results_df_fram[match(c("DJF", "MAM", "JJA", "SON"), results_df_fram$season), ]
+row.names(results_df_fram) <- NULL
+
+print(results_df_fram)
+
+# --- 6. Generate Formatted Summary Report ---
+cat("\n", rep("=", 70), "\n")
+cat("FRAM STRAIT: SEASONAL TREND SUMMARY REPORT\n")
+cat(rep("=", 70), "\n\n")
+
+data_units <- "m⁴/s⁴" # Set the units as identified from your script's output
+
+for (i in 1:nrow(results_df_fram)) {
   
-  season_data <- seasonal_list_sval[[season_name]]
-  ts_obj <- ts(season_data$storminess, start = min(season_data$Year), frequency = 1)
-  ts_vector <- as.vector(ts_obj) # For pre-whitening
-  
-  rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
-  cat(sprintf("  N observations: %d years\n", length(ts_obj)))
-  cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", rho1))
-  
-  # *** 1. CORRECTED PRE-WHITENING FORMULA ***
-  n_pw <- length(ts_vector)
-  prewhitened <- ts_vector[2:n_pw] - rho1 * ts_vector[1:(n_pw-1)]
-  mk_result <- mk.test(prewhitened)
-  p_value <- mk_result$p.value
-  
-  cat(sprintf("  PW-MK p-value: %.4f\n", p_value))
-  
-  sens_result <- sens.slope(ts_obj)
-  slope_decade <- sens_result$estimates * 10
-  cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", slope_decade))
-  
-  # *** 2. CORRECTED BOOTSTRAP (tsboot) ***
-  block_length <- 3 # 3-year block for annual data
-  boot_path <- boot_paths_sval[[season_name]]
-  
-  if (file.exists(boot_path)) {
-    cat("  Loading existing block bootstrap results...\n")
-    boot_result <- readRDS(boot_path)
-  } else {
-    cat(sprintf("  Running MOVING BLOCKS bootstrap (l=%d, R=5000)...\n", block_length))
-    set.seed(200 + which(season_name == c("DJF", "MAM", "JJA", "SON")))
-    boot_result <- boot::tsboot(ts_vector,
-                                statistic = slope_stat_seasonal,
-                                R = 5000,
-                                l = block_length,
-                                sim = "fixed",
-                                parallel = "multicore",
-                                ncpus = max(1, parallel::detectCores() - 1))
-    saveRDS(boot_result, boot_path)
-  }
-  
-  boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
-  
-  if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
-    ci_lower <- boot_ci$percent[4] * 10
-    ci_upper <- boot_ci$percent[5] * 10
-    ci_includes_zero <- (ci_lower < 0 && ci_upper > 0)
-    cat(sprintf("  Bootstrap 95%% CI: [%.4f, %.4f] m⁴/s⁴ per decade\n", ci_lower, ci_upper))
-  } else {
-    ci_lower <- NA; ci_upper <- NA; ci_includes_zero <- NA
-  }
-  
-  seasonal_results_sval[[season_name]] <- list(p_value = p_value, slope_decade = slope_decade,
-                                                ci_lower = ci_lower, ci_upper = ci_upper)
+  with(results_df_fram[i, ], {
+    
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Season:         %s\n", season))
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Baseline Mean (58-67):  %.2f %s\n", baseline_mean, data_units))
+    cat(sprintf("N Observations:     %d years\n", n_obs))
+    cat(sprintf("Lag-1 Autocorr (ρ₁):   %.3f\n", rho1))
+    cat(sprintf("Sen's Slope (decade):   %.4f %s\n", slope_decade, data_units))
+    cat(sprintf("Total Change (%dyr): %.2f %s (%.1f%%)\n", n_obs, slope_per_period, data_units, percent_change))
+    cat(sprintf("PW-MK p-value:        %.4f\n", p_value))
+    cat(sprintf("FDR-adjusted p-value: %.4f %s\n", p_fdr, sig_fdr))
+    cat(sprintf("Bootstrap 95%% CI:     [%.4f, %.4f]\n\n", ci_lower, ci_upper))
+  })
 }
 ```
 
