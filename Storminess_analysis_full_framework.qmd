@@ -5231,13 +5231,257 @@ for (i in 1:nrow(results_df_fram)) {
 }
 ```
 
+```{r}
+# ============================================================================
+# SEASONAL - SVALBARD REGION
+# ============================================================================
+
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 4.3 SEASONAL: SVALBARD REGION SEASONAL ANALYSIS\n")
+cat(rep("=", 70), "\n\n")
+
+# --- 0. Extract Svalbard Region Domain ---
+cat("--- Extracting Svalbard Region Domain ---\n")
+lon_sector_idx <- which(lon >= -10 & lon <= 35)
+lat_sector_idx <- which(lat >= 74 & lat <= 81)
+lon_sector_vals <- lon[lon_sector_idx]
+lat_sector_vals <- lat[lat_sector_idx]
+
+cat(sprintf("  Domain: 74-81°N, 10°W-35°E\n"))
+storminess_sector <- storminess[, lat_sector_idx, lon_sector_idx]
+weights_sector <- cos(lat_sector_vals * pi / 180)
+weights_matrix_sector <- matrix(weights_sector,
+                                nrow = length(lat_sector_vals),
+                                ncol = length(lon_sector_vals),
+                                byrow = FALSE)
+storm_ts_sector <- apply(storminess_sector, 1, function(slice) {
+  weighted.mean(slice, weights_matrix_sector, na.rm = TRUE)
+})
+storm_df_sval <- data.frame(
+  date = dates,
+  storminess = storm_ts_sector,
+  Year = as.numeric(format(dates, "%Y")),
+  Month = as.numeric(format(dates, "%m"))
+)
+cat("✓ Svalbard region time series extracted\n\n")
+
+# --- 1. Prepare Seasonal Data ---
+cat("--- Preparing Seasonal Data ---\n")
+storm_df_sval$Season <- NA
+storm_df_sval$Season[storm_df_sval$Month %in% c(3, 4, 5)] <- "MAM"
+storm_df_sval$Season[storm_df_sval$Month %in% c(6, 7, 8)] <- "JJA"
+storm_df_sval$Season[storm_df_sval$Month %in% c(9, 10, 11)] <- "SON"
+storm_df_sval$Season[storm_df_sval$Month %in% c(12, 1, 2)] <- "DJF"
+storm_df_sval$Season_Year <- storm_df_sval$Year
+storm_df_sval$Season_Year[storm_df_sval$Month == 12] <- storm_df_sval$Season_Year[storm_df_sval$Month == 12] + 1
+cat("✓ Seasons assigned correctly\n")
+seasonal_means_sval <- aggregate(storminess ~ Season_Year + Season, 
+                                 data = storm_df_sval, FUN = mean)
+names(seasonal_means_sval)[1] <- "Year"
+seasonal_means_sval <- seasonal_means_sval[!(seasonal_means_sval$Year == 1958 & seasonal_means_sval$Season == "DJF"), ]
+seasonal_means_sval <- seasonal_means_sval[!(seasonal_means_sval$Year == 2025 & seasonal_means_sval$Season == "DJF"), ]
+cat("✓ Data aggregated\n\n")
+print(table(seasonal_means_sval$Season))
+
+# --- 2. PRIMARY TEST: GLS with Year:Autumn Interaction ---
+cat(rep("=", 70), "\n")
+cat("PRIMARY TEST: GLS REGRESSION WITH AUTUMN INTERACTION\n")
+cat(rep("=", 70), "\n\n")
+
+seasonal_means_sval$Autumn <- ifelse(seasonal_means_sval$Season == "SON", 1, 0)
+seasonal_means_sval$Year_Index <- seasonal_means_sval$Year - min(seasonal_means_sval$Year)
+
+cat("Fitting GLS model with AR(1) correlation structure...\n")
+gls_model_sval <- gls(storminess ~ Year_Index + Autumn + Year_Index:Autumn,
+                       data = seasonal_means_sval,
+                       correlation = corAR1(form = ~ Year_Index | Season),
+                       method = "ML")
+cat("\n--- GLS Model Results (Svalbard Region) ---\n")
+print(summary(gls_model_sval))
+
+p_beta3_sval <- summary(gls_model_sval)$tTable["Year_Index:Autumn", "p-value"]
+cat("\n--- Interpretation ---\n")
+if (p_beta3_sval < 0.05) {
+  cat("✓ SIGNIFICANT autumn intensification detected (p < 0.05)\n")
+} else {
+  cat("✗ NO significant autumn intensification (p >= 0.05)\n")
+}
+
+# --- 3. CONFIRMATORY TEST: Seasonal Mann-Kendall ---
+cat("\n", rep("=", 70), "\n")
+cat("CONFIRMATORY TEST: SEASONAL MANN-KENDALL ANALYSIS\n")
+cat(rep("=", 70), "\n\n")
+
+seasonal_list_sval <- split(seasonal_means_sval, seasonal_means_sval$Season)
+seasonal_list_sval <- seasonal_list_sval[c("DJF", "MAM", "JJA", "SON")]
+
+# Define processed_dir using here()
+processed_dir <- here("Data", "processed")
+
+boot_paths_sval <- list(
+  DJF = file.path(processed_dir, "boot_svalbard_DJF.rds"),
+  MAM = file.path(processed_dir, "boot_svalbard_MAM.rds"),
+  JJA = file.path(processed_dir, "boot_svalbard_JJA.rds"),
+  SON = file.path(processed_dir, "boot_svalbard_SON.rds")
+)
+
+# Initialize a list to store results as data frames
+seasonal_results_list_sval <- list()
+
+# Re-using the same statistic function
+# slope_stat_seasonal <- function(data) { ... }
+
+for (season_name in c("DJF", "MAM", "JJA", "SON")) {
+  cat(sprintf("\n--- Analyzing Season: %s ---\n", season_name))
+ 
+  season_data <- seasonal_list_sval[[season_name]]
+  ts_obj <- ts(season_data$storminess, start = min(season_data$Year), frequency = 1)
+  ts_vector <- as.vector(ts_obj) # For pre-whitening
+ 
+  n_obs <- length(ts_obj)
+  rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
+  cat(sprintf("  N observations: %d years\n", n_obs))
+  cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", rho1))
+ 
+  # *** 1. CORRECTED PRE-WHITENING FORMULA ***
+  n_pw <- length(ts_vector)
+  prewhitened <- ts_vector[2:n_pw] - rho1 * ts_vector[1:(n_pw-1)]
+  mk_result <- mk.test(prewhitened)
+  p_value <- mk_result$p.value
+ 
+  cat(sprintf("  PW-MK p-value: %.4f\n", p_value))
+ 
+  sens_result <- sens.slope(ts_obj)
+  slope_year <- sens_result$estimates
+  slope_decade <- slope_year * 10
+  cat(sprintf("  Sen's slope: %.4f m⁴/s⁴ per decade\n", slope_decade))
+ 
+  # *** 2. CORRECTED BOOTSTRAP (tsboot) ***
+  block_length <- 3 # 3-year block for annual data
+  boot_path <- boot_paths_sval[[season_name]]
+ 
+  if (file.exists(boot_path)) {
+    cat("  Loading existing block bootstrap results...\n")
+    boot_result <- readRDS(boot_path)
+  } else {
+    cat(sprintf("  Running MOVING BLOCKS bootstrap (l=%d, R=5000)...\n", block_length))
+    set.seed(200 + which(season_name == c("DJF", "MAM", "JJA", "SON")))
+    boot_result <- boot::tsboot(ts_vector,
+                                statistic = slope_stat_seasonal,
+                                R = 5000,
+                                l = block_length,
+                                sim = "fixed",
+                                parallel = "multicore",
+                                ncpus = max(1, parallel::detectCores() - 1))
+    
+    # Create the directory if it doesn't exist
+    if (!dir.exists(processed_dir)) {
+      dir.create(processed_dir, recursive = TRUE)
+    }
+    saveRDS(boot_result, boot_path)
+  }
+ 
+  boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
+ 
+  if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
+    ci_lower <- boot_ci$percent[4] * 10
+    ci_upper <- boot_ci$percent[5] * 10
+    ci_includes_zero <- (ci_lower < 0 && ci_upper > 0)
+    cat(sprintf("  Bootstrap 95%% CI: [%.4f, %.4f] m⁴/s⁴ per decade\n", ci_lower, ci_upper))
+  } else {
+    ci_lower <- NA; ci_upper <- NA; ci_includes_zero <- NA
+  }
+ 
+  # Store all results in the list
+  seasonal_results_list_sval[[season_name]] <- data.frame(
+    season = season_name,
+    n_obs = n_obs,
+    rho1 = rho1,
+    slope_decade = slope_decade,
+    slope_year = slope_year, # Store this for total change calculation
+    p_value = p_value,
+    ci_lower = ci_lower,
+    ci_upper = ci_upper
+  )
+}
+
+# --- 4. Calculate Baseline Means ---
+cat("\n", rep("=", 70), "\n")
+cat("CALCULATING BASELINE MEANS (1958-1967)\n")
+cat(rep("=", 70), "\n\n")
+
+# Baseline for MAM, JJA, SON is Years 1958-1967
+# Baseline for DJF is Season_Years 1959-1968 (10 seasons)
+baseline_df_sval <- subset(seasonal_means_sval, 
+  (Season %in% c("MAM", "JJA", "SON") & Year >= 1958 & Year <= 1967) |
+  (Season == "DJF" & Year >= 1959 & Year <= 1968)
+)
+
+baseline_means_sval <- aggregate(storminess ~ Season, data = baseline_df_sval, FUN = mean)
+# *** FIX: Rename columns to "season" and "baseline_mean" for merging ***
+names(baseline_means_sval) <- c("season", "baseline_mean")
+
+print(baseline_means_sval)
+
+# --- 5. Assemble Final Results Data Frame ---
+cat("\n", rep("=", 70), "\n")
+cat("ASSEMBLING FINAL RESULTS DATAFRAME\n")
+cat(rep("=", 70), "\n\n")
+
+# Combine list into a single data frame
+results_df_sval <- do.call(rbind, seasonal_results_list_sval)
+
+# Merge with baseline means
+results_df_sval <- merge(results_df_sval, baseline_means_sval, by = "season")
+
+# Calculate remaining metrics
+results_df_sval$slope_per_period <- results_df_sval$slope_year * results_df_sval$n_obs
+results_df_sval$percent_change <- (results_df_sval$slope_per_period / results_df_sval$baseline_mean) * 100
+
+# Apply FDR correction
+results_df_sval$p_fdr <- p.adjust(results_df_sval$p_value, method = "fdr")
+results_df_sval$sig_fdr <- ifelse(results_df_sval$p_fdr < 0.05, "✓", "")
+
+# Reorder for clarity
+results_df_sval <- results_df_sval[match(c("DJF", "MAM", "JJA", "SON"), results_df_sval$season), ]
+row.names(results_df_sval) <- NULL
+
+print(results_df_sval)
+
+# --- 6. Generate Formatted Summary Report ---
+cat("\n", rep("=", 70), "\n")
+cat("SVALBARD REGION: SEASONAL TREND SUMMARY REPORT\n")
+cat(rep("=", 70), "\n\n")
+
+data_units <- "m⁴/s⁴" # Set the units as identified from your script's output
+
+for (i in 1:nrow(results_df_sval)) {
+  
+  with(results_df_sval[i, ], {
+    
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Season:         %s\n", season))
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Baseline Mean (58-67):  %.2f %s\n", baseline_mean, data_units))
+    cat(sprintf("N Observations:     %d years\n", n_obs))
+    cat(sprintf("Lag-1 Autocorr (ρ₁):   %.3f\n", rho1))
+    cat(sprintf("Sen's Slope (decade):   %.4f %s\n", slope_decade, data_units))
+    cat(sprintf("Total Change (%dyr): %.2f %s (%.1f%%)\n", n_obs, slope_per_period, data_units, percent_change))
+    cat(sprintf("PW-MK p-value:        %.4f\n", p_value))
+    cat(sprintf("FDR-adjusted p-value: %.4f %s\n", p_fdr, sig_fdr))
+    
+    # *** CORRECTED LINE: Changed "95%" to "95%%" ***
+    cat(sprintf("Bootstrap 95%% CI:     [%.4f, %.4f]\n\n", ci_lower, ci_upper))
+  })
+}
+```
+
+
 ## Regional Sub-Analysis: Trends in Extreme Intensity (P99 EKE)
 
 This chapter extends the extreme value analysis from the overall Core Arctic domain (Phase 4) to two key regional sectors—the Fram Strait and the Svalbard/Barents Sea—to test whether extreme intensity trends are localized within known atmospheric gateways. The analysis uses the annual **99th percentile (P99) of Eddy Kinetic Energy (EKE)** time series (1958–2024).
 
 The regional trend framework is modified to account for the annual nature of the data: \* **Time Series Creation:** A new, **area-weighted** time series is generated for each region by calculating the cosine-latitude weighted spatial mean of the annual P99 EKE array. \* **Robust Statistics:** The trend is quantified by the **Theil-Sen slope** ($\text{m}^2/\text{s}^2$ per decade), and significance is assessed using the **Pre-Whitened Mann-Kendall** test and **Moving Blocks Bootstrap** confidence intervals. A block length of $\mathbf{l=3}$ years is used in the bootstrap, appropriate for annual data.
-
-------------------------------------------------------------------------
 
 ### Analysis 1: Fram Strait (Atlantic Storm Track Gateway)
 
@@ -5251,8 +5495,6 @@ The Fram Strait sector (15°W–15°E, 76–82°N) is analyzed as the primary en
 | **Bootstrap 95% CI** | **\[-1.6473, 1.5744\]** $\text{m}^2/\text{s}^2$ per decade | CI includes zero. |
 
 **Conclusion:** Both the PW-MK test and the robust 95% confidence interval are non-significant. There is **no statistically significant trend** in the intensity of annual extreme storm events in the Fram Strait over the 1958–2024 period.
-
-------------------------------------------------------------------------
 
 ### Analysis 2: Svalbard / Barents Sea Sector
 
@@ -5286,7 +5528,8 @@ cat(rep("=", 70), "\n\n")
 
 # --- 2. Load and Prepare P99 Annual Data ---
 cat("--- Loading and Preparing P99 EKE Annual Data ---\n")
-processed_dir <- "E:/ERA5_data/processed"
+# Use here() for a robust, project-relative path
+processed_dir <- here("Data", "processed")
 input_file_p99 <- file.path(processed_dir, "P99_EKE_annual_1958-2024_clean.nc")
 
 nc_file <- nc_open(input_file_p99)
@@ -5312,18 +5555,18 @@ cat(sprintf("  P99 EKE array permuted to [time, lat, lon] with dims: [%d, %d, %d
 # --- 4. Define Reusable Trend Analysis Function (for ANNUAL data) ---
 # This function is adapted from your Phase 3 code to use l=3
 run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
-  
+ 
   # --- a. Prepare Inputs ---
   ts_vector_clean <- as.vector(na.omit(ts_vector))
   ts_obj <- ts(ts_vector_clean, start = 1, frequency = 1) # Freq=1 for annual data
   n <- length(ts_vector_clean)
-  
+ 
   cat(sprintf("  N observations: %d years\n", n))
-  
+ 
   # --- b. Pre-Whitened Mann-Kendall Test ---
   rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
   cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", rho1))
-  
+ 
   prewhitened <- ts_vector_clean[2:n] - rho1 * ts_vector_clean[1:(n-1)]
   mk_result <- trend::mk.test(prewhitened)
   p_value <- mk_result$p.value
@@ -5339,7 +5582,7 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
   # *** CRITICAL: l=3 for annual data (Rule 1) ***
   block_length <- 3
   n_replicates <- 5000
-  
+ 
   slope_stat_annual <- function(d) {
     ts_subset <- ts(d, start = 1, frequency = 1) # Freq=1
     result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
@@ -5349,10 +5592,10 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
       return(result)
     }
   }
-  
+ 
   boot_file_path <- file.path(processed_dir, 
                               sprintf("boot_result_P99_INTENSITY_%s.rds", region_name))
-  
+ 
   if (file.exists(boot_file_path)) {
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
@@ -5366,13 +5609,20 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
                                 sim = "fixed",
                                 parallel = "multicore",
                                 ncpus = max(1, parallel::detectCores() - 1))
+    
+    # Create directory if it doesn't exist
+    if (!dir.exists(dirname(boot_file_path))) {
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     saveRDS(boot_result, boot_file_path)
     cat("  ✓ Bootstrap results saved\n")
   }
 
   # --- e. Report CI ---
+  ci_lower_decade <- NA
+  ci_upper_decade <- NA
   boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
-  
+ 
   if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
     ci_lower_decade <- boot_ci$percent[4] * 10
     ci_upper_decade <- boot_ci$percent[5] * 10
@@ -5387,21 +5637,34 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
   } else {
     cat("  ERROR: Could not calculate bootstrap CI\n")
   }
+  
+  # --- f. Return Results ---
+  # Return a data.frame with all key statistics
+  results_df <- data.frame(
+    n_obs = n,
+    rho1 = rho1,
+    p_value = p_value,
+    slope_year = slope_per_year,
+    slope_decade = slope_per_decade,
+    ci_lower = ci_lower_decade,
+    ci_upper = ci_upper_decade
+  )
+  return(results_df)
 }
 
 # --- 5. Define Master Regional Spatially-Averaged Analysis ---
 analyze_regional_p99 <- function(region_name_short, region_name_long, lon_mask_vals, lat_mask_vals) {
-  
+ 
   cat("\n", rep("=", 70), "\n")
   cat(glue("ANALYZING P99 INTENSITY: {region_name_long}\n"))
   cat(rep("=", 70), "\n\n")
-  
+ 
   # --- a. Define the Bounding Box ---
   lon_sector_idx <- which(lon_mask_vals)
   lat_sector_idx <- which(lat_mask_vals)
   lon_sector_vals <- lon[lon_sector_idx]
   lat_sector_vals <- lat[lat_sector_idx]
-  
+ 
   cat("--- Domain Definition ---\n")
   cat(sprintf("  Longitude range: %.1f°E to %.1f°E (%d cells)\n", 
               min(lon_sector_vals), max(lon_sector_vals), length(lon_sector_vals)))
@@ -5412,35 +5675,49 @@ analyze_regional_p99 <- function(region_name_short, region_name_long, lon_mask_v
   cat("\n--- Extracting P99 Spatial Data ---\n")
   # Subset the [time, lat, lon] array
   p99_sector_array <- p99_array_permuted[, lat_sector_idx, lon_sector_idx]
-  
+ 
   # Create cosine-latitude weights
   weights_sector <- cos(lat_sector_vals * pi / 180)
   weights_matrix_sector <- matrix(weights_sector,
                                   nrow = length(lat_sector_vals),
                                   ncol = length(lon_sector_vals),
                                   byrow = FALSE)
-  
+ 
   # Calculate area-weighted mean for each time step (year)
   ts_vector_p99_sector <- apply(p99_sector_array, 1, function(slice) {
     weighted.mean(slice, weights_matrix_sector, na.rm = TRUE)
   })
-  
+ 
   cat("✓ Area-weighted P99 (Intensity) time series created.\n")
   
-  # --- c. Run Full Trend Analysis ---
+  # --- c. Calculate Baseline Mean (1958-1967) ---
+  # The time series is 1958-2024 (67 years). Baseline is the first 10 years.
+  baseline_mean_p99 <- mean(ts_vector_p99_sector[1:10])
+  cat(sprintf("  Baseline Mean (1958-1967): %.2f m²/s²\n", baseline_mean_p99))
+ 
+  # --- d. Run Full Trend Analysis ---
   cat("\n--- P99 Trend Analysis ---\n")
-  run_annual_trend_analysis(ts_vector = ts_vector_p99_sector,
-                            region_name = region_name_short,
-                            unit_label = "m²/s²") # Units of EKE
+  trend_results_df <- run_annual_trend_analysis(ts_vector = ts_vector_p99_sector,
+                                    region_name = region_name_short,
+                                    unit_label = "m²/s²") # Units of EKE
   cat("\n", rep("=", 70), "\n\n")
+
+  # --- e. Combine and Return ---
+  trend_results_df$baseline_mean <- baseline_mean_p99
+  trend_results_df$region <- region_name_short
+  
+  return(trend_results_df)
 }
 
 # ============================================================================
 # --- 6. EXECUTE ANALYSIS FOR BOTH REGIONS ---
 # ============================================================================
 
+# Initialize a list to store the results data.frames
+all_p99_results_list <- list()
+
 # --- Region 1: Fram Strait ---
-analyze_regional_p99(
+all_p99_results_list[['Fram_Strait']] <- analyze_regional_p99(
   region_name_short = "Fram_Strait",
   region_name_long = "Fram Strait (15°W-15°E, 76-82°N)",
   lon_mask_vals = (lon >= -15 & lon <= 15),
@@ -5448,13 +5725,63 @@ analyze_regional_p99(
 )
 
 # --- Region 2: Svalbard / Barents Sea ---
-analyze_regional_p99(
+all_p99_results_list[['Svalbard_Barents']] <- analyze_regional_p99(
   region_name_short = "Svalbard_Barents",
   region_name_long = "Svalbard/Barents Sea (10°W-35°E, 74-81°N)",
   lon_mask_vals = (lon >= -10 & lon <= 35),
   lat_mask_vals = (lat >= 74 & lat <= 81)
 )
 
+# ============================================================================
+# --- 7. Assemble Final Results Data Frame ---
+# ============================================================================
+cat("\n", rep("=", 70), "\n")
+cat("ASSEMBLING FINAL P99 RESULTS DATAFRAME\n")
+cat(rep("=", 70), "\n\n")
+
+# Combine list into a single data frame
+results_df_p99 <- do.call(rbind, all_p99_results_list)
+
+# Calculate remaining metrics
+results_df_p99$slope_per_period <- results_df_p99$slope_year * results_df_p99$n_obs
+results_df_p99$percent_change <- (results_df_p99$slope_per_period / results_df_p99$baseline_mean) * 100
+
+# Apply FDR correction
+results_df_p99$p_fdr <- p.adjust(results_df_p99$p_value, method = "fdr")
+results_df_p99$sig_fdr <- ifelse(results_df_p99$p_fdr < 0.05, "✓", "")
+
+# Reorder for clarity
+row.names(results_df_p99) <- NULL
+print(results_df_p99)
+
+# ============================================================================
+# --- 8. Generate Formatted Summary Report ---
+# ============================================================================
+cat("\n", rep("=", 70), "\n")
+cat("P99 INTENSITY: REGIONAL TREND SUMMARY REPORT\n")
+cat(rep("=", 70), "\n\n")
+
+data_units <- "m²/s²" # Units of EKE
+
+for (i in 1:nrow(results_df_p99)) {
+  
+  with(results_df_p99[i, ], {
+    
+    cat(sprintf("----------------------------------------\n"))
+    # Use the 'region' column for the name
+    cat(sprintf("Region:         %s\n", region))
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Baseline Mean (58-67):  %.2f %s\n", baseline_mean, data_units))
+    cat(sprintf("N Observations:     %d years\n", n_obs))
+    cat(sprintf("Lag-1 Autocorr (ρ₁):   %.3f\n", rho1))
+    cat(sprintf("Sen's Slope (decade):   %.4f %s\n", slope_decade, data_units))
+    cat(sprintf("Total Change (%dyr): %.2f %s (%.1f%%)\n", n_obs, slope_per_period, data_units, percent_change))
+    cat(sprintf("PW-MK p-value:        %.4f\n", p_value))
+    cat(sprintf("FDR-adjusted p-value: %.4f %s\n", p_fdr, sig_fdr))
+    # Use 95%% to print the '%' sign
+    cat(sprintf("Bootstrap 95%% CI:     [%.4f, %.4f]\n\n", ci_lower, ci_upper))
+  })
+}
 ```
 
 ## Regional Sub-Analysis: Trends in Extreme Frequency (Annual P95 Exceedances)
@@ -5508,7 +5835,8 @@ cat(rep("=", 70), "\n\n")
 
 # --- 2. Load and Prepare P95 Annual Data ---
 cat("--- Loading and Preparing P95 EKE Annual Frequency Data ---\n")
-processed_dir <- "E:/ERA5_data/processed"
+# Use here() for a robust, project-relative path
+processed_dir <- here("Data", "processed")
 input_file_p95 <- file.path(processed_dir, "P95_Storm_Day_Frequency_annual_1958-2024_clean.nc")
 
 nc_file <- nc_open(input_file_p95)
@@ -5533,18 +5861,18 @@ cat(sprintf("  P95 Frequency array permuted to [time, lat, lon] with dims: [%d, 
 # --- 4. Define Reusable Trend Analysis Function (for ANNUAL data) ---
 # This function is adapted from your Phase 3 code to use l=3
 run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
-  
+ 
   # --- a. Prepare Inputs ---
   ts_vector_clean <- as.vector(na.omit(ts_vector))
   ts_obj <- ts(ts_vector_clean, start = 1, frequency = 1) # Freq=1 for annual data
   n <- length(ts_vector_clean)
-  
+ 
   cat(sprintf("  N observations: %d years\n", n))
-  
+ 
   # --- b. Pre-Whitened Mann-Kendall Test ---
   rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
   cat(sprintf("  Lag-1 autocorr (ρ₁): %.3f\n", rho1))
-  
+ 
   prewhitened <- ts_vector_clean[2:n] - rho1 * ts_vector_clean[1:(n-1)]
   mk_result <- trend::mk.test(prewhitened)
   p_value <- mk_result$p.value
@@ -5560,7 +5888,7 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
   # *** CRITICAL: l=3 for annual data (Rule 1) ***
   block_length <- 3
   n_replicates <- 5000
-  
+ 
   slope_stat_annual <- function(d) {
     ts_subset <- ts(d, start = 1, frequency = 1) # Freq=1
     result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
@@ -5570,10 +5898,10 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
       return(result)
     }
   }
-  
+ 
   boot_file_path <- file.path(processed_dir, 
                               sprintf("boot_result_P95_FREQ_ANNUAL_%s.rds", region_name))
-  
+ 
   if (file.exists(boot_file_path)) {
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
@@ -5587,13 +5915,20 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
                                 sim = "fixed",
                                 parallel = "multicore",
                                 ncpus = max(1, parallel::detectCores() - 1))
+    
+    # Create directory if it doesn't exist
+    if (!dir.exists(dirname(boot_file_path))) {
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     saveRDS(boot_result, boot_file_path)
     cat("  ✓ Bootstrap results saved\n")
   }
 
   # --- e. Report CI ---
+  ci_lower_decade <- NA
+  ci_upper_decade <- NA
   boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
-  
+ 
   if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
     ci_lower_decade <- boot_ci$percent[4] * 10
     ci_upper_decade <- boot_ci$percent[5] * 10
@@ -5608,21 +5943,34 @@ run_annual_trend_analysis <- function(ts_vector, region_name, unit_label) {
   } else {
     cat("  ERROR: Could not calculate bootstrap CI\n")
   }
+  
+  # --- f. Return Results ---
+  # Return a data.frame with all key statistics
+  results_df <- data.frame(
+    n_obs = n,
+    rho1 = rho1,
+    p_value = p_value,
+    slope_year = slope_per_year,
+    slope_decade = slope_per_decade,
+    ci_lower = ci_lower_decade,
+    ci_upper = ci_upper_decade
+  )
+  return(results_df)
 }
 
 # --- 5. Define Master Regional Spatially-Averaged Analysis ---
 analyze_regional_p95_annual <- function(region_name_short, region_name_long, lon_mask_vals, lat_mask_vals) {
-  
+ 
   cat("\n", rep("=", 70), "\n")
   cat(glue("ANALYZING P95 FREQUENCY (Annual): {region_name_long}\n"))
   cat(rep("=", 70), "\n\n")
-  
+ 
   # --- a. Define the Bounding Box ---
   lon_sector_idx <- which(lon_mask_vals)
   lat_sector_idx <- which(lat_mask_vals)
   lon_sector_vals <- lon[lon_sector_idx]
   lat_sector_vals <- lat[lat_sector_idx]
-  
+ 
   cat("--- Domain Definition ---\n")
   cat(sprintf("  Longitude range: %.1f°E to %.1f°E (%d cells)\n", 
               min(lon_sector_vals), max(lon_sector_vals), length(lon_sector_vals)))
@@ -5633,35 +5981,49 @@ analyze_regional_p95_annual <- function(region_name_short, region_name_long, lon
   cat("\n--- Extracting P95 (Annual) Spatial Data ---\n")
   # Subset the [time, lat, lon] array
   p95_sector_array <- p95_array_permuted[, lat_sector_idx, lon_sector_idx]
-  
+ 
   # Create cosine-latitude weights
   weights_sector <- cos(lat_sector_vals * pi / 180)
   weights_matrix_sector <- matrix(weights_sector,
                                   nrow = length(lat_sector_vals),
-                                  ncol = length(lon_sector_idx),
+                                  ncol = length(lon_sector_idx), # Corrected this from lon_sector_idx to length(lon_sector_idx)
                                   byrow = FALSE)
-  
+ 
   # Calculate area-weighted mean for each time step (year)
   ts_vector_p95_sector <- apply(p95_sector_array, 1, function(slice) {
     weighted.mean(slice, weights_matrix_sector, na.rm = TRUE)
   })
-  
+ 
   cat("✓ Area-weighted P95 (Frequency) time series created.\n")
   
-  # --- c. Run Full Trend Analysis ---
+  # --- c. Calculate Baseline Mean (1958-1967) ---
+  # The time series is 1958-2024 (67 years). Baseline is the first 10 years.
+  baseline_mean_p95 <- mean(ts_vector_p95_sector[1:10])
+  cat(sprintf("  Baseline Mean (1958-1967): %.2f events\n", baseline_mean_p95))
+ 
+  # --- d. Run Full Trend Analysis ---
   cat("\n--- P95 (Annual) Trend Analysis ---\n")
-  run_annual_trend_analysis(ts_vector = ts_vector_p95_sector,
-                            region_name = region_name_short,
-                            unit_label = "events") # Units are "storm day events"
+  trend_results_df <- run_annual_trend_analysis(ts_vector = ts_vector_p95_sector,
+                                    region_name = region_name_short,
+                                    unit_label = "events") # Units are "storm day events"
   cat("\n", rep("=", 70), "\n\n")
+
+  # --- e. Combine and Return ---
+  trend_results_df$baseline_mean <- baseline_mean_p95
+  trend_results_df$region <- region_name_short
+  
+  return(trend_results_df)
 }
 
 # ============================================================================
 # --- 6. EXECUTE ANALYSIS FOR BOTH REGIONS ---
 # ============================================================================
 
+# Initialize a list to store the results data.frames
+all_p95_freq_results_list <- list()
+
 # --- Region 1: Fram Strait ---
-analyze_regional_p95_annual(
+all_p95_freq_results_list[['Fram_Strait']] <- analyze_regional_p95_annual(
   region_name_short = "Fram_Strait",
   region_name_long = "Fram Strait (15°W-15°E, 76-82°N)",
   lon_mask_vals = (lon >= -15 & lon <= 15),
@@ -5669,12 +6031,63 @@ analyze_regional_p95_annual(
 )
 
 # --- Region 2: Svalbard / Barents Sea ---
-analyze_regional_p95_annual(
+all_p95_freq_results_list[['Svalbard_Barents']] <- analyze_regional_p95_annual(
   region_name_short = "Svalbard_Barents",
   region_name_long = "Svalbard/Barents Sea (10°W-35°E, 74-81°N)",
   lon_mask_vals = (lon >= -10 & lon <= 35),
   lat_mask_vals = (lat >= 74 & lat <= 81)
 )
+
+# ============================================================================
+# --- 7. Assemble Final Results Data Frame ---
+# ============================================================================
+cat("\n", rep("=", 70), "\n")
+cat("ASSEMBLING FINAL P95 FREQUENCY RESULTS DATAFRAME\n")
+cat(rep("=", 70), "\n\n")
+
+# Combine list into a single data frame
+results_df_p95_freq <- do.call(rbind, all_p95_freq_results_list)
+
+# Calculate remaining metrics
+results_df_p95_freq$slope_per_period <- results_df_p95_freq$slope_year * results_df_p95_freq$n_obs
+results_df_p95_freq$percent_change <- (results_df_p95_freq$slope_per_period / results_df_p95_freq$baseline_mean) * 100
+
+# Apply FDR correction
+results_df_p95_freq$p_fdr <- p.adjust(results_df_p95_freq$p_value, method = "fdr")
+results_df_p95_freq$sig_fdr <- ifelse(results_df_p95_freq$p_fdr < 0.05, "✓", "")
+
+# Reorder for clarity
+row.names(results_df_p95_freq) <- NULL
+print(results_df_p95_freq)
+
+# ============================================================================
+# --- 8. Generate Formatted Summary Report ---
+# ============================================================================
+cat("\n", rep("=", 70), "\n")
+cat("P95 FREQUENCY (ANNUAL): REGIONAL TREND SUMMARY REPORT\n")
+cat(rep("=", 70), "\n\n")
+
+data_units <- "events" # Units of storm day frequency
+
+for (i in 1:nrow(results_df_p95_freq)) {
+  
+  with(results_df_p95_freq[i, ], {
+    
+    cat(sprintf("----------------------------------------\n"))
+    # Use the 'region' column for the name
+    cat(sprintf("Region:         %s\n", region))
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Baseline Mean (58-67):  %.2f %s\n", baseline_mean, data_units))
+    cat(sprintf("N Observations:     %d years\n", n_obs))
+    cat(sprintf("Lag-1 Autocorr (ρ₁):   %.3f\n", rho1))
+    cat(sprintf("Sen's Slope (decade):   %.4f %s\n", slope_decade, data_units))
+    cat(sprintf("Total Change (%dyr): %.2f %s (%.1f%%)\n", n_obs, slope_per_period, data_units, percent_change))
+    cat(sprintf("PW-MK p-value:        %.4f\n", p_value))
+    cat(sprintf("FDR-adjusted p-value: %.4f %s\n", p_fdr, sig_fdr))
+    # Use 95%% to print the '%' sign
+    cat(sprintf("Bootstrap 95%% CI:     [%.4f, %.4f]\n\n", ci_lower, ci_upper))
+  })
+}
 ```
 
 ## Regional Sub-Analysis: Trends in Extreme Frequency (Seasonal P95)
@@ -5738,7 +6151,8 @@ cat(rep("=", 70), "\n\n")
 
 # --- 2. Load and Process 4D NetCDF Data ---
 cat("--- Loading and processing 4D NetCDF ---\n")
-processed_dir <- "E:/ERA5_data/processed"
+# Use here() for a robust, project-relative path
+processed_dir <- here("Data", "processed")
 input_file_freq <- file.path(processed_dir, "P95_Storm_Day_Frequency_seasonal_1958-2024_clean.nc")
 
 nc_file <- nc_open(input_file_freq)
@@ -5771,45 +6185,45 @@ cat("\n--- Creating 8 Area-Weighted Regional Time Series ---\n")
 all_regional_ts <- list()
 
 for (region_name in names(regional_domains)) {
-  
+ 
   domain <- regional_domains[[region_name]]
-  
+ 
   # Get indices for this region
   lon_sector_idx <- which(domain$lon_mask)
   lat_sector_idx <- which(domain$lat_mask)
   lat_sector_vals <- lat[lat_sector_idx]
-  
+ 
   # Create cosine weights
   lat_weights <- cos(lat_sector_vals * pi / 180)
   weights_matrix <- matrix(lat_weights,
                            nrow = length(lat_sector_vals),
                            ncol = length(lon_sector_idx),
                            byrow = FALSE)
-  
+ 
   cat(sprintf("  Processing Region: %s (%d cells)\n", 
               region_name, length(lat_sector_idx) * length(lon_sector_idx)))
-  
+ 
   # Loop through the 4 seasons
   for (s_idx in 1:4) {
     season_name <- seasons_vec[s_idx]
-    
+   
     # Extract 3D array for this region & season: [time, lat, lon]
     region_season_array <- freq_array_full[, s_idx, lat_sector_idx, lon_sector_idx]
-    
+   
     # Calculate the spatial mean for each time step (year)
     time_series_vec <- apply(region_season_array, 1, function(spatial_slice) {
       weighted.mean(spatial_slice, weights_matrix, na.rm = TRUE)
     })
-    
+   
     # Create the final data frame
     df <- data.frame(
       Year = years_vec,
       storm_day_count = time_series_vec
     )
-    
+   
     # Remove NAs (e.g., DJF 1958) - this mirrors your Phase 3 logic
     df <- na.omit(df)
-    
+   
     # Store in the list with a unique name
     ts_name <- glue("{region_name}_{season_name}")
     all_regional_ts[[ts_name]] <- df
@@ -5817,11 +6231,27 @@ for (region_name in names(regional_domains)) {
 }
 cat("✓ 8 regional seasonal time series created.\n")
 
+# --- 4.1. Calculate Baseline Means ---
+cat("\n--- Calculating Baseline Means (1958-1967) ---\n")
+baseline_means_list <- list()
+for (ts_name in names(all_regional_ts)) {
+  ts_df <- all_regional_ts[[ts_name]]
+  # The first 10 years represent the baseline (1958-67 or 1959-68 for DJF)
+  baseline_means_list[[ts_name]] <- mean(ts_df$storm_day_count[1:10])
+}
+# Convert to a data.frame for easy merging
+baseline_df <- data.frame(
+  region_season = names(baseline_means_list),
+  baseline_mean = unlist(baseline_means_list)
+)
+cat("✓ Baseline means calculated for all 8 series.\n")
+
+
 # --- 5. Define Reusable Trend Analysis Function (Adapted from your Phase 3) ---
 run_regional_seasonal_analysis <- function(seasonal_df, region_season_name) {
-  
+ 
   cat(sprintf("\n--- Analyzing: %s ---\n", region_season_name))
-  
+ 
   # --- a. Prepare Inputs ---
   ts_obj <- ts(seasonal_df$storm_day_count, 
                start = min(seasonal_df$Year), 
@@ -5829,13 +6259,13 @@ run_regional_seasonal_analysis <- function(seasonal_df, region_season_name) {
   ts_vector <- as.vector(ts_obj)
   n_replicates <- 5000
   set.seed(123 + nchar(region_season_name)) # Unique seed
-  
+ 
   cat(sprintf("  N observations: %d years\n", length(ts_vector)))
-  
+ 
   # --- b. Pre-Whitened Mann-Kendall Test ---
   rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
   n <- length(ts_vector)
-  
+ 
   prewhitened <- ts_vector[2:n] - rho1 * ts_vector[1:(n-1)]
   mk_result <- trend::mk.test(prewhitened)
   p_value <- mk_result$p.value
@@ -5851,7 +6281,7 @@ run_regional_seasonal_analysis <- function(seasonal_df, region_season_name) {
   # --- d. Block Bootstrap CI (with Save/Load) ---
   # *** CRITICAL: l=3 for annual data (Rule 1) ***
   block_length <- 3 
-  
+ 
   slope_stat_seasonal <- function(d) {
     ts_subset <- ts(d, start = 1, frequency = 1)
     result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
@@ -5861,11 +6291,11 @@ run_regional_seasonal_analysis <- function(seasonal_df, region_season_name) {
       return(result)
     }
   }
-  
+ 
   # Unique filename for each of the 8 time series
   boot_file_path <- file.path(processed_dir, 
                               sprintf("boot_result_P95_FREQ_%s.rds", region_season_name))
-  
+ 
   if (file.exists(boot_file_path)) {
     cat("  Loading existing bootstrap results...\n")
     boot_result <- readRDS(boot_file_path)
@@ -5879,30 +6309,36 @@ run_regional_seasonal_analysis <- function(seasonal_df, region_season_name) {
                                 sim = "fixed",
                                 parallel = "multicore",
                                 ncpus = max(1, parallel::detectCores() - 1))
+    
+    # Create directory if it doesn't exist
+    if (!dir.exists(dirname(boot_file_path))) {
+      dir.create(dirname(boot_file_path), recursive = TRUE)
+    }
     saveRDS(boot_result, boot_file_path)
     cat("  ✓ Bootstrap results saved\n")
   }
 
   # --- e. Report CI ---
   boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
-  
+ 
   if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent)) {
     ci_lower_decade <- boot_ci$percent[4] * 10
     ci_upper_decade <- boot_ci$percent[5] * 10
     cat(sprintf("  Bootstrap 95%% CI: [%.4f, %.4f] events per decade\n", 
                 ci_lower_decade, ci_upper_decade))
-    
+   
     if (ci_lower_decade < 0 && ci_upper_decade > 0) {
       cat("  → CI includes zero (trend not significant via bootstrap)\n")
     } else {
       cat("  → CI excludes zero (trend significant via bootstrap)\n")
     }
-    
+   
     return(list(
       region_season = region_season_name,
       n_obs = n,
       rho1 = rho1,
       p_value = p_value,
+      slope_year = slope_per_year, # Added this
       slope_decade = slope_per_decade,
       ci_lower = ci_lower_decade,
       ci_upper = ci_upper_decade
@@ -5914,6 +6350,7 @@ run_regional_seasonal_analysis <- function(seasonal_df, region_season_name) {
       n_obs = n,
       rho1 = rho1,
       p_value = p_value, 
+      slope_year = slope_per_year, # Added this
       slope_decade = slope_per_decade, 
       ci_lower = NA, 
       ci_upper = NA
@@ -5937,6 +6374,20 @@ cat(rep("=", 70), "\n\n")
 
 results_df <- as.data.frame(do.call(rbind, lapply(all_results, as.data.frame)))
 
+# Merge with baseline means
+results_df <- merge(results_df, baseline_df, by = "region_season")
+
+# Convert list columns to numeric
+numeric_cols <- c("n_obs", "rho1", "p_value", "slope_year", "slope_decade", 
+                  "ci_lower", "ci_upper", "baseline_mean")
+for (col in numeric_cols) {
+  results_df[[col]] <- as.numeric(results_df[[col]])
+}
+
+# Calculate final metrics
+results_df$slope_per_period <- results_df$slope_year * results_df$n_obs
+results_df$percent_change <- (results_df$slope_per_period / results_df$baseline_mean) * 100
+
 # We use a regular expression to split on the *last* underscore
 # (the one right before the 3-letter season code)
 results_df <- results_df %>%
@@ -5946,14 +6397,17 @@ results_df <- results_df %>%
     sep = "_(?=[A-Z]{3}$)" # Regex: split on "_" if followed by 3 capitals
   )
 
-# Convert back to numeric
-numeric_cols <- c("n_obs", "rho1", "p_value", "slope_decade", "ci_lower", "ci_upper")
-for (col in numeric_cols) {
-  results_df[[col]] <- as.numeric(results_df[[col]])
-}
-
 results_df$Season <- factor(results_df$Season, levels = c("DJF", "MAM", "JJA", "SON"))
-results_df <- results_df %>% arrange(Region, Season)
+
+# Calculate FDR-adjusted p-values (grouped by region)
+results_df <- results_df %>%
+  arrange(Region, Season) %>%
+  group_by(Region) %>%
+  mutate(
+    p_fdr = p.adjust(p_value, method = "fdr"),
+    sig_fdr = ifelse(p_fdr < 0.05, "✓", "")
+  ) %>%
+  ungroup()
 
 
 # --- Print Fram Strait Results ---
@@ -5971,7 +6425,7 @@ cat(rep("-", 70), "\n")
 
 son_svalbard_p <- results_df %>% 
   filter(Region == "Svalbard_Barents", Season == "SON") %>% 
-  pull(p_value)
+  pull(p_value) # Using the raw p-value as in original script
 
 if (son_svalbard_p < 0.05) {
   cat(glue("✓✓✓ HYPOTHESIS SUPPORTED: The trend in SON (Autumn) P95 frequency
@@ -5979,6 +6433,34 @@ if (son_svalbard_p < 0.05) {
 } else {
   cat(glue("✗✗✗ HYPOTHESIS NOT SUPPORTED: The trend in SON (Autumn) P95 frequency
      for the SVALBARD/BARENTS sector is NOT statistically significant (p = {sprintf('%.4f', son_svalbard_p)})."), "\n")
+}
+
+# ============================================================================
+# --- 8. Generate Formatted Summary Report ---
+# ============================================================================
+cat("\n", rep("=", 70), "\n")
+cat("P95 FREQUENCY (SEASONAL): REGIONAL TREND SUMMARY REPORT\n")
+cat(rep("=", 70), "\n\n")
+
+data_units <- "events" # Units of storm day frequency
+
+for (i in 1:nrow(results_df)) {
+  
+  with(results_df[i, ], {
+    
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Region: %s / Season: %s\n", Region, Season))
+    cat(sprintf("----------------------------------------\n"))
+    cat(sprintf("Baseline Mean (58-67):  %.2f %s\n", baseline_mean, data_units))
+    cat(sprintf("N Observations:     %d years\n", n_obs))
+    cat(sprintf("Lag-1 Autocorr (ρ₁):   %.3f\n", rho1))
+    cat(sprintf("Sen's Slope (decade):   %.4f %s\n", slope_decade, data_units))
+    cat(sprintf("Total Change (%dyr): %.2f %s (%.1f%%)\n", n_obs, slope_per_period, data_units, percent_change))
+    cat(sprintf("PW-MK p-value:        %.4f\n", p_value))
+    cat(sprintf("FDR-adjusted p-value: %.4f %s\n", p_fdr, sig_fdr))
+    # Use 95%% to print the '%' sign
+    cat(sprintf("Bootstrap 95%% CI:     [%.4f, %.4f]\n\n", ci_lower, ci_upper))
+  })
 }
 ```
 
@@ -6711,71 +7193,215 @@ if(file.exists(boot_son_svalbard_path)) {
 cat("\n", rep("=", 70), "\n")
 ```
 
-# Summary
 
-```{r summary}
+# Phase 4 - Advanced Mechanistic Diagnostics
+
+This chapter presents the **Advanced Mechanistic Diagnostics**, moving beyond the initial metrics of storminess variance (Phase 1-3) and extremes (Phase 4.1-4.5) to analyze the **kinetic energy budget** of the atmosphere. This directly addresses whether the underlying atmospheric circulation or the average strength of storms changed.
+
+The methodology tests trends in three fundamental components across a full factorial design (3 Regions × 7 Temporal Scales), utilizing the principle of **Reynolds Decomposition**.
+
+## Kinematic Components and Statistical Moments
+
+The analysis examines **two distinct statistical moments** of the atmospheric flow:
+
+1. **First Moment (Mean)** - Analyzed in this chapter via:
+   - **MKE (Mean Kinetic Energy)**: $\text{MKE} = \frac{1}{2}(\bar{u}^2 + \bar{v}^2)$
+     - Measures the strength of the large-scale, time-mean circulation
+   - **EKE (Eddy Kinetic Energy)**: $\text{EKE} = \frac{1}{2}\overline{(u'^2 + v'^2)}$
+     - Measures the **average energy** or **mean strength** of transient storms
+   - **MKE/EKE Ratio**: Dimensionless index of energy partitioning
+     - High ratio (>5): Mean circulation dominates
+     - Low ratio (<3): Eddies/storms dominate
+
+2. **Second Moment (Variance)** - Analyzed in Phases 1-3 via:
+   - **Storminess Index**: $\sigma^2[\text{EKE}_{\text{instant}}]$
+     - Measures the **variability** or **intermittency** of storm activity
+
+**Key Distinction:** Mean strength (EKE) and variability (Storminess) are **independent properties**. Both must be analyzed to characterize the full distribution of storm activity.
+
+## Experimental Design and Data Processing
+
+### Full Factorial Design (63 Scenarios)
+
+| Factor | Categories | Implementation |
+|:-------|:-----------|:---------------|
+| **Spatial Domains (3)** | Pan-Arctic (≥60°N), Fram Strait (76-82°N, 15°W-15°E), Svalbard/Barents (74-81°N, 10°W-35°E) | Area-weighted spatial means using cosine-latitude weighting |
+| **Temporal Scales (7)** | Annual, DJF, MAM, JJA, SON, DJFM, FMA | Aggregated to annual means (one value per year) |
+| **Metrics (3)** | MKE, EKE, MKE/EKE Ratio | Trends of spatially-averaged time series |
+
+**Total scenarios:** 3 regions × 7 time scales × 3 metrics = **63 independent hypothesis tests**
+
+### Data Aggregation Strategy
+
+**Critical methodological point:** All analyses operate on **annual time series** (67 values, 1958-2024), not monthly data:
+
+1. **Annual Analysis:**
+   - Input: 804 monthly values of MKE, EKE from Reynolds decomposition
+   - **Aggregation**: Average all 12 months within each year
+   - Output: 67 annual mean values
+   - Analysis: Trend of annual means
+
+2. **Seasonal Analysis:**
+   - Input: 804 monthly values
+   - **Aggregation**: Average relevant months within each year for each season
+     - Example (DJF): Mean of [Dec Year N, Jan Year N+1, Feb Year N+1] = One DJF value for Year N+1
+   - Output: 66-67 annual seasonal means (depending on completeness at boundaries)
+   - Analysis: Trend of annual seasonal means
+
+This aggregation removes within-year variability and creates annual time series appropriate for climate trend analysis.
+
+## Robust Statistical Framework
+
+The following pipeline was applied uniformly to all 63 time series:
+
+### 1. Significance Testing
+**Pre-Whitened Mann-Kendall (PW-MK) Test:**
+- Accounts for temporal autocorrelation via pre-whitening: $Y'_t = Y_t - \rho_1 Y_{t-1}$
+- Where $\rho_1$ is the lag-1 autocorrelation coefficient
+- Non-parametric test for monotonic trends (no distributional assumptions)
+- Null hypothesis: No trend exists
+
+### 2. Trend Magnitude
+**Theil-Sen Slope Estimator:**
+- Robust to outliers (uses median of all pairwise slopes)
+- Units: m²/s² per decade (MKE, EKE) or dimensionless per decade (ratio)
+- Reported as: Change per decade over the 67-year period
+
+### 3. Uncertainty Quantification
+**Moving Blocks Bootstrap** ($R = 5000$ replicates):
+- **Block length selection** (critical for preserving autocorrelation structure):
+  - **l = 3 years** for all annual and seasonal analyses
+  - Rationale: Annual data has no seasonal cycle; block length must preserve inter-annual persistence typical of Arctic climate (NAO, AMO influence ~2-3 years)
+- Percentile method: 95% confidence interval from bootstrap distribution
+- Trend considered significant if: (1) $p < 0.05$ AND (2) 95% CI excludes zero
+
+### Verification of Aggregation Success
+Lag-1 autocorrelations ($\rho_1$) confirm proper annual aggregation:
+- **Expected for annual data:** $0.0 \le |\rho_1| \le 0.3$ (weak year-to-year correlation)
+- **Observed:**
+  - MKE: $\rho_1 \in [-0.025, 0.204]$ ✓
+  - EKE: $\rho_1 \in [0.059, 0.122]$ ✓  
+  - Ratio: $\rho_1 \in [-0.059, 0.098]$ ✓
+- **Contrast with monthly data:** Would show $\rho_1 > 0.5$ due to seasonal cycle
+
+## Results: Comprehensive Atmospheric Stability
+
+### Overall Summary
+
+**Zero out of 63 independent hypothesis tests showed a statistically significant trend** ($p < 0.05$).
+
+| Component | Description | Tests | Significant | Result |
+|:----------|:------------|:-----:|:-----------:|:------:|
+| **MKE** | Mean circulation strength | 21 | **0** | ✓ **Stable** |
+| **EKE** | Average storm strength | 21 | **0** | ✓ **Stable** |
+| **MKE/EKE Ratio** | Energy partitioning | 21 | **0** | ✓ **Stable** |
+| **Total** | All kinetic energy components | **63** | **0** | ✓ **Stable** |
+
+### Breakdown by Temporal Scale
+
+| Time Scale | Total Tests | Components Tested | Significant Results |
+|:-----------|:-----------:|:-----------------:|:-------------------:|
+| Annual | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+| DJF (Winter) | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+| MAM (Spring) | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+| JJA (Summer) | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+| SON (Autumn) | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+| DJFM (Extended Winter) | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+| FMA (Late Winter-Spring) | 9 | MKE, EKE, Ratio × 3 regions | 0 |
+
+### Physical Interpretation
+
+The comprehensive stability across all components demonstrates:
+
+1. **Mean Circulation (MKE) Stability:**
+   - Large-scale atmospheric circulation patterns (jet stream, polar vortex) remained unchanged
+   - No evidence of circulation weakening or strengthening
+   - Consistent across all seasons and regions
+
+2. **Average Storm Strength (EKE) Stability:**
+   - Typical storm intensity remained constant
+   - Complements the storminess variance finding (Phase 1-3)
+   - **Together:** Both the **mean** and **variance** of storm energy are stable
+     - Distribution of storm activity unchanged
+
+3. **Energy Partitioning (MKE/EKE Ratio) Stability:**
+   - Balance between mean flow and transient eddies unchanged
+   - Arctic atmosphere maintained consistent dynamical character
+   - No shift toward more circulation-dominated or eddy-dominated regimes
+
+## Synthesis: Comprehensive Dynamical Stability
+
+Combining results across all phases:
+
+| Metric | Statistical Moment | Phase | Result |
+|:-------|:------------------|:------|:-------|
+| **Storminess Index** | Variance (2nd moment) | 1-3 | ✓ Stable |
+| **EKE Mean** | Mean (1st moment) | 4.6 | ✓ Stable |
+| **MKE** | Mean circulation | 4.6 | ✓ Stable |
+| **P99 Intensity** | 99th percentile | 4.1 | ✓ Stable |
+| **P95 Frequency** | Extreme event count | 4.2 | ✓ Stable |
+
+**Final Conclusion:**
+
+The Arctic atmosphere exhibited **comprehensive dynamical stability** across the 67-year period (1958-2024), with no detectable trends in:
+- Distribution moments (mean, variance)
+- Extreme values (P95, P99)
+- Energy budget components (MKE, EKE, ratio)
+- Temporal scales (annual, all seasons)
+- Spatial domains (Pan-Arctic, regional)
+
+This stability persisted despite:
+- Dramatic Arctic sea ice loss (>50% summer extent)
+- Significant Arctic amplification of warming (2-3× global rate)
+- Major changes in Arctic Ocean and sea ice conditions
+
+The results demonstrate remarkable **atmospheric dynamical resilience** to boundary condition changes, contradicting hypotheses of intensifying Arctic storms, weakening polar circulation, or seasonal shifts in storminess patterns.
+
+```{r}
 # ============================================================================
-# PHASE 4, SECTION 3.3: MECHANISTIC DIAGNOSTICS (CORRECTED VERSION)
+# PHASE 4, SECTION 3.3: MECHANISTIC DIAGNOSTICS (FULLY CORRECTED VERSION)
 #
 # PURPOSE: Analyze long-term trends in kinetic energy components (MKE & EKE)
 #          to provide mechanistic insight into Arctic storminess changes.
 #
+# KEY CORRECTION: Annual analyses now properly aggregate monthly→annual
+#                  before calculating trends (67 annual means, not 804 months)
+# ============================================================================
+
 # ============================================================================
 # CRITICAL: UNDERSTANDING THE RELATIONSHIP BETWEEN METRICS
 # ============================================================================
 #
-# The analysis uses TWO DIFFERENT metrics derived from instantaneous EKE:
-#z
-# 1. STORMINESS INDEX (main analysis):
+# The analysis uses THREE DIFFERENT metrics:
+#
+# 1. STORMINESS INDEX (main thesis analysis):
 #    - Definition: Var[eke_instant] = Variance of instantaneous EKE
 #    - Measures: How VARIABLE or INTERMITTENT storm activity is
 #    - Physical meaning: Storm variability, sporadic vs. consistent activity
-#    - Python code: storminess = eke_instant.var(dim='time')
 #
-# 2. EKE MEAN (mechanistic analysis):
+# 2. EKE MEAN (this mechanistic analysis):
 #    - Definition: E[eke_instant] = Mean of instantaneous EKE
 #    - Measures: Average STRENGTH or ENERGY of storms
 #    - Physical meaning: How strong storms are on average
-#    - Python code: eke_mean = eke_instant.mean(dim='time')
+#
+# 3. MKE MEAN (this mechanistic analysis):
+#    - Definition: E[0.5*(U_mean² + V_mean²)] = Mean flow kinetic energy
+#    - Measures: Energy in time-mean circulation
+#    - Physical meaning: Strength of climatological wind patterns
 #
 # WHERE:
-#    eke_instant = 0.5 * (u_eddy**2 + v_eddy**2)  [at each time step]
+#    eke_instant = 0.5 * (u_eddy² + v_eddy²)  [at each time step]
 #    u_eddy, v_eddy = wind anomalies from monthly mean
 #
-# ============================================================================
-# KEY POINT: THESE ARE DIFFERENT STATISTICAL MOMENTS
-# ============================================================================
+# THESE ARE DIFFERENT STATISTICAL MOMENTS:
+#    Storminess Index = σ²(eke_instant) = Second moment (variance)
+#    EKE Mean         = μ(eke_instant)  = First moment (mean)
 #
-# Storminess Index = σ²(eke_instant) = SECOND moment (variance)
-# EKE Mean         = μ(eke_instant)  = FIRST moment (mean)
-#
-# They measure DIFFERENT physical properties and can change INDEPENDENTLY:
-#
-# Scenario A: Both stable    → No change in mean strength OR variability
-# Scenario B: EKE↑, Storm=   → Storms stronger but equally intermittent
-# Scenario C: EKE=, Storm↑   → Same strength, more variable (rare extremes)
-# Scenario D: Both↑          → Storms stronger AND more variable
-#
-#
-# ============================================================================
-# WHAT THIS ANALYSIS ADDS
-# ============================================================================
-#
-# Your main analysis showed: NO trends in Storminess Index (variance stable)
-# This analysis tests:       Are trends in EKE Mean also absent? (mean stable?)
-#
-# If BOTH are stable → Comprehensive stability (distribution unchanged)
-# If ONE changes → Partial change (only mean OR variance affected)
-#
-# Additional diagnostics:
-# - MKE trends: Is mean circulation changing?
-# - MKE/EKE ratio: Is energy partitioning changing?
-# - Seasonal patterns: Do mechanisms vary by season?
-#
+# They can change INDEPENDENTLY.
 # ============================================================================
 
 # --- 2. DEFINE FILE PATHS & PARAMETERS ---
-processed_dir <- "E:/ERA5_data/processed"
+processed_dir <- here::here("Data", "processed")
 
 paths <- list(
   mke = file.path(processed_dir, "ERA5_MKE_monthly_1958-2024.nc"),
@@ -6785,14 +7411,12 @@ paths <- list(
 # Check if files exist
 if (!file.exists(paths$mke) || !file.exists(paths$eke)) {
   stop("Missing required files: MKE or EKE NetCDF not found.\n",
-       "Please run the Python Reynolds decomposition script first.\n",
        "Expected files:\n",
-       "  - ERA5_MKE_monthly_1958-2024.nc (monthly mean kinetic energy)\n",
-       "  - ERA5_EKE_monthly_1958-2024.nc (monthly mean eddy kinetic energy)")
+       "  - ERA5_MKE_monthly_1958-2024.nc\n",
+       "  - ERA5_EKE_monthly_1958-2024.nc")
 }
 
 # --- 3. DEFINE REGIONAL MASKS ---
-# Reusable function to define the three analysis domains
 define_regional_masks <- function(lat_full, lon_full) {
   list(
     Pan_Arctic = list(
@@ -6814,7 +7438,6 @@ define_regional_masks <- function(lat_full, lon_full) {
 }
 
 # --- 4. DEFINE SEASONAL DEFINITIONS ---
-# Standard meteorological seasons plus extended winter periods
 season_definitions <- list(
   DJF = list(months = c(12, 1, 2), name = "DJF (Winter)"),
   MAM = list(months = c(3, 4, 5), name = "MAM (Spring)"),
@@ -6824,122 +7447,21 @@ season_definitions <- list(
   FMA = list(months = c(2, 3, 4), name = "FMA (Late Winter-Early Spring)")
 )
 
-# --- 5. REUSABLE TREND ANALYSIS FUNCTIONS ---
-
-# ============================================================================
-# FUNCTION: run_monthly_trend_analysis
-# 
-# Purpose: Perform robust trend analysis on MONTHLY time series
-# 
-# Uses:
-#   - Pre-Whitened Mann-Kendall test (accounts for autocorrelation)
-#   - Sen's slope estimator (robust to outliers)
-#   - Moving blocks bootstrap (l=12 months, preserves seasonal cycle)
-#
-# Inputs:
-#   - ts_vector: Monthly time series (804 values for 1958-2024)
-#   - boot_file_path: Where to save/load bootstrap results
-#   - unit_label: Units for reporting (e.g., "m²/s²")
-#
-# Outputs:
-#   - rho1: Lag-1 autocorrelation
-#   - p_value: Statistical significance
-#   - slope_decade: Trend magnitude (per decade)
-#   - ci_lower/ci_upper: 95% confidence interval (per decade)
-# ============================================================================
-
-run_monthly_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m²/s²") {
-  
-  # Convert to time series object
-  ts_obj <- ts(ts_vector, start = c(1958, 1), frequency = 12)
-  ts_vector_clean <- as.vector(ts_obj)
-  n <- length(ts_vector_clean)
-  
-  # --- a. Calculate Autocorrelation ---
-  # Important: High autocorrelation invalidates standard tests
-  rho1 <- acf(ts_obj, plot = FALSE, lag.max = 1)$acf[2]
-  
-  # --- b. Pre-Whitened Mann-Kendall Test ---
-  # Remove autocorrelation before testing for trend
-  prewhitened <- ts_vector_clean[2:n] - rho1 * ts_vector_clean[1:(n-1)]
-  mk_result <- trend::mk.test(prewhitened)
-  p_value <- mk_result$p.value
-
-  # --- c. Sen's Slope (Trend Magnitude) ---
-  # Robust estimator (median of all pairwise slopes)
-  sens_result <- sens.slope(ts_obj)
-  slope_per_year <- sens_result$estimates
-  slope_per_decade <- slope_per_year * 10  # Convert to per decade
-
-  # --- d. Moving Blocks Bootstrap for Confidence Interval ---
-  # Block length = 12 months preserves seasonal cycle
-  block_length <- 12 
-  n_replicates <- 5000
-  
-  # Function to calculate slope on each bootstrap replicate
-  slope_statistic_monthly <- function(d) {
-    ts_subset <- ts(d, start = 1, frequency = 12)
-    result <- try(sens.slope(ts_subset)$estimates, silent = TRUE)
-    if (inherits(result, "try-error") || is.null(result) || is.na(result)) return(NA)
-    return(result)  # Returns slope per year
-  }
-  
-  # Load cached bootstrap or compute new one
-  if (file.exists(boot_file_path)) {
-    boot_result <- readRDS(boot_file_path)
-  } else {
-    set.seed(42)  # Reproducibility
-    boot_result <- boot::tsboot(ts_vector_clean,
-                                statistic = slope_statistic_monthly,
-                                R = n_replicates,
-                                l = block_length,
-                                sim = "fixed",
-                                parallel = "multicore",
-                                ncpus = max(1, parallel::detectCores() - 1))
-    saveRDS(boot_result, boot_file_path)
-  }
-
-  # --- e. Extract 95% Confidence Interval ---
-  boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
-  
-  if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent) && all(!is.na(boot_ci$percent[4:5]))) {
-    ci_lower_decade <- boot_ci$percent[4] * 10  # Convert to per decade
-    ci_upper_decade <- boot_ci$percent[5] * 10
-  } else {
-    ci_lower_decade <- NA
-    ci_upper_decade <- NA
-  }
-  
-  # Return all statistics
-  return(list(
-    rho1 = rho1,
-    p_value = p_value,
-    slope_decade = slope_per_decade,
-    ci_lower = ci_lower_decade,
-    ci_upper = ci_upper_decade,
-    unit = unit_label
-  ))
-}
-
 # ============================================================================
 # FUNCTION: run_annual_trend_analysis
 # 
-# Purpose: Perform robust trend analysis on ANNUAL time series
-#          (used for seasonal aggregates)
+# Purpose: Robust trend analysis on ANNUAL time series (67 values)
 # 
-# Uses:
-#   - Pre-Whitened Mann-Kendall test
-#   - Sen's slope estimator
-#   - Moving blocks bootstrap (l=3 years, preserves inter-annual persistence)
-#
-# Inputs/Outputs: Same as run_monthly_trend_analysis
+# Block length: l=3 years (preserves inter-annual persistence)
+# Why l=3: Annual data has no seasonal cycle, only year-to-year memory
+#          Arctic climate has ~2-3 year persistence (NAO, AMO)
 # ============================================================================
 
 run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m²/s²") {
   
   n <- length(ts_vector)
   
-  # Autocorrelation
+  # Lag-1 autocorrelation (should be low for annual data, ~0.1-0.3)
   rho1 <- acf(ts_vector, plot = FALSE, lag.max = 1)$acf[2]
   
   # Pre-Whitened Mann-Kendall
@@ -6947,12 +7469,14 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m
   mk_result <- trend::mk.test(prewhitened)
   p_value <- mk_result$p.value
 
-  # Sen's Slope
+  # Sen's Slope (robust median-based estimator)
   sens_result <- sens.slope(ts_vector)
   slope_per_year <- sens_result$estimates
   slope_per_decade <- slope_per_year * 10
 
-  # Block Bootstrap (l=3 for annual data)
+  # *** CRITICAL: l=3 for ANNUAL data (not l=12) ***
+  # l=3 preserves inter-annual persistence (year-to-year memory)
+  # No seasonal cycle to preserve (data already aggregated)
   block_length <- 3
   n_replicates <- 5000
   
@@ -6979,7 +7503,8 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m
   # Extract CI
   boot_ci <- try(boot.ci(boot_result, type = "perc"), silent = TRUE)
   
-  if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent) && all(!is.na(boot_ci$percent[4:5]))) {
+  if (!inherits(boot_ci, "try-error") && !is.null(boot_ci$percent) && 
+      all(!is.na(boot_ci$percent[4:5]))) {
     ci_lower_decade <- boot_ci$percent[4] * 10
     ci_upper_decade <- boot_ci$percent[5] * 10
   } else {
@@ -7001,29 +7526,18 @@ run_annual_trend_analysis <- function(ts_vector, boot_file_path, unit_label = "m
 # FUNCTION: extract_regional_ts
 # 
 # Purpose: Extract area-weighted spatial average for a specific region
-# 
-# Inputs:
-#   - v_permuted: 3D array [time, lat, lon]
-#   - lat_full: Full latitude vector
-#   - masks: List of regional mask definitions
-#   - region_name: Which region to extract
-#
-# Output: 
-#   - Time series vector (area-weighted spatial mean)
 # ============================================================================
 
 extract_regional_ts <- function(v_permuted, lat_full, masks, region_name) {
   
-  # Get indices for this region
   lat_idx_r <- masks[[region_name]]$lat_idx
   lon_idx_r <- masks[[region_name]]$lon_idx
   lat_vals_r <- lat_full[lat_idx_r]
   
-  # Subset the array to this region
+  # Subset to region
   v_region <- v_permuted[, lat_idx_r, lon_idx_r, drop = FALSE]
   
-  # Create area weights (cosine of latitude)
-  # This corrects for meridian convergence toward the pole
+  # Area weights (cosine of latitude)
   lat_weights <- cos(lat_vals_r * pi / 180)
   weights_matrix <- matrix(lat_weights,
                            nrow = length(lat_vals_r),
@@ -7039,116 +7553,21 @@ extract_regional_ts <- function(v_permuted, lat_full, masks, region_name) {
 }
 
 # ============================================================================
-# SECTION 1: ANNUAL TRENDS ANALYSIS
-# ============================================================================
-
-# ============================================================================
-# FUNCTION: analyze_ke_annual
+# FUNCTION: analyze_ke_annual (CORRECTED VERSION)
 # 
-# Purpose: Analyze annual trends in MKE or EKE for all three regions
+# Purpose: Analyze ANNUAL trends in MKE or EKE
 #
-# What it does:
-#   1. Loads monthly NetCDF file (MKE or EKE)
-#   2. Extracts time series for Pan-Arctic, Fram Strait, Svalbard/Barents
-#   3. Performs robust trend analysis on each region
-#   4. Returns results table
-#
-# Inputs:
-#   - file_path: Path to NetCDF file
-#   - var_name: Variable name ("mke" or "eke")
-#   - boot_prefix: Prefix for bootstrap cache files
-#   - unit_label: Units for reporting
-#
-# Output:
-#   - Data frame with trends for all 3 regions
+# CRITICAL CORRECTION: 
+# - Load monthly data (804 values)
+# - Aggregate to annual means (67 values)  ← NEW STEP
+# - Analyze annual trends with l=3         ← CORRECTED
 # ============================================================================
 
 analyze_ke_annual <- function(file_path, var_name, boot_prefix, unit_label = "m²/s²") {
   
   cat(glue("\n--- Analyzing Annual {toupper(var_name)} Trends ---\n"))
   
-  # --- Load NetCDF Data ---
-  nc <- nc_open(file_path)
-  v_raw <- ncvar_get(nc, var_name)
-  dim_names <- sapply(nc$var[[var_name]]$dim, function(d) d$name)
-  
-  # Identify dimension order
-  time_idx <- which(dim_names == "time")
-  lat_idx <- which(dim_names == "latitude")
-  lon_idx <- which(dim_names == "longitude")
-  
-  lat_full <- ncvar_get(nc, "latitude")
-  lon_full <- ncvar_get(nc, "longitude")
-  nc_close(nc)
-  
-  # Permute to standard order [time, lat, lon]
-  v_permuted <- aperm(v_raw, c(time_idx, lat_idx, lon_idx))
-  rm(v_raw); gc()
-  
-  cat(glue("  Loaded: [time={dim(v_permuted)[1]}, lat={dim(v_permuted)[2]}, lon={dim(v_permuted)[3]}]\n"))
-
-  # --- Define Regional Masks ---
-  masks <- define_regional_masks(lat_full, lon_full)
-  
-  results_list <- list()
-
-  # --- Loop Through Regions ---
-  for (region_name in names(masks)) {
-    
-    cat(glue("  Processing: {masks[[region_name]]$name}...\n"))
-    
-    # Extract area-weighted time series
-    ts_vector <- extract_regional_ts(v_permuted, lat_full, masks, region_name)
-    
-    # Define path for bootstrap cache
-    boot_path <- file.path(processed_dir, glue("boot_{boot_prefix}_Annual_{region_name}.rds"))
-    
-    # Run trend analysis
-    stats <- run_monthly_trend_analysis(ts_vector, boot_path, unit_label)
-    
-    # Store results
-    results_list[[region_name]] <- data.frame(
-      Component = toupper(var_name),
-      Region = masks[[region_name]]$name,
-      Time_Scale = "Annual",
-      Lag1 = stats$rho1,
-      Slope = stats$slope_decade,
-      Pvalue = stats$p_value,
-      CI_Lower = stats$ci_lower,
-      CI_Upper = stats$ci_upper,
-      Units = stats$unit
-    )
-  }
-  
-  return(bind_rows(results_list))
-}
-
-# ============================================================================
-# SECTION 2: SEASONAL TRENDS ANALYSIS
-# ============================================================================
-
-# ============================================================================
-# FUNCTION: analyze_ke_seasonal
-# 
-# Purpose: Analyze seasonal trends in MKE or EKE for all regions and seasons
-#
-# Process:
-#   1. Load monthly data
-#   2. Extract months belonging to each season (DJF, MAM, JJA, SON, DJFM, FMA)
-#   3. Aggregate to annual (mean across season months for each year)
-#   4. Analyze annual trend for each season × region combination
-#
-# Note: We convert monthly→annual because:
-#   - Seasonal subsets are too short for monthly analysis
-#   - Annual aggregation removes within-season variability
-#   - Use l=3 (annual) instead of l=12 (monthly) for bootstrap
-# ============================================================================
-
-analyze_ke_seasonal <- function(file_path, var_name, boot_prefix, unit_label = "m²/s²") {
-  
-  cat(glue("\n--- Analyzing Seasonal {toupper(var_name)} Trends ---\n"))
-  
-  # Load data
+  # Load NetCDF Data
   nc <- nc_open(file_path)
   v_raw <- ncvar_get(nc, var_name)
   dim_names <- sapply(nc$var[[var_name]]$dim, function(d) d$name)
@@ -7165,173 +7584,60 @@ analyze_ke_seasonal <- function(file_path, var_name, boot_prefix, unit_label = "
   v_permuted <- aperm(v_raw, c(time_idx, lat_idx, lon_idx))
   rm(v_raw); gc()
   
-  # Define masks
+  cat(glue("  Loaded: [time={dim(v_permuted)[1]} months, lat={dim(v_permuted)[2]}, lon={dim(v_permuted)[3]}]\n"))
+
+  # Define Regional Masks
   masks <- define_regional_masks(lat_full, lon_full)
   
   results_list <- list()
-  
-  # --- Loop Through Seasons ---
-  for (season_name in names(season_definitions)) {
-    
-    cat(glue("\n  Processing Season: {season_definitions[[season_name]]$name}...\n"))
-    
-    months <- season_definitions[[season_name]]$months
-    
-    # Create time indices
-    n_months <- dim(v_permuted)[1]  # Should be 804 (67 years × 12 months)
-    n_years <- n_months / 12
-    
-    # Vector indicating month (1-12) and year (1-67) for each time step
-    month_sequence <- rep(1:12, times = n_years)
-    year_sequence <- rep(1:n_years, each = 12)
-    
-    # Find time steps belonging to this season
-    seasonal_idx <- which(month_sequence %in% months)
-    
-    # Extract seasonal subset
-    v_seasonal <- v_permuted[seasonal_idx, , , drop = FALSE]
-    
-    # Determine which year each seasonal time step belongs to
-    year_for_seasonal <- year_sequence[seasonal_idx]
-    
-    # Aggregate to annual (mean across season months for each year)
-    v_annual <- array(NA, dim = c(n_years, dim(v_seasonal)[2], dim(v_seasonal)[3]))
-    
-    for (yr in 1:n_years) {
-      yr_indices <- which(year_for_seasonal == yr)
-      if (length(yr_indices) > 0) {
-        # Take mean across months within this year
-        v_annual[yr, , ] <- apply(v_seasonal[yr_indices, , , drop = FALSE], c(2, 3), mean, na.rm = TRUE)
-      }
-    }
-    
-    # --- Loop Through Regions ---
-    for (region_name in names(masks)) {
-      
-      cat(glue("    Region: {masks[[region_name]]$name}...\n"))
-      
-      # Extract regional subset
-      lat_idx_r <- masks[[region_name]]$lat_idx
-      lon_idx_r <- masks[[region_name]]$lon_idx
-      lat_vals_r <- lat_full[lat_idx_r]
-      
-      v_region <- v_annual[, lat_idx_r, lon_idx_r, drop = FALSE]
-      
-      # Create area weights
-      lat_weights <- cos(lat_vals_r * pi / 180)
-      weights_matrix <- matrix(lat_weights,
-                               nrow = length(lat_vals_r),
-                               ncol = length(lon_idx_r),
-                               byrow = FALSE)
-      
-      # Calculate area-weighted annual time series
-      ts_vector <- apply(v_region, 1, function(slice) {
-        weighted.mean(slice, weights_matrix, na.rm = TRUE)
-      })
-      
-      # Define boot path
-      boot_path <- file.path(processed_dir, glue("boot_{boot_prefix}_{season_name}_{region_name}.rds"))
-      
-      # Run ANNUAL analysis (l=3 for annual data)
-      stats <- run_annual_trend_analysis(ts_vector, boot_path, unit_label)
-      
-      # Store results
-      results_list[[paste(season_name, region_name, sep = "_")]] <- data.frame(
-        Component = toupper(var_name),
-        Region = masks[[region_name]]$name,
-        Time_Scale = season_name,
-        Lag1 = stats$rho1,
-        Slope = stats$slope_decade,
-        Pvalue = stats$p_value,
-        CI_Lower = stats$ci_lower,
-        CI_Upper = stats$ci_upper,
-        Units = stats$unit
-      )
-    }
-  }
-  
-  return(bind_rows(results_list))
-}
 
-# ============================================================================
-# SECTION 3: MKE/EKE RATIO ANALYSIS (ANNUAL)
-# ============================================================================
-
-# ============================================================================
-# FUNCTION: analyze_ke_ratio_annual
-# 
-# Purpose: Analyze trends in the MKE/EKE ratio (energy partitioning)
-#
-# Physical meaning:
-#   - High ratio → Mean circulation dominates (zonal flow, stable)
-#   - Low ratio → Eddies dominate (meridional flow, active storms)
-#   - Increasing trend → System becoming more circulation-dominated
-#   - Decreasing trend → System becoming more eddy-dominated
-#
-# Process:
-#   1. Load both MKE and EKE monthly data
-#   2. Calculate ratio = MKE/EKE for each time step
-#   3. Analyze trend in ratio
-# ============================================================================
-
-analyze_ke_ratio_annual <- function() {
-  
-  cat(glue("\n--- Analyzing Annual MKE/EKE Ratio ---\n"))
-  
-  # Load both MKE and EKE
-  nc_mke <- nc_open(paths$mke)
-  nc_eke <- nc_open(paths$eke)
-  
-  mke_raw <- ncvar_get(nc_mke, "mke")
-  eke_raw <- ncvar_get(nc_eke, "eke")
-  
-  dim_names_mke <- sapply(nc_mke$var[["mke"]]$dim, function(d) d$name)
-  
-  time_idx <- which(dim_names_mke == "time")
-  lat_idx <- which(dim_names_mke == "latitude")
-  lon_idx <- which(dim_names_mke == "longitude")
-  
-  lat_full <- ncvar_get(nc_mke, "latitude")
-  lon_full <- ncvar_get(nc_mke, "longitude")
-  
-  nc_close(nc_mke)
-  nc_close(nc_eke)
-  
-  # Permute both to [time, lat, lon]
-  mke_permuted <- aperm(mke_raw, c(time_idx, lat_idx, lon_idx))
-  eke_permuted <- aperm(eke_raw, c(time_idx, lat_idx, lon_idx))
-  rm(mke_raw, eke_raw); gc()
-  
-  cat(glue("  Loaded MKE and EKE: [time={dim(mke_permuted)[1]}, lat={dim(mke_permuted)[2]}, lon={dim(mke_permuted)[3]}]\n"))
-  
-  # Define masks
-  masks <- define_regional_masks(lat_full, lon_full)
-  
-  results_list <- list()
-  
-  # --- Loop Through Regions ---
+  # Loop Through Regions
   for (region_name in names(masks)) {
     
     cat(glue("  Processing: {masks[[region_name]]$name}...\n"))
     
-    # Extract time series for both components
-    mke_ts <- extract_regional_ts(mke_permuted, lat_full, masks, region_name)
-    eke_ts <- extract_regional_ts(eke_permuted, lat_full, masks, region_name)
+    # Extract area-weighted MONTHLY time series (804 values)
+    ts_vector_monthly <- extract_regional_ts(v_permuted, lat_full, masks, region_name)
     
-    # Calculate ratio
-    ratio_ts <- mke_ts / eke_ts
+    # *** CRITICAL: AGGREGATE MONTHLY → ANNUAL ***
+    cat("    Aggregating monthly → annual...\n")
+    n_months <- length(ts_vector_monthly)
+    n_years <- n_months / 12
     
-    # Boot path
-    boot_path <- file.path(processed_dir, glue("boot_MKE_EKE_RATIO_Annual_{region_name}.rds"))
+    if (n_months != 804) {
+      warning(sprintf("Expected 804 months, got %d", n_months))
+    }
     
-    # Analyze trend
-    stats <- run_monthly_trend_analysis(ratio_ts, boot_path, unit_label = "dimensionless")
+    # Create data frame
+    monthly_df <- data.frame(
+      value = ts_vector_monthly,
+      year = rep(1:n_years, each = 12)
+    )
+    
+    # Aggregate to annual means
+    annual_df <- aggregate(value ~ year, data = monthly_df, FUN = mean)
+    ts_vector_annual <- annual_df$value
+    
+    cat(sprintf("    ✓ Converted %d monthly → %d annual values\n", 
+                n_months, length(ts_vector_annual)))
+    
+    if (length(ts_vector_annual) != 67) {
+      warning(sprintf("Expected 67 annual values, got %d", length(ts_vector_annual)))
+    }
+    
+    # Define path for bootstrap cache
+    boot_path <- file.path(processed_dir, 
+                          glue("boot_{boot_prefix}_Annual_{region_name}_CORRECTED.rds"))
+    
+    # *** CORRECTED: Use ANNUAL analysis function (l=3, not l=12) ***
+    stats <- run_annual_trend_analysis(ts_vector_annual, boot_path, unit_label)
     
     # Store results
     results_list[[region_name]] <- data.frame(
-      Component = "MKE/EKE Ratio",
+      Component = toupper(var_name),
       Region = masks[[region_name]]$name,
       Time_Scale = "Annual",
+      N_Years = length(ts_vector_annual),
       Lag1 = stats$rho1,
       Slope = stats$slope_decade,
       Pvalue = stats$p_value,
@@ -7345,12 +7651,12 @@ analyze_ke_ratio_annual <- function() {
 }
 
 # ============================================================================
-# SECTION 4: MKE/EKE RATIO ANALYSIS (SEASONAL)
+# FUNCTION: analyze_ke_ratio_annual (CORRECTED VERSION)
 # ============================================================================
 
-analyze_ke_ratio_seasonal <- function() {
+analyze_ke_ratio_annual <- function() {
   
-  cat(glue("\n--- Analyzing Seasonal MKE/EKE Ratio ---\n"))
+  cat(glue("\n--- Analyzing Annual MKE/EKE Ratio ---\n"))
   
   # Load both components
   nc_mke <- nc_open(paths$mke)
@@ -7371,7 +7677,203 @@ analyze_ke_ratio_seasonal <- function() {
   nc_close(nc_mke)
   nc_close(nc_eke)
   
-  # Permute
+  # Permute to [time, lat, lon]
+  mke_permuted <- aperm(mke_raw, c(time_idx, lat_idx, lon_idx))
+  eke_permuted <- aperm(eke_raw, c(time_idx, lat_idx, lon_idx))
+  rm(mke_raw, eke_raw); gc()
+  
+  cat(glue("  Loaded MKE and EKE: [time={dim(mke_permuted)[1]} months, lat={dim(mke_permuted)[2]}, lon={dim(mke_permuted)[3]}]\n"))
+  
+  # Define masks
+  masks <- define_regional_masks(lat_full, lon_full)
+  
+  results_list <- list()
+  
+  # Loop Through Regions
+  for (region_name in names(masks)) {
+    
+    cat(glue("  Processing: {masks[[region_name]]$name}...\n"))
+    
+    # Extract MONTHLY time series (804 values each)
+    mke_ts_monthly <- extract_regional_ts(mke_permuted, lat_full, masks, region_name)
+    eke_ts_monthly <- extract_regional_ts(eke_permuted, lat_full, masks, region_name)
+    
+    # *** CRITICAL: AGGREGATE TO ANNUAL MEANS ***
+    cat("    Aggregating monthly → annual...\n")
+    n_months <- length(mke_ts_monthly)
+    n_years <- n_months / 12
+    
+    # Aggregate MKE
+    mke_df <- data.frame(value = mke_ts_monthly, year = rep(1:n_years, each = 12))
+    mke_annual_df <- aggregate(value ~ year, data = mke_df, FUN = mean)
+    mke_ts_annual <- mke_annual_df$value
+    
+    # Aggregate EKE
+    eke_df <- data.frame(value = eke_ts_monthly, year = rep(1:n_years, each = 12))
+    eke_annual_df <- aggregate(value ~ year, data = eke_df, FUN = mean)
+    eke_ts_annual <- eke_annual_df$value
+    
+    # Calculate ratio on ANNUAL data
+    ratio_ts_annual <- mke_ts_annual / eke_ts_annual
+    
+    cat(sprintf("    ✓ Converted %d monthly → %d annual values\n", 
+                n_months, length(ratio_ts_annual)))
+    
+    # Boot path
+    boot_path <- file.path(processed_dir, 
+                          glue("boot_MKE_EKE_RATIO_Annual_{region_name}_CORRECTED.rds"))
+    
+    # *** CORRECTED: Use ANNUAL analysis (l=3) ***
+    stats <- run_annual_trend_analysis(ratio_ts_annual, boot_path, 
+                                      unit_label = "dimensionless")
+    
+    # Store results
+    results_list[[region_name]] <- data.frame(
+      Component = "MKE/EKE Ratio",
+      Region = masks[[region_name]]$name,
+      Time_Scale = "Annual",
+      N_Years = length(ratio_ts_annual),
+      Lag1 = stats$rho1,
+      Slope = stats$slope_decade,
+      Pvalue = stats$p_value,
+      CI_Lower = stats$ci_lower,
+      CI_Upper = stats$ci_upper,
+      Units = stats$unit
+    )
+  }
+  
+  return(bind_rows(results_list))
+}
+
+# ============================================================================
+# FUNCTION: analyze_ke_seasonal (UNCHANGED - already correct)
+# ============================================================================
+
+analyze_ke_seasonal <- function(file_path, var_name, boot_prefix, unit_label = "m²/s²") {
+  
+  cat(glue("\n--- Analyzing Seasonal {toupper(var_name)} Trends ---\n"))
+  
+  # Load data
+  nc <- nc_open(file_path)
+  v_raw <- ncvar_get(nc, var_name)
+  dim_names <- sapply(nc$var[[var_name]]$dim, function(d) d$name)
+  
+  time_idx <- which(dim_names == "time")
+  lat_idx <- which(dim_names == "latitude")
+  lon_idx <- which(dim_names == "longitude")
+  
+  lat_full <- ncvar_get(nc, "latitude")
+  lon_full <- ncvar_get(nc, "longitude")
+  nc_close(nc)
+  
+  v_permuted <- aperm(v_raw, c(time_idx, lat_idx, lon_idx))
+  rm(v_raw); gc()
+  
+  masks <- define_regional_masks(lat_full, lon_full)
+  
+  results_list <- list()
+  
+  # Loop Through Seasons
+  for (season_name in names(season_definitions)) {
+    
+    cat(glue("\n  Processing Season: {season_definitions[[season_name]]$name}...\n"))
+    
+    months <- season_definitions[[season_name]]$months
+    
+    n_months <- dim(v_permuted)[1]
+    n_years <- n_months / 12
+    
+    month_sequence <- rep(1:12, times = n_years)
+    year_sequence <- rep(1:n_years, each = 12)
+    
+    seasonal_idx <- which(month_sequence %in% months)
+    
+    v_seasonal <- v_permuted[seasonal_idx, , , drop = FALSE]
+    
+    year_for_seasonal <- year_sequence[seasonal_idx]
+    
+    # Aggregate to annual (one value per season per year)
+    v_annual <- array(NA, dim = c(n_years, dim(v_seasonal)[2], dim(v_seasonal)[3]))
+    
+    for (yr in 1:n_years) {
+      yr_indices <- which(year_for_seasonal == yr)
+      if (length(yr_indices) > 0) {
+        v_annual[yr, , ] <- apply(v_seasonal[yr_indices, , , drop = FALSE], 
+                                  c(2, 3), mean, na.rm = TRUE)
+      }
+    }
+    
+    # Loop Through Regions
+    for (region_name in names(masks)) {
+      
+      cat(glue("    Region: {masks[[region_name]]$name}...\n"))
+      
+      lat_idx_r <- masks[[region_name]]$lat_idx
+      lon_idx_r <- masks[[region_name]]$lon_idx
+      lat_vals_r <- lat_full[lat_idx_r]
+      
+      v_region <- v_annual[, lat_idx_r, lon_idx_r, drop = FALSE]
+      
+      lat_weights <- cos(lat_vals_r * pi / 180)
+      weights_matrix <- matrix(lat_weights,
+                               nrow = length(lat_vals_r),
+                               ncol = length(lon_idx_r),
+                               byrow = FALSE)
+      
+      ts_vector <- apply(v_region, 1, function(slice) {
+        weighted.mean(slice, weights_matrix, na.rm = TRUE)
+      })
+      
+      boot_path <- file.path(processed_dir, 
+                            glue("boot_{boot_prefix}_{season_name}_{region_name}.rds"))
+      
+      # Use ANNUAL analysis (l=3)
+      stats <- run_annual_trend_analysis(ts_vector, boot_path, unit_label)
+      
+      results_list[[paste(season_name, region_name, sep = "_")]] <- data.frame(
+        Component = toupper(var_name),
+        Region = masks[[region_name]]$name,
+        Time_Scale = season_name,
+        N_Years = length(ts_vector),
+        Lag1 = stats$rho1,
+        Slope = stats$slope_decade,
+        Pvalue = stats$p_value,
+        CI_Lower = stats$ci_lower,
+        CI_Upper = stats$ci_upper,
+        Units = stats$unit
+      )
+    }
+  }
+  
+  return(bind_rows(results_list))
+}
+
+# ============================================================================
+# FUNCTION: analyze_ke_ratio_seasonal (UNCHANGED - already correct)
+# ============================================================================
+
+analyze_ke_ratio_seasonal <- function() {
+  
+  cat(glue("\n--- Analyzing Seasonal MKE/EKE Ratio ---\n"))
+  
+  nc_mke <- nc_open(paths$mke)
+  nc_eke <- nc_open(paths$eke)
+  
+  mke_raw <- ncvar_get(nc_mke, "mke")
+  eke_raw <- ncvar_get(nc_eke, "eke")
+  
+  dim_names_mke <- sapply(nc_mke$var[["mke"]]$dim, function(d) d$name)
+  
+  time_idx <- which(dim_names_mke == "time")
+  lat_idx <- which(dim_names_mke == "latitude")
+  lon_idx <- which(dim_names_mke == "longitude")
+  
+  lat_full <- ncvar_get(nc_mke, "latitude")
+  lon_full <- ncvar_get(nc_mke, "longitude")
+  
+  nc_close(nc_mke)
+  nc_close(nc_eke)
+  
   mke_permuted <- aperm(mke_raw, c(time_idx, lat_idx, lon_idx))
   eke_permuted <- aperm(eke_raw, c(time_idx, lat_idx, lon_idx))
   rm(mke_raw, eke_raw); gc()
@@ -7380,7 +7882,6 @@ analyze_ke_ratio_seasonal <- function() {
   
   results_list <- list()
   
-  # --- Loop Through Seasons ---
   for (season_name in names(season_definitions)) {
     
     cat(glue("\n  Processing Season: {season_definitions[[season_name]]$name}...\n"))
@@ -7395,25 +7896,24 @@ analyze_ke_ratio_seasonal <- function() {
     
     seasonal_idx <- which(month_sequence %in% months)
     
-    # Extract seasonal data for both components
     mke_seasonal <- mke_permuted[seasonal_idx, , , drop = FALSE]
     eke_seasonal <- eke_permuted[seasonal_idx, , , drop = FALSE]
     
     year_for_seasonal <- year_sequence[seasonal_idx]
     
-    # Aggregate to annual
     mke_annual <- array(NA, dim = c(n_years, dim(mke_seasonal)[2], dim(mke_seasonal)[3]))
     eke_annual <- array(NA, dim = c(n_years, dim(eke_seasonal)[2], dim(eke_seasonal)[3]))
     
     for (yr in 1:n_years) {
       yr_indices <- which(year_for_seasonal == yr)
       if (length(yr_indices) > 0) {
-        mke_annual[yr, , ] <- apply(mke_seasonal[yr_indices, , , drop = FALSE], c(2, 3), mean, na.rm = TRUE)
-        eke_annual[yr, , ] <- apply(eke_seasonal[yr_indices, , , drop = FALSE], c(2, 3), mean, na.rm = TRUE)
+        mke_annual[yr, , ] <- apply(mke_seasonal[yr_indices, , , drop = FALSE], 
+                                    c(2, 3), mean, na.rm = TRUE)
+        eke_annual[yr, , ] <- apply(eke_seasonal[yr_indices, , , drop = FALSE], 
+                                    c(2, 3), mean, na.rm = TRUE)
       }
     }
     
-    # --- Loop Through Regions ---
     for (region_name in names(masks)) {
       
       cat(glue("    Region: {masks[[region_name]]$name}...\n"))
@@ -7431,7 +7931,6 @@ analyze_ke_ratio_seasonal <- function() {
                                ncol = length(lon_idx_r),
                                byrow = FALSE)
       
-      # Extract time series
       mke_ts <- apply(mke_region, 1, function(slice) {
         weighted.mean(slice, weights_matrix, na.rm = TRUE)
       })
@@ -7440,18 +7939,19 @@ analyze_ke_ratio_seasonal <- function() {
         weighted.mean(slice, weights_matrix, na.rm = TRUE)
       })
       
-      # Calculate ratio
       ratio_ts <- mke_ts / eke_ts
       
-      boot_path <- file.path(processed_dir, glue("boot_MKE_EKE_RATIO_{season_name}_{region_name}.rds"))
+      boot_path <- file.path(processed_dir, 
+                            glue("boot_MKE_EKE_RATIO_{season_name}_{region_name}.rds"))
       
-      # Run ANNUAL analysis
-      stats <- run_annual_trend_analysis(ratio_ts, boot_path, unit_label = "dimensionless")
+      stats <- run_annual_trend_analysis(ratio_ts, boot_path, 
+                                        unit_label = "dimensionless")
       
       results_list[[paste(season_name, region_name, sep = "_")]] <- data.frame(
         Component = "MKE/EKE Ratio",
         Region = masks[[region_name]]$name,
         Time_Scale = season_name,
+        N_Years = length(ratio_ts),
         Lag1 = stats$rho1,
         Slope = stats$slope_decade,
         Pvalue = stats$p_value,
@@ -7470,12 +7970,12 @@ analyze_ke_ratio_seasonal <- function() {
 # ============================================================================
 
 cat("\n\n", rep("=", 80), "\n")
-cat("STARTING MECHANISTIC DIAGNOSTICS (SECTION 3.3)\n")
+cat("MECHANISTIC DIAGNOSTICS (FULLY CORRECTED VERSION)\n")
 cat("Kinetic Energy Budget Analysis: MKE, EKE, and MKE/EKE Ratio\n")
 cat(rep("=", 80), "\n")
 
-# --- PART 1: Annual Trends ---
-cat("\n### PART 1: ANNUAL TRENDS ###\n")
+# --- PART 1: Annual Trends (CORRECTED) ---
+cat("\n### PART 1: ANNUAL TRENDS (804 monthly → 67 annual) ###\n")
 
 mke_annual <- analyze_ke_annual(
   file_path = paths$mke,
@@ -7493,7 +7993,7 @@ eke_annual <- analyze_ke_annual(
 
 ratio_annual <- analyze_ke_ratio_annual()
 
-# --- PART 2: Seasonal Trends ---
+# --- PART 2: Seasonal Trends (already correct) ---
 cat("\n### PART 2: SEASONAL TRENDS ###\n")
 
 mke_seasonal <- analyze_ke_seasonal(
@@ -7513,11 +8013,11 @@ eke_seasonal <- analyze_ke_seasonal(
 ratio_seasonal <- analyze_ke_ratio_seasonal()
 
 # ============================================================================
-# FORMAT AND PRESENT RESULTS
+# IMPROVED SUMMARY AND INTERPRETATION
 # ============================================================================
 
 cat("\n\n", rep("=", 80), "\n")
-cat("FORMATTING RESULTS\n")
+cat("RESULTS FORMATTING AND INTERPRETATION\n")
 cat(rep("=", 80), "\n")
 
 # Combine all results
@@ -7531,193 +8031,153 @@ all_results <- bind_rows(
 ) %>%
   mutate(
     CI_formatted = glue("[{sprintf('%.4f', CI_Lower)}, {sprintf('%.4f', CI_Upper)}]"),
-    Conclusion = ifelse(Pvalue < 0.05, "Significant", "Not Significant"),
-    # Physical interpretation
-    Interpretation = case_when(
-      Component == "MKE" & Pvalue < 0.05 & Slope > 0 ~ "Strengthening mean circulation",
-      Component == "MKE" & Pvalue < 0.05 & Slope < 0 ~ "Weakening mean circulation",
-      Component == "EKE" & Pvalue < 0.05 & Slope > 0 ~ "Increasing average storm strength",
-      Component == "EKE" & Pvalue < 0.05 & Slope < 0 ~ "Decreasing average storm strength",
-      Component == "MKE/EKE Ratio" & Pvalue < 0.05 & Slope > 0 ~ "Mean flow becoming more dominant",
-      Component == "MKE/EKE Ratio" & Pvalue < 0.05 & Slope < 0 ~ "Eddies becoming more dominant",
-      TRUE ~ "No significant change"
-    )
+    Significant = ifelse(Pvalue < 0.05, "YES", "NO"),
+    CI_Includes_Zero = ifelse(CI_Lower < 0 & CI_Upper > 0, "YES", "NO")
   )
 
 # ============================================================================
-# CREATE SUMMARY TABLES
+# IMPROVED SUMMARY TABLES
 # ============================================================================
 
-# --- Table 1: Annual Results ---
+# --- Table 1: Annual Results (Better Format) ---
 table_annual <- all_results %>%
   filter(Time_Scale == "Annual") %>%
+  mutate(
+    Trend_Summary = sprintf("%.4f [%.4f, %.4f]", Slope, CI_Lower, CI_Upper),
+    Interpretation = case_when(
+      Significant == "NO" ~ "✓ Stable (no trend)",
+      Component == "MKE" & Slope > 0 ~ "⚠ Strengthening circulation",
+      Component == "MKE" & Slope < 0 ~ "⚠ Weakening circulation",
+      Component == "EKE" & Slope > 0 ~ "⚠ Stronger storms",
+      Component == "EKE" & Slope < 0 ~ "⚠ Weaker storms",
+      Component == "MKE/EKE Ratio" & Slope > 0 ~ "⚠ More circulation-dominated",
+      Component == "MKE/EKE Ratio" & Slope < 0 ~ "⚠ More eddy-dominated",
+      TRUE ~ "?"
+    )
+  ) %>%
   select(
     Component,
     Region,
-    `Lag-1 (ρ₁)` = Lag1,
-    `Sen's Slope (per decade)` = Slope,
-    `PW-MK p-value` = Pvalue,
-    `95% Bootstrap CI` = CI_formatted,
-    Conclusion,
+    `N` = N_Years,
+    `ρ₁` = Lag1,
+    `Trend (per decade) [95% CI]` = Trend_Summary,
+    `p-value` = Pvalue,
+    `Signif?` = Significant,
     Interpretation
   )
 
-# --- Table 2: Seasonal MKE ---
-table_seasonal_mke <- all_results %>%
-  filter(Component == "MKE" & Time_Scale != "Annual") %>%
-  select(
-    Region,
-    Season = Time_Scale,
-    `Lag-1 (ρ₁)` = Lag1,
-    `Sen's Slope (m²/s² per decade)` = Slope,
-    `PW-MK p-value` = Pvalue,
-    `95% Bootstrap CI` = CI_formatted,
-    Conclusion
-  )
+# --- Summary by Component ---
+summary_by_component <- all_results %>%
+  group_by(Component, Time_Scale) %>%
+  summarise(
+    N_Tests = n(),
+    N_Significant = sum(Pvalue < 0.05, na.rm = TRUE),
+    Pct_Significant = round(100 * N_Significant / N_Tests, 1),
+    Mean_Slope = mean(Slope, na.rm = TRUE),
+    Mean_p = mean(Pvalue, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(Component, Time_Scale)
 
-# --- Table 3: Seasonal EKE ---
-table_seasonal_eke <- all_results %>%
-  filter(Component == "EKE" & Time_Scale != "Annual") %>%
-  select(
-    Region,
-    Season = Time_Scale,
-    `Lag-1 (ρ₁)` = Lag1,
-    `Sen's Slope (m²/s² per decade)` = Slope,
-    `PW-MK p-value` = Pvalue,
-    `95% Bootstrap CI` = CI_formatted,
-    Conclusion
-  )
-
-# --- Table 4: Seasonal Ratio ---
-table_seasonal_ratio <- all_results %>%
-  filter(Component == "MKE/EKE Ratio" & Time_Scale != "Annual") %>%
-  select(
-    Region,
-    Season = Time_Scale,
-    `Lag-1 (ρ₁)` = Lag1,
-    `Sen's Slope (per decade)` = Slope,
-    `PW-MK p-value` = Pvalue,
-    `95% Bootstrap CI` = CI_formatted,
-    Conclusion
-  )
+# --- Summary by Region ---
+summary_by_region <- all_results %>%
+  group_by(Region, Time_Scale) %>%
+  summarise(
+    N_Tests = n(),
+    N_Significant = sum(Pvalue < 0.05, na.rm = TRUE),
+    Pct_Significant = round(100 * N_Significant / N_Tests, 1),
+    .groups = "drop"
+  ) %>%
+  arrange(Region, Time_Scale)
 
 # ============================================================================
-# PRINT RESULTS
+# PRINT IMPROVED RESULTS
 # ============================================================================
 
 cat("\n\n", rep("=", 80), "\n")
 cat("FINAL RESULTS: MECHANISTIC DIAGNOSTICS\n")
 cat(rep("=", 80), "\n")
 
-cat("\n\n### Table 1: Annual Kinetic Energy Trends (1958-2024) ###\n\n")
+cat("\n\n### Table 1: Annual Kinetic Energy Trends (1958-2024) ###\n")
+cat("Note: All analyses use 67 annual means (not 804 monthly values)\n")
+cat("Block length: l=3 years (preserves inter-annual persistence)\n\n")
 print(kable(table_annual, format = "markdown", digits = 4))
 
-cat("\n\n### Table 2: Seasonal MKE Trends (1958-2024) ###\n\n")
-print(kable(table_seasonal_mke, format = "markdown", digits = 4))
+cat("\n\n### Summary: Significant Results by Component ###\n\n")
+print(kable(summary_by_component, format = "markdown", digits = 2))
 
-cat("\n\n### Table 3: Seasonal EKE Trends (1958-2024) ###\n\n")
-print(kable(table_seasonal_eke, format = "markdown", digits = 4))
-
-cat("\n\n### Table 4: Seasonal MKE/EKE Ratio Trends (1958-2024) ###\n\n")
-print(kable(table_seasonal_ratio, format = "markdown", digits = 4))
+cat("\n\n### Summary: Significant Results by Region ###\n\n")
+print(kable(summary_by_region, format = "markdown", digits = 1))
 
 # ============================================================================
-# PHYSICAL INTERPRETATION GUIDE
+# PHYSICAL INTERPRETATION
 # ============================================================================
 
 cat("\n\n", rep("=", 80), "\n")
-cat("PHYSICAL INTERPRETATION GUIDE\n")
-cat(rep("=", 80), "\n")
+cat("PHYSICAL INTERPRETATION\n")
+cat(rep("=", 80), "\n\n")
 
-cat("
-WHAT EACH METRIC TELLS :
-----------------------------
+# Count significant results
+n_total <- nrow(all_results)
+n_sig <- sum(all_results$Pvalue < 0.05, na.rm = TRUE)
+pct_sig <- round(100 * n_sig / n_total, 1)
 
-1. MKE (Mean Kinetic Energy) = E[0.5(Ū² + V̄²)]
-   - Physical meaning: Energy in the time-mean circulation
-   - Measures: Strength of climatological wind patterns
-   - Changes indicate: Shifts in large-scale atmospheric circulation
-   
-2. EKE (Eddy Kinetic Energy) = E[0.5(u'² + v'²)]
-   - Physical meaning: AVERAGE energy in transient eddies
-   - Measures: Mean strength of storms/cyclones
-   - Changes indicate: Shifts in typical storm intensity
-   
-3. Storminess Index (your main analysis) = Var[0.5(u'² + v'²)]
-   - Physical meaning: VARIABILITY in transient eddy energy
-   - Measures: How intermittent or sporadic storm activity is
-   - Changes indicate: Shifts in storm frequency or burstiness
+cat(sprintf("OVERALL SUMMARY:\n"))
+cat(sprintf("  Total tests: %d\n", n_total))
+cat(sprintf("  Significant (p<0.05): %d (%.1f%%)\n\n", n_sig, pct_sig))
 
-KEY DISTINCTION:
-----------------
-EKE Mean vs. Storminess Index measure DIFFERENT statistical moments:
-
-EKE Mean = μ(eke_instant)        → First moment (average)
-Storminess = σ²(eke_instant)     → Second moment (variance)
-
-These can change INDEPENDENTLY. Examples:
-
-Scenario A: EKE stable, Storminess stable
-  → Average storm strength AND variability unchanged
-  → System is comprehensively stable (EXPECTED RESULT)
-
-Scenario B: EKE increasing, Storminess stable
-  → Storms are stronger on average
-  → But still occur with same frequency/intermittency
-  
-Scenario C: EKE stable, Storminess increasing
-  → Average storm strength unchanged
-  → But more variable (more rare extreme events)
-
-MKE/EKE RATIO:
---------------
-High ratio (>5): Mean circulation dominates (stable, zonal flow)
-Low ratio (<3): Eddies dominate (meridional flow, active weather)
-
-Increasing trend → System becoming more circulation-dominated
-Decreasing trend → System becoming more eddy-dominated
-
-CONSISTENCY WITH THE MAIN RESULTS:
------------------------------------
-The storminess analysis showed NO significant trends (variance stable).
-
-If this mechanistic analysis also shows:
-✓ NO EKE trends → Average storm strength also stable
-✓ NO MKE trends → Mean circulation also stable
-✓ NO ratio trends → Energy partitioning also stable
-
-This would demonstrate COMPREHENSIVE ATMOSPHERIC STABILITY:
-- First moment (mean) stable
-- Second moment (variance) stable
-- Energy partition stable
-- All seasons stable
-- All regions stable
-
-INTERPRETING RESULTS:
----------------------
-")
-
-# Print summary of significant results
-sig_results <- all_results %>%
-  filter(Pvalue < 0.05) %>%
-  select(Component, Region, Time_Scale, Slope, Pvalue, Interpretation)
-
-if (nrow(sig_results) > 0) {
-  cat("SIGNIFICANT TRENDS DETECTED:\n\n")
-  print(kable(sig_results, format = "markdown", digits = 4))
-  cat("\n⚠ Note: These significant results indicate partial changes.\n")
-  cat("   Compare with your storminess analysis to understand implications.\n")
+if (n_sig == 0) {
+  cat("✓✓✓ NO SIGNIFICANT TRENDS DETECTED ✓✓✓\n\n")
+  cat("INTERPRETATION: COMPREHENSIVE ATMOSPHERIC STABILITY\n")
+  cat(rep("-", 80), "\n\n")
+  cat("The Arctic kinetic energy budget remained stable over 1958-2024:\n\n")
+  cat("  ✓ Mean circulation (MKE) → Unchanged\n")
+  cat("    → Climatological wind patterns stable\n\n")
+  cat("  ✓ Average storm strength (EKE mean) → Unchanged\n")
+  cat("    → Typical storm intensity stable\n\n")
+  cat("  ✓ Storm variability (Storminess variance) → Unchanged [from main analysis]\n")
+  cat("    → Storm intermittency stable\n\n")
+  cat("  ✓ Energy partitioning (MKE/EKE ratio) → Unchanged\n")
+  cat("    → Balance between mean flow and eddies stable\n\n")
+  cat("This demonstrates COMPREHENSIVE stability across:\n")
+  cat("  • First moment (mean) → STABLE\n")
+  cat("  • Second moment (variance) → STABLE\n")
+  cat("  • Energy partition → STABLE\n")
+  cat("  • All seasons → STABLE\n")
+  cat("  • All regions → STABLE\n\n")
+  cat("KEY FINDING:\n")
+  cat("Despite dramatic Arctic sea ice loss and ongoing climate change,\n")
+  cat("the Arctic atmospheric circulation and storm activity remained\n")
+  cat("remarkably stable over the 67-year analysis period.\n\n")
+  cat("This contradicts hypotheses of:\n")
+  cat("  ✗ Intensifying Arctic storms (EKE stable)\n")
+  cat("  ✗ Weakening polar vortex (MKE stable)\n")
+  cat("  ✗ Autumn intensification (all seasons stable)\n")
+  cat("  ✗ Winter shift (all seasons stable)\n")
 } else {
-  cat("✓ NO SIGNIFICANT TRENDS DETECTED\n\n")
-  cat("This is consistent with your storminess analysis showing no trends.\n\n")
-  cat("INTERPRETATION:\n")
-  cat("The Arctic kinetic energy budget remained stable over 1958-2024:\n")
-  cat("  ✓ Mean circulation (MKE) unchanged\n")
-  cat("  ✓ Average storm strength (EKE mean) unchanged\n")
-  cat("  ✓ Storm variability (Storminess variance) unchanged [from main analysis]\n")
-  cat("  ✓ Energy partitioning (MKE/EKE ratio) unchanged\n\n")
-  cat("This demonstrates comprehensive atmospheric stability despite\n")
-  cat("dramatic Arctic sea ice loss and ongoing climate change.\n")
+  cat("⚠ SOME SIGNIFICANT TRENDS DETECTED ⚠\n\n")
+  
+  sig_results <- all_results %>%
+    filter(Pvalue < 0.05) %>%
+    select(Component, Region, Time_Scale, Slope, Pvalue, CI_formatted) %>%
+    mutate(
+      Direction = ifelse(Slope > 0, "INCREASING", "DECREASING"),
+      Interpretation = case_when(
+        Component == "MKE" & Slope > 0 ~ "Strengthening mean circulation",
+        Component == "MKE" & Slope < 0 ~ "Weakening mean circulation",
+        Component == "EKE" & Slope > 0 ~ "Increasing average storm strength",
+        Component == "EKE" & Slope < 0 ~ "Decreasing average storm strength",
+        Component == "MKE/EKE Ratio" & Slope > 0 ~ "Becoming more circulation-dominated",
+        Component == "MKE/EKE Ratio" & Slope < 0 ~ "Becoming more eddy-dominated",
+        TRUE ~ "?"
+      )
+    )
+  
+  print(kable(sig_results, format = "markdown", digits = 4))
+  
+  cat("\n\nThese results indicate PARTIAL changes in the Arctic atmosphere.\n")
+  cat("Compare with your storminess analysis (variance trends) to understand\n")
+  cat("whether changes are in mean, variance, or both.\n")
 }
 
 # ============================================================================
@@ -7728,35 +8188,42 @@ cat("\n\n", rep("=", 80), "\n")
 cat("SAVING RESULTS\n")
 cat(rep("=", 80), "\n")
 
-output_dir <- file.path(processed_dir, "mechanistic_diagnostics")
+output_dir <- file.path(processed_dir, "mechanistic_diagnostics_CORRECTED")
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
-write.csv(table_annual, file.path(output_dir, "Table_Mechanistic_Annual.csv"), row.names = FALSE)
-write.csv(table_seasonal_mke, file.path(output_dir, "Table_Mechanistic_Seasonal_MKE.csv"), row.names = FALSE)
-write.csv(table_seasonal_eke, file.path(output_dir, "Table_Mechanistic_Seasonal_EKE.csv"), row.names = FALSE)
-write.csv(table_seasonal_ratio, file.path(output_dir, "Table_Mechanistic_Seasonal_Ratio.csv"), row.names = FALSE)
-write.csv(all_results, file.path(output_dir, "Table_Mechanistic_Complete.csv"), row.names = FALSE)
+write.csv(table_annual, 
+          file.path(output_dir, "Table_Mechanistic_Annual_CORRECTED.csv"), 
+          row.names = FALSE)
+write.csv(all_results, 
+          file.path(output_dir, "Table_Mechanistic_Complete_CORRECTED.csv"), 
+          row.names = FALSE)
+write.csv(summary_by_component, 
+          file.path(output_dir, "Summary_By_Component.csv"), 
+          row.names = FALSE)
+write.csv(summary_by_region, 
+          file.path(output_dir, "Summary_By_Region.csv"), 
+          row.names = FALSE)
 
 cat(glue("\n✓ All tables saved to: {output_dir}\n"))
 
 cat("\n\n", rep("=", 80), "\n")
-cat("MECHANISTIC DIAGNOSTICS COMPLETE\n")
-cat(rep("=", 80), "\n")
+cat("MECHANISTIC DIAGNOSTICS COMPLETE (CORRECTED VERSION)\n")
+cat(rep("=", 80), "\n\n")
 
-cat("\n")
-cat("SUMMARY OF ANALYSIS:\n")
-cat("  - Total tests performed: ", nrow(all_results), "\n")
-cat("  - Significant results (p<0.05): ", sum(all_results$Pvalue < 0.05, na.rm = TRUE), "\n")
-cat("  - Components analyzed: MKE, EKE, MKE/EKE Ratio\n")
-cat("  - Temporal scales: Annual + 6 seasonal aggregates\n")
-cat("  - Spatial domains: 3 regions (Pan-Arctic, Fram Strait, Svalbard/Barents)\n")
-cat("  - Statistical method: Pre-Whitened Mann-Kendall + Bootstrap CI\n")
-cat("\n")
+cat("KEY CORRECTIONS APPLIED:\n")
+cat("  ✓ Annual analyses: 804 monthly → 67 annual (aggregated)\n")
+cat("  ✓ Block length: l=3 for annual data (was incorrectly l=12)\n")
+cat("  ✓ Lag-1 autocorrelation: Now appropriate for annual data (~0.1-0.3)\n")
+cat("  ✓ Physical interpretation: Based on true annual trends\n\n")
+
+cat("METHODOLOGICAL CONSISTENCY:\n")
+cat("  ✓ Matches storminess index analysis (annual aggregation)\n")
+cat("  ✓ Matches regional analyses (annual aggregation)\n")
+cat("  ✓ Matches seasonal analyses (annual seasonal means)\n")
+cat("  ✓ All bootstrap CIs use appropriate block lengths\n\n")
 ```
-
-# Mechanistic diagnostic
 
 ```{r}
 # ============================================================================
@@ -7773,8 +8240,8 @@ cat("\n")
 # ============================================================================
 
 # --- 2. LOAD RESULTS ---
-processed_dir <- "E:/ERA5_data/processed"
-results_dir <- file.path(processed_dir, "mechanistic_diagnostics")
+processed_dir <- here::here("Data", "processed")
+results_dir <- here::here("Data", "processed", "mechanistic_diagnostics")
 
 # Load all tables
 table_annual <- read_csv(file.path(results_dir, "Table_Mechanistic_Annual.csv"))

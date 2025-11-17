@@ -4,6 +4,21 @@ format: html
 editor: visual
 ---
 
+```{r}
+library(ncdf4)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(patchwork)
+library(viridis)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(maps)
+library(lubridate)
+library(gridExtra)
+```
+
 # Phase 1
 
 ```{r summary}
@@ -19,18 +34,6 @@ editor: visual
 #
 # OUTPUTS: Publication-quality figures for Methods section
 # ============================================================================
-
-library(ncdf4)
-library(ggplot2)
-library(dplyr)
-library(tidyr)
-library(patchwork)
-library(viridis)
-library(sf)
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(maps)
-library(lubridate)
 
 # --- SETUP ---
 processed_dir <- "E:/ERA5_data/processed"
@@ -647,18 +650,6 @@ cat(rep("=", 80), "\n")
 #
 # ============================================================================
 
-# --- LOAD LIBRARIES ---
-library(ncdf4)
-library(stars)
-library(sf)
-library(ggplot2)
-library(rnaturalearth)
-library(patchwork)
-library(viridis)
-library(dplyr)
-library(lubridate)
-library(scales)
-
 # --- SETUP ---
 processed_dir <- "E:/ERA5_data/processed"
 plot_dir <- file.path(processed_dir, "phase1_diagnostics")
@@ -1044,7 +1035,7 @@ cat(sprintf("  Ratio range: %.1f to %.1f\n\n", ratio_global_range[1], ratio_glob
 cat(rep("=", 80), "\n")
 ```
 
-```{r}
+```{r trend}
 # ============================================================================
 # PHASE 1: PRIMARY TIME SERIES VISUALIZATION
 # Pan-Arctic Storminess Index (1958-2024)
@@ -1058,12 +1049,6 @@ cat(rep("=", 80), "\n")
 # INPUT: Requires 'storm_df' data frame from Phase 1 Section 1.3
 #        with columns: date, storminess
 # ============================================================================
-
-library(ggplot2)
-library(zoo)
-library(scales)
-library(lubridate)
-library(dplyr)
 
 # --- SETUP ---
 plot_dir <- here("Data", "processed", "phase1_diagnostics")
@@ -1256,3 +1241,564 @@ cat("  • Gray monthly values show the full range of variability\n\n")
 
 cat(rep("=", 80), "\n")
 ```
+
+```{r stl-decomposition}
+# ============================================================================
+# PHASE 1: SEASONAL DECOMPOSITION ANALYSIS
+# Pan-Arctic Storminess Index (1958-2024)
+# ============================================================================
+#
+# PURPOSE: Decompose the time series into:
+#   - Trend component (long-term, slow variations)
+#   - Seasonal component (annual cycle)
+#   - Remainder/Irregular component (short-term fluctuations)
+#
+# METHOD: STL (Seasonal and Trend decomposition using Loess)
+#   - More robust than classical decomposition
+#   - Handles non-linear trends
+#   - Allows seasonal component to vary over time
+#
+# INPUT: Requires 'storm_ts_obj' from Phase 1 Section 1.3
+# ============================================================================
+
+# --- SETUP ---
+plot_dir <- here("Data", "processed", "phase1_diagnostics")
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+cat("\n", rep("=", 80), "\n")
+cat("PHASE 1: SEASONAL DECOMPOSITION ANALYSIS\n")
+cat(rep("=", 80), "\n\n")
+
+# ============================================================================
+# STEP 1: PERFORM STL DECOMPOSITION
+# ============================================================================
+
+cat("Performing STL decomposition...\n")
+
+# STL decomposition with robust fitting
+# s.window = "periodic" assumes seasonal pattern doesn't change over time
+# s.window = 13 or higher allows it to vary (13 = uses 13 years of data)
+# t.window = length of smoothing window for trend (controls smoothness)
+
+stl_result <- stl(storm_ts_obj, 
+                  s.window = "periodic",  # Seasonal pattern assumed constant
+                  t.window = 15,          # Trend smoothing (15 years)
+                  robust = TRUE)          # Robust to outliers
+
+# Extract components
+decomp_df <- data.frame(
+  date = storm_df$date,
+  observed = as.numeric(storm_ts_obj),
+  trend = as.numeric(stl_result$time.series[, "trend"]),
+  seasonal = as.numeric(stl_result$time.series[, "seasonal"]),
+  remainder = as.numeric(stl_result$time.series[, "remainder"])
+)
+
+# Calculate variance explained by each component
+var_total <- var(decomp_df$observed, na.rm = TRUE)
+var_trend <- var(decomp_df$trend, na.rm = TRUE)
+var_seasonal <- var(decomp_df$seasonal, na.rm = TRUE)
+var_remainder <- var(decomp_df$remainder, na.rm = TRUE)
+
+pct_trend <- 100 * var_trend / var_total
+pct_seasonal <- 100 * var_seasonal / var_total
+pct_remainder <- 100 * var_remainder / var_total
+
+cat(sprintf("  Variance decomposition:\n"))
+cat(sprintf("    Trend:     %.2f%% of total variance\n", pct_trend))
+cat(sprintf("    Seasonal:  %.2f%% of total variance\n", pct_seasonal))
+cat(sprintf("    Remainder: %.2f%% of total variance\n\n", pct_remainder))
+
+# ============================================================================
+# STEP 2: CREATE SEASONAL CLIMATOLOGY (MEAN ANNUAL CYCLE)
+# ============================================================================
+
+cat("Calculating mean seasonal cycle...\n")
+
+# Extract just the unique seasonal pattern (12 months)
+seasonal_cycle <- decomp_df %>%
+  mutate(month = format(date, "%b")) %>%
+  mutate(month = factor(month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))) %>%
+  group_by(month) %>%
+  summarise(
+    seasonal_mean = mean(seasonal, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Calculate range of seasonal component
+seasonal_range <- max(seasonal_cycle$seasonal_mean) - min(seasonal_cycle$seasonal_mean)
+peak_month <- seasonal_cycle$month[which.max(seasonal_cycle$seasonal_mean)]
+trough_month <- seasonal_cycle$month[which.min(seasonal_cycle$seasonal_mean)]
+
+cat(sprintf("  Peak storminess month: %s (%.2f m⁴/s⁴ above annual mean)\n", 
+            peak_month, max(seasonal_cycle$seasonal_mean)))
+cat(sprintf("  Lowest storminess month: %s (%.2f m⁴/s⁴ below annual mean)\n", 
+            trough_month, min(seasonal_cycle$seasonal_mean)))
+cat(sprintf("  Seasonal amplitude: %.2f m⁴/s⁴\n\n", seasonal_range))
+
+# ============================================================================
+# STEP 3: CREATE FOUR-PANEL DECOMPOSITION PLOT
+# ============================================================================
+
+cat("Creating decomposition visualization...\n")
+
+# Define common x-axis settings
+x_scale <- scale_x_date(
+  date_breaks = "5 years",
+  date_labels = "%Y",
+  expand = c(0.01, 0)
+)
+
+# Common theme
+common_theme <- theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(size = 12, face = "bold", hjust = 0),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 10, face = "bold"),
+    axis.text = element_text(size = 9),
+    panel.grid.minor = element_line(linewidth = 0.2, color = "gray90"),
+    panel.grid.major = element_line(linewidth = 0.3, color = "gray85"),
+    panel.background = element_rect(fill = "#FFF9F0", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(5, 10, 5, 10)
+  )
+
+# --- PANEL 1: OBSERVED DATA ---
+p1 <- ggplot(decomp_df, aes(x = date, y = observed)) +
+  geom_line(color = "gray30", linewidth = 0.4) +
+  x_scale +
+  labs(
+    title = "A. Observed Time Series",
+    y = expression(paste("Storminess (m"^4, " s"^{-4}, ")"))
+  ) +
+  common_theme
+
+# --- PANEL 2: TREND COMPONENT ---
+p2 <- ggplot(decomp_df, aes(x = date, y = trend)) +
+  geom_hline(yintercept = mean(decomp_df$trend, na.rm = TRUE), 
+             linetype = "dashed", color = "gray50", linewidth = 0.5) +
+  geom_line(color = "#1F77B4", linewidth = 0.8) +
+  x_scale +
+  labs(
+    title = sprintf("B. Trend Component (%.1f%% of variance)", pct_trend),
+    y = expression(paste("Trend (m"^4, " s"^{-4}, ")"))
+  ) +
+  common_theme
+
+# --- PANEL 3: SEASONAL COMPONENT ---
+p3 <- ggplot(decomp_df, aes(x = date, y = seasonal)) +
+  geom_hline(yintercept = 0, linetype = "solid", color = "black", linewidth = 0.5) +
+  geom_line(color = "#2CA02C", linewidth = 0.5, alpha = 0.7) +
+  x_scale +
+  labs(
+    title = sprintf("C. Seasonal Component (%.1f%% of variance)", pct_seasonal),
+    y = expression(paste("Seasonal (m"^4, " s"^{-4}, ")"))
+  ) +
+  common_theme
+
+# --- PANEL 4: REMAINDER (IRREGULAR) COMPONENT ---
+p4 <- ggplot(decomp_df, aes(x = date, y = remainder)) +
+  geom_hline(yintercept = 0, linetype = "solid", color = "black", linewidth = 0.5) +
+  geom_line(color = "#D62728", linewidth = 0.3, alpha = 0.6) +
+  x_scale +
+  scale_x_date(
+    date_breaks = "5 years",
+    date_labels = "%Y",
+    expand = c(0.01, 0)
+  ) +
+  labs(
+    title = sprintf("D. Remainder Component (%.1f%% of variance)", pct_remainder),
+    y = expression(paste("Remainder (m"^4, " s"^{-4}, ")")),
+    x = "Year"
+  ) +
+  common_theme +
+  theme(axis.title.x = element_text(size = 11, face = "bold", margin = margin(t = 5)))
+
+# --- COMBINE PANELS ---
+combined_plot <- grid.arrange(
+  p1, p2, p3, p4,
+  ncol = 1,
+  top = grid::textGrob(
+    "STL Decomposition: Pan-Arctic Storminess Index (1958–2024)",
+    gp = grid::gpar(fontsize = 16, fontface = "bold")
+  ),
+  bottom = grid::textGrob(
+    "STL method: s.window = 'periodic', t.window = 15 years, robust = TRUE",
+    gp = grid::gpar(fontsize = 9, col = "gray40"),
+    x = 0.5, hjust = 0.5
+  )
+)
+
+# ============================================================================
+# STEP 4: SAVE DECOMPOSITION PLOT
+# ============================================================================
+
+output_file <- file.path(plot_dir, "Fig_Seasonal_Decomposition_STL.png")
+
+ggsave(
+  filename = output_file,
+  plot = combined_plot,
+  width = 14,
+  height = 11,
+  dpi = 300,
+  bg = "white"
+)
+
+cat(sprintf("  ✓ STL decomposition plot saved: %s\n\n", basename(output_file)))
+
+# ============================================================================
+# STEP 5: CREATE MEAN SEASONAL CYCLE PLOT (CLIMATOLOGY)
+# ============================================================================
+
+cat("Creating mean seasonal cycle plot...\n")
+
+p_seasonal <- ggplot(seasonal_cycle, aes(x = month, y = seasonal_mean)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.6) +
+  geom_line(aes(group = 1), color = "#2CA02C", linewidth = 1.2) +
+  geom_point(color = "#2CA02C", size = 3, shape = 16) +
+  geom_point(data = subset(seasonal_cycle, month == peak_month),
+             color = "#D62728", size = 4, shape = 17) +
+  geom_point(data = subset(seasonal_cycle, month == trough_month),
+             color = "#1F77B4", size = 4, shape = 17) +
+  scale_y_continuous(
+    breaks = pretty(seasonal_cycle$seasonal_mean, n = 8)
+  ) +
+  labs(
+    title = "Mean Seasonal Cycle of Arctic Storminess (1958–2024)",
+    subtitle = sprintf("Peak: %s | Trough: %s | Amplitude: %.2f m⁴ s⁻⁴", 
+                      peak_month, trough_month, seasonal_range),
+    x = "Month",
+    y = expression(paste("Seasonal Anomaly (m"^4, " s"^{-4}, ")"))
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, margin = margin(b = 15), 
+                                 color = "gray30"),
+    axis.title.x = element_text(size = 12, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+    axis.text = element_text(size = 11),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major = element_line(linewidth = 0.4, color = "gray85"),
+    panel.background = element_rect(fill = "#FFF9F0", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  annotate("text", x = which(seasonal_cycle$month == peak_month), 
+           y = max(seasonal_cycle$seasonal_mean) + seasonal_range * 0.1,
+           label = "Peak", color = "#D62728", fontface = "bold", size = 3.5) +
+  annotate("text", x = which(seasonal_cycle$month == trough_month), 
+           y = min(seasonal_cycle$seasonal_mean) - seasonal_range * 0.1,
+           label = "Trough", color = "#1F77B4", fontface = "bold", size = 3.5)
+
+output_file_seasonal <- file.path(plot_dir, "Fig_Mean_Seasonal_Cycle.png")
+
+ggsave(
+  filename = output_file_seasonal,
+  plot = p_seasonal,
+  width = 12,
+  height = 7,
+  dpi = 300,
+  bg = "white"
+)
+
+cat(sprintf("  ✓ Mean seasonal cycle plot saved: %s\n\n", basename(output_file_seasonal)))
+
+# ============================================================================
+# STEP 6: SUMMARY STATISTICS AND DIAGNOSTICS
+# ============================================================================
+
+cat(rep("=", 80), "\n")
+cat("SEASONAL DECOMPOSITION ANALYSIS COMPLETE\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Decomposition Statistics:\n")
+cat(rep("-", 50), "\n")
+cat(sprintf("STL Method: s.window = 'periodic', t.window = 15 years, robust = TRUE\n\n"))
+
+cat("Variance Partitioning:\n")
+cat(sprintf("  Total variance:       %.2f (m⁴/s⁴)²\n", var_total))
+cat(sprintf("  Trend variance:       %.2f (m⁴/s⁴)² (%.1f%%)\n", var_trend, pct_trend))
+cat(sprintf("  Seasonal variance:    %.2f (m⁴/s⁴)² (%.1f%%)\n", var_seasonal, pct_seasonal))
+cat(sprintf("  Remainder variance:   %.2f (m⁴/s⁴)² (%.1f%%)\n\n", var_remainder, pct_remainder))
+
+cat("Seasonal Component Characteristics:\n")
+cat(sprintf("  Peak month:           %s\n", peak_month))
+cat(sprintf("  Peak magnitude:       %+.2f m⁴/s⁴ (above mean)\n", 
+            max(seasonal_cycle$seasonal_mean)))
+cat(sprintf("  Trough month:         %s\n", trough_month))
+cat(sprintf("  Trough magnitude:     %+.2f m⁴/s⁴ (below mean)\n", 
+            min(seasonal_cycle$seasonal_mean)))
+cat(sprintf("  Peak-to-trough range: %.2f m⁴/s⁴\n\n", seasonal_range))
+
+cat("Trend Component Characteristics:\n")
+cat(sprintf("  Mean:                 %.2f m⁴/s⁴\n", mean(decomp_df$trend, na.rm = TRUE)))
+cat(sprintf("  Start value (1958):   %.2f m⁴/s⁴\n", decomp_df$trend[1]))
+cat(sprintf("  End value (2024):     %.2f m⁴/s⁴\n", 
+            decomp_df$trend[nrow(decomp_df)]))
+cat(sprintf("  Total change:         %+.2f m⁴/s⁴\n\n", 
+            decomp_df$trend[nrow(decomp_df)] - decomp_df$trend[1]))
+
+cat("Remainder Component Characteristics:\n")
+cat(sprintf("  Mean:                 %.2f m⁴/s⁴\n", mean(decomp_df$remainder, na.rm = TRUE)))
+cat(sprintf("  Std. deviation:       %.2f m⁴/s⁴\n", sd(decomp_df$remainder, na.rm = TRUE)))
+cat(sprintf("  Range:                [%.2f, %.2f] m⁴/s⁴\n\n", 
+            min(decomp_df$remainder, na.rm = TRUE),
+            max(decomp_df$remainder, na.rm = TRUE)))
+
+cat("Generated Files:\n")
+cat(sprintf("  1. %s\n", basename(output_file)))
+cat(sprintf("  2. %s\n\n", basename(output_file_seasonal)))
+
+cat("Interpretation Notes:\n")
+cat("  • Trend: Shows long-term, smooth variations (interannual to decadal)\n")
+cat("  • Seasonal: Shows the repeating annual cycle\n")
+cat("  • Remainder: Shows irregular, short-term fluctuations and outliers\n")
+cat("  • High seasonal variance indicates strong annual cycle\n")
+cat("  • High remainder variance indicates 'noisy' data or extreme events\n\n")
+
+cat(rep("=", 80), "\n")
+```
+
+```{r ACF/PACF}
+# ============================================================================
+# PHASE 1: ACF AND PACF ANALYSIS
+# Pan-Arctic Storminess Index (1958-2024)
+# ============================================================================
+#
+# PURPOSE: Assess the temporal autocorrelation structure:
+#   - ACF: Shows correlation with past values at different lags
+#   - PACF: Shows direct correlation after removing intermediate effects
+#
+# INTERPRETATION:
+#   - ACF reveals the "memory" in the time series
+#   - PACF helps identify AR(p) model order
+#   - Both inform the need for autocorrelation-corrected trend tests
+#
+# INPUT: Requires 'storm_df' data frame with column: storminess
+# ============================================================================
+
+# ============================================================================
+# PHASE 1: ACF AND PACF ANALYSIS
+# Pan-Arctic Storminess Index (1958-2024)
+# ============================================================================
+#
+# PURPOSE: Assess the temporal autocorrelation structure using base R graphics
+#
+# INPUT: Requires 'storm_df' data frame with column: storminess
+# ============================================================================
+
+# --- SETUP ---
+plot_dir <- here("Plots", "phase1_diagnostics")  # UPDATED PATH
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+cat("\n", rep("=", 80), "\n")
+cat("PHASE 1: ACF AND PACF ANALYSIS\n")
+cat(rep("=", 80), "\n\n")
+
+# ============================================================================
+# STEP 1: COMPUTE ACF AND PACF
+# ============================================================================
+
+cat("Computing ACF and PACF...\n")
+
+# Set maximum lag (in months)
+max_lag <- 36  # 3 years
+
+# Compute ACF
+acf_result <- acf(storm_df$storminess, 
+                  lag.max = max_lag, 
+                  plot = FALSE)
+
+# Compute PACF
+pacf_result <- pacf(storm_df$storminess, 
+                    lag.max = max_lag, 
+                    plot = FALSE)
+
+# Calculate confidence intervals (95%)
+n <- length(storm_df$storminess)
+ci_level <- 1.96 / sqrt(n)
+
+cat(sprintf("  Number of observations: %d\n", n))
+cat(sprintf("  95%% confidence interval: ±%.4f\n\n", ci_level))
+
+# ============================================================================
+# STEP 2: EXTRACT KEY STATISTICS
+# ============================================================================
+
+cat("Key Autocorrelation Statistics:\n")
+cat(rep("-", 50), "\n")
+
+# Lag-1 autocorrelation (most important)
+rho_1 <- acf_result$acf[2]  # Index 2 because index 1 is lag 0
+cat(sprintf("  ρ₁ (lag-1 ACF):       %.3f\n", rho_1))
+
+# First significant lag in PACF
+significant_pacf_lags <- which(abs(pacf_result$acf) > ci_level)
+if (length(significant_pacf_lags) > 0) {
+  cat(sprintf("  Significant PACF lags: %s\n", 
+              paste(significant_pacf_lags, collapse = ", ")))
+} else {
+  cat("  No significant PACF lags detected\n")
+}
+
+# Check if lag-1 is significant
+if (abs(rho_1) > ci_level) {
+  cat(sprintf("  ✓ Lag-1 autocorrelation is SIGNIFICANT (|ρ₁| > %.4f)\n", ci_level))
+  cat("  → This confirms the need for autocorrelation-corrected tests\n\n")
+} else {
+  cat(sprintf("  Lag-1 autocorrelation is NOT significant (|ρ₁| ≤ %.4f)\n\n", ci_level))
+}
+
+# Effective sample size calculation
+rho_k <- acf_result$acf[-1][1:min(24, length(acf_result$acf[-1]))]
+k <- 1:length(rho_k)
+neff <- n / (1 + 2 * sum((1 - k/n) * rho_k))
+
+cat(sprintf("Effective Sample Size:\n"))
+cat(sprintf("  Original N:           %d\n", n))
+cat(sprintf("  Effective N:          %.1f\n", neff))
+cat(sprintf("  Reduction:            %.1f%%\n\n", 100 * (1 - neff/n)))
+
+# ============================================================================
+# STEP 3: CREATE COMBINED ACF/PACF PLOT
+# ============================================================================
+
+cat("Creating combined ACF/PACF plot...\n")
+
+# Open PNG device
+output_file <- file.path(plot_dir, "Fig_ACF_PACF_Analysis.png")
+png(filename = output_file, 
+    width = 12, height = 10, units = "in", res = 300,
+    bg = "white")
+
+# Set up 2-row layout with margins
+par(mfrow = c(2, 1),
+    mar = c(4, 4.5, 3.5, 2),  # bottom, left, top, right margins
+    oma = c(2, 0, 3, 0),       # outer margins for main title
+    bg = "#FFF9F0")            # Beige background
+
+# --- PANEL A: ACF PLOT ---
+plot(acf_result, 
+     main = "",
+     xlab = "Lag (months)",
+     ylab = "Autocorrelation",
+     las = 1,              # Horizontal axis labels
+     lwd = 2,              # Line width for bars
+     ci.col = "#1F77B4",   # Color for confidence interval
+     col = "gray30")       # Color for bars
+
+# Add panel label
+mtext("A. Autocorrelation Function (ACF)", 
+      side = 3, line = 2.2, adj = 0, font = 2, cex = 1.1)
+
+# Add subtitle with rho_1 value using expression for proper Greek letter and subscript
+mtext(bquote("Lag-1 autocorrelation: " * rho[1] * " = " * .(sprintf("%.3f", rho_1))),
+      side = 3, line = 0.8, adj = 0, font = 1, cex = 0.9, col = "gray30")
+
+# Add CI annotation
+text(x = max_lag * 0.05, y = 0.95, 
+     labels = sprintf("95%% CI: ±%.3f", ci_level),
+     pos = 4, col = "#1F77B4", font = 3, cex = 0.9)
+
+# --- PANEL B: PACF PLOT ---
+plot(pacf_result,
+     main = "",
+     xlab = "Lag (months)",
+     ylab = "Partial Autocorrelation",
+     las = 1,
+     lwd = 2,
+     ci.col = "#1F77B4",
+     col = "gray30")
+
+# Add panel label
+mtext("B. Partial Autocorrelation Function (PACF)", 
+      side = 3, line = 2.2, adj = 0, font = 2, cex = 1.1)
+
+# Add subtitle with AR model suggestion
+ar_order <- ifelse(length(significant_pacf_lags) > 0, 
+                   max(significant_pacf_lags), 0)
+mtext(sprintf("Suggests AR(%d) model structure", ar_order),
+      side = 3, line = 0.8, adj = 0, font = 1, cex = 0.9, col = "gray30")
+
+# Add CI annotation
+text(x = max_lag * 0.05, y = max(pacf_result$acf) * 0.9, 
+     labels = sprintf("95%% CI: ±%.3f", ci_level),
+     pos = 4, col = "#1F77B4", font = 3, cex = 0.9)
+
+# --- ADD OVERALL TITLE AND CAPTION ---
+mtext("Temporal Autocorrelation Structure: Pan-Arctic Storminess Index (1958–2024)",
+      side = 3, line = 0.5, outer = TRUE, font = 2, cex = 1.3)
+
+# Use expression for subscript in caption
+mtext(bquote("Red points indicate significant autocorrelation at " * alpha * " = 0.05 | n = " * 
+             .(n) * ", " * n[eff] * " = " * .(sprintf("%.0f", neff)) * 
+             " (" * .(sprintf("%.1f%%", 100 * (1 - neff/n))) * " reduction)"),
+      side = 1, line = 0.5, outer = TRUE, font = 1, cex = 0.8, col = "gray40")
+
+# Close device
+dev.off()
+
+cat(sprintf("  ✓ ACF/PACF plot saved: %s\n\n", basename(output_file)))
+
+# ============================================================================
+# STEP 4: CREATE ACF TABLE FOR FIRST 12 LAGS
+# ============================================================================
+
+cat("ACF Values for First 12 Lags:\n")
+cat(rep("-", 50), "\n")
+cat("Lag | ACF Value | Significant?\n")
+cat(rep("-", 50), "\n")
+
+for (i in 2:min(13, length(acf_result$acf))) {  # Start from 2 to skip lag 0
+  lag_num <- i - 1
+  acf_val <- acf_result$acf[i]
+  sig_flag <- ifelse(abs(acf_val) > ci_level, "***", "")
+  cat(sprintf("%3d | %9.4f | %s\n", lag_num, acf_val, sig_flag))
+}
+cat("\n")
+
+# ============================================================================
+# STEP 5: SUMMARY AND INTERPRETATION
+# ============================================================================
+
+cat(rep("=", 80), "\n")
+cat("ACF/PACF ANALYSIS COMPLETE\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Key Findings:\n")
+cat(rep("-", 50), "\n")
+cat(sprintf("1. Lag-1 Autocorrelation: ρ₁ = %.3f\n", rho_1))
+if (abs(rho_1) > 0.1) {
+  cat("   → STRONG persistence detected (|ρ₁| > 0.1)\n")
+  cat("   → Violates independence assumption of standard tests\n")
+}
+cat(sprintf("\n2. Effective Sample Size: %.0f (%.1f%% of original)\n", 
+            neff, 100 * neff/n))
+cat("   → Autocorrelation reduces statistical degrees of freedom\n")
+
+cat(sprintf("\n3. PACF Significant Lags: %s\n", 
+            ifelse(length(significant_pacf_lags) > 0,
+                   paste(significant_pacf_lags, collapse = ", "),
+                   "None")))
+
+cat("\n4. Implications for Trend Analysis:\n")
+cat("   ✓ Pre-Whitened Mann-Kendall test (autocorrelation-aware) is REQUIRED\n")
+cat("   ✓ Block bootstrap should use appropriate block length\n")
+cat("   ✓ Standard OLS regression would yield inflated significance\n")
+
+cat("\n\nGenerated File:\n")
+cat(sprintf("  %s\n\n", basename(output_file)))
+
+cat("Interpretation Guide:\n")
+cat("  • ACF shows ALL correlations (direct + indirect effects)\n")
+cat("  • PACF shows DIRECT correlations (removing intermediate effects)\n")
+cat("  • Significant lag-1 PACF suggests AR(1) process\n")
+cat("  • Multiple significant PACF lags suggest higher-order AR(p) process\n")
+cat("  • Slow ACF decay indicates long-range persistence\n\n")
+
+cat(rep("=", 80), "\n")
+```
+
