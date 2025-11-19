@@ -698,6 +698,8 @@ cat("\n--- Generating Pan-Arctic Annual Mean Storminess Trend Plot ---\n")
 
 # --- 1. Extract Key Values for Plot Annotation ---
 
+ci_lower_decade <- boot_ci$percent[4] * 10
+ci_upper_decade <- boot_ci$percent[5] * 10
 
 # Get the p-value from the Pre-Whitened MK test on the *annual* data
 p_value_to_report <- mk_pw$p.value 
@@ -786,7 +788,7 @@ To determine if the overall spatial pattern of trends was distinguishable from r
     -   The full grid-point trend analysis (pre-whitening + MK test) was run on each of the 500 surrogate fields.
     -   For each run, the total number of grid cells with a p-value \< 0.05 was counted. This created a null distribution of how many significant cells are expected purely by random chance.
     -   The number of significant cells found in the *actual* data (250) was then compared to this null distribution to calculate the final field significance p-value.
-
+zz
 ```{r}
 # ============================================================================
 # PHASE 2.2: SPATIAL TREND ANALYSIS - FULL DOMAIN (56-90°N)
@@ -7939,51 +7941,87 @@ analyze_ke_ratio_seasonal <- function() {
 }
 
 # ============================================================================
-# EXECUTE COMPLETE ANALYSIS
+# CHECK FOR EXISTING OUTPUT FILES AND EXECUTE ANALYSIS
 # ============================================================================
 
-cat("\n\n", rep("=", 80), "\n")
-cat("MECHANISTIC DIAGNOSTICS (FULLY CORRECTED VERSION)\n")
-cat("Kinetic Energy Budget Analysis: MKE, EKE, and MKE/EKE Ratio\n")
-cat(rep("=", 80), "\n")
+output_dir <- file.path(processed_dir, "mechanistic_diagnostics")
+output_file_check <- file.path(output_dir, "Table_Mechanistic_Complete.csv")
 
-# --- PART 1: Annual Trends (CORRECTED) ---
-cat("\n### PART 1: ANNUAL TRENDS (804 monthly → 67 annual) ###\n")
+if (file.exists(output_file_check)) {
+  cat("\n\n", rep("=", 80), "\n")
+  cat("SKIPPING ANALYSIS: Final output file already exists.\n")
+  cat(glue("File found: {output_file_check}\n"))
+  cat("Delete the file to force a recalculation.\n")
+  cat(rep("=", 80), "\n\n")
 
-mke_annual <- analyze_ke_annual(
-  file_path = paths$mke,
-  var_name = "mke",
-  boot_prefix = "MKE",
-  unit_label = "m²/s²"
-)
+  # Load the existing results to proceed with the summary/printing block
+  all_results <- read.csv(output_file_check)
+  # Re-create other tables from the loaded all_results if needed, or simply skip to the final print blocks.
+  # For simplicity, we only load the main result table and proceed to the final printing block
+  # which will re-generate the formatted tables and interpretation.
+  
+  run_analysis <- FALSE
+} else {
+  run_analysis <- TRUE
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  cat("\n\n", rep("=", 80), "\n")
+  cat("MECHANISTIC DIAGNOSTICS (FULLY CORRECTED VERSION)\n")
+  cat("Kinetic Energy Budget Analysis: MKE, EKE, and MKE/EKE Ratio\n")
+  cat(rep("=", 80), "\n")
+}
 
-eke_annual <- analyze_ke_annual(
-  file_path = paths$eke,
-  var_name = "eke",
-  boot_prefix = "EKE",
-  unit_label = "m²/s²"
-)
+if (run_analysis) {
+    # --- PART 1: Annual Trends (CORRECTED) ---
+    cat("\n### PART 1: ANNUAL TRENDS (804 monthly → 67 annual) ###\n")
 
-ratio_annual <- analyze_ke_ratio_annual()
+    mke_annual <- analyze_ke_annual(
+      file_path = paths$mke,
+      var_name = "mke",
+      boot_prefix = "MKE",
+      unit_label = "m²/s²"
+    )
 
-# --- PART 2: Seasonal Trends (already correct) ---
-cat("\n### PART 2: SEASONAL TRENDS ###\n")
+    eke_annual <- analyze_ke_annual(
+      file_path = paths$eke,
+      var_name = "eke",
+      boot_prefix = "EKE",
+      unit_label = "m²/s²"
+    )
 
-mke_seasonal <- analyze_ke_seasonal(
-  file_path = paths$mke,
-  var_name = "mke",
-  boot_prefix = "MKE",
-  unit_label = "m²/s²"
-)
+    ratio_annual <- analyze_ke_ratio_annual()
 
-eke_seasonal <- analyze_ke_seasonal(
-  file_path = paths$eke,
-  var_name = "eke",
-  boot_prefix = "EKE",
-  unit_label = "m²/s²"
-)
+    # --- PART 2: Seasonal Trends (already correct) ---
+    cat("\n### PART 2: SEASONAL TRENDS ###\n")
 
-ratio_seasonal <- analyze_ke_ratio_seasonal()
+    mke_seasonal <- analyze_ke_seasonal(
+      file_path = paths$mke,
+      var_name = "mke",
+      boot_prefix = "MKE",
+      unit_label = "m²/s²"
+    )
+
+    eke_seasonal <- analyze_ke_seasonal(
+      file_path = paths$eke,
+      var_name = "eke",
+      boot_prefix = "EKE",
+      unit_label = "m²/s²"
+    )
+
+    ratio_seasonal <- analyze_ke_ratio_seasonal()
+
+    # Combine all results
+    all_results <- bind_rows(
+      mke_annual,
+      eke_annual,
+      ratio_annual,
+      mke_seasonal,
+      eke_seasonal,
+      ratio_seasonal
+    )
+}
+
 
 # ============================================================================
 # IMPROVED SUMMARY AND INTERPRETATION
@@ -7993,15 +8031,8 @@ cat("\n\n", rep("=", 80), "\n")
 cat("RESULTS FORMATTING AND INTERPRETATION\n")
 cat(rep("=", 80), "\n")
 
-# Combine all results
-all_results <- bind_rows(
-  mke_annual,
-  eke_annual,
-  ratio_annual,
-  mke_seasonal,
-  eke_seasonal,
-  ratio_seasonal
-) %>%
+# Process/reprocess results for display, regardless of whether the analysis was run or loaded
+all_results <- all_results %>%
   mutate(
     CI_formatted = glue("[{sprintf('%.4f', CI_Lower)}, {sprintf('%.4f', CI_Upper)}]"),
     Significant = ifelse(Pvalue < 0.05, "YES", "NO"),
@@ -8071,15 +8102,15 @@ cat("\n\n", rep("=", 80), "\n")
 cat("FINAL RESULTS: MECHANISTIC DIAGNOSTICS\n")
 cat(rep("=", 80), "\n")
 
-cat("\n\n### Table 1: Annual Kinetic Energy Trends (1958-2024) ###\n")
+cat("\n\n### table 1: annual kinetic energy trends (1958-2024) ###\n")
 cat("Note: All analyses use 67 annual means (not 804 monthly values)\n")
 cat("Block length: l=3 years (preserves inter-annual persistence)\n\n")
 print(kable(table_annual, format = "markdown", digits = 4))
 
-cat("\n\n### Summary: Significant Results by Component ###\n\n")
+cat("\n\n### summary: significant results by component ###\n\n")
 print(kable(summary_by_component, format = "markdown", digits = 2))
 
-cat("\n\n### Summary: Significant Results by Region ###\n\n")
+cat("\n\n### summary: significant results by region ###\n\n")
 print(kable(summary_by_region, format = "markdown", digits = 1))
 
 # ============================================================================
@@ -8104,29 +8135,29 @@ if (n_sig == 0) {
   cat("INTERPRETATION: COMPREHENSIVE ATMOSPHERIC STABILITY\n")
   cat(rep("-", 80), "\n\n")
   cat("The Arctic kinetic energy budget remained stable over 1958-2024:\n\n")
-  cat("  ✓ Mean circulation (MKE) → Unchanged\n")
-  cat("    → Climatological wind patterns stable\n\n")
-  cat("  ✓ Average storm strength (EKE mean) → Unchanged\n")
-  cat("    → Typical storm intensity stable\n\n")
-  cat("  ✓ Storm variability (Storminess variance) → Unchanged [from main analysis]\n")
-  cat("    → Storm intermittency stable\n\n")
-  cat("  ✓ Energy partitioning (MKE/EKE ratio) → Unchanged\n")
-  cat("    → Balance between mean flow and eddies stable\n\n")
+  cat("  ✓ mean circulation (MKE) → unchanged\n")
+  cat("    → climatological wind patterns stable\n\n")
+  cat("  ✓ average storm strength (EKE mean) → unchanged\n")
+  cat("    → typical storm intensity stable\n\n")
+  cat("  ✓ storm variability (storminess variance) → unchanged [from main analysis]\n")
+  cat("    → storm intermittency stable\n\n")
+  cat("  ✓ energy partitioning (MKE/EKE ratio) → unchanged\n")
+  cat("    → balance between mean flow and eddies stable\n\n")
   cat("This demonstrates COMPREHENSIVE stability across:\n")
-  cat("  • First moment (mean) → STABLE\n")
-  cat("  • Second moment (variance) → STABLE\n")
-  cat("  • Energy partition → STABLE\n")
-  cat("  • All seasons → STABLE\n")
-  cat("  • All regions → STABLE\n\n")
+  cat("  • first moment (mean) → stable\n")
+  cat("  • second moment (variance) → stable\n")
+  cat("  • energy partition → stable\n")
+  cat("  • all seasons → stable\n")
+  cat("  • all regions → stable\n\n")
   cat("KEY FINDING:\n")
   cat("Despite dramatic Arctic sea ice loss and ongoing climate change,\n")
   cat("the Arctic atmospheric circulation and storm activity remained\n")
   cat("remarkably stable over the 67-year analysis period.\n\n")
   cat("This contradicts hypotheses of:\n")
-  cat("  ✗ Intensifying Arctic storms (EKE stable)\n")
-  cat("  ✗ Weakening polar vortex (MKE stable)\n")
-  cat("  ✗ Autumn intensification (all seasons stable)\n")
-  cat("  ✗ Winter shift (all seasons stable)\n")
+  cat("  ✗ intensifying arctic storms (EKE stable)\n")
+  cat("  ✗ weakening polar vortex (MKE stable)\n")
+  cat("  ✗ autumn intensification (all seasons stable)\n")
+  cat("  ✗ winter shift (all seasons stable)\n")
 } else {
   cat("⚠ SOME SIGNIFICANT TRENDS DETECTED ⚠\n\n")
   
@@ -8136,12 +8167,12 @@ if (n_sig == 0) {
     mutate(
       Direction = ifelse(Slope > 0, "INCREASING", "DECREASING"),
       Interpretation = case_when(
-        Component == "MKE" & Slope > 0 ~ "Strengthening mean circulation",
-        Component == "MKE" & Slope < 0 ~ "Weakening mean circulation",
-        Component == "EKE" & Slope > 0 ~ "Increasing average storm strength",
-        Component == "EKE" & Slope < 0 ~ "Decreasing average storm strength",
-        Component == "MKE/EKE Ratio" & Slope > 0 ~ "Becoming more circulation-dominated",
-        Component == "MKE/EKE Ratio" & Slope < 0 ~ "Becoming more eddy-dominated",
+        Component == "MKE" & Slope > 0 ~ "strengthening mean circulation",
+        Component == "MKE" & Slope < 0 ~ "weakening mean circulation",
+        Component == "EKE" & Slope > 0 ~ "increasing average storm strength",
+        Component == "EKE" & Slope < 0 ~ "decreasing average storm strength",
+        Component == "MKE/EKE Ratio" & Slope > 0 ~ "becoming more circulation-dominated",
+        Component == "MKE/EKE Ratio" & Slope < 0 ~ "becoming more eddy-dominated",
         TRUE ~ "?"
       )
     )
@@ -8161,41 +8192,49 @@ cat("\n\n", rep("=", 80), "\n")
 cat("SAVING RESULTS\n")
 cat(rep("=", 80), "\n")
 
-output_dir <- file.path(processed_dir, "mechanistic_diagnostics_CORRECTED")
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
+# Output directory creation is moved before the file existence check
+# output_dir <- file.path(processed_dir, "mechanistic_diagnostics") 
+# if (!dir.exists(output_dir)) {
+#   dir.create(output_dir, recursive = TRUE)
+# }
+
+# Only write files if the analysis was run
+if (run_analysis) {
+    write.csv(table_annual, 
+              file.path(output_dir, "Table_Mechanistic_Annual.csv"), 
+              row.names = FALSE)
+    write.csv(all_results, 
+              file.path(output_dir, "Table_Mechanistic_Complete.csv"), 
+              row.names = FALSE)
+    write.csv(summary_by_component, 
+              file.path(output_dir, "Summary_By_Component.csv"), 
+              row.names = FALSE)
+    write.csv(summary_by_region, 
+              file.path(output_dir, "Summary_By_Region.csv"), 
+              row.names = FALSE)
+
+    cat(glue("\n✓ all tables saved to: {output_dir}\n"))
+} else {
+    cat(glue("\n✓ analysis skipped, results loaded from: {output_file_check}\n"))
 }
-
-write.csv(table_annual, 
-          file.path(output_dir, "Table_Mechanistic_Annual_CORRECTED.csv"), 
-          row.names = FALSE)
-write.csv(all_results, 
-          file.path(output_dir, "Table_Mechanistic_Complete_CORRECTED.csv"), 
-          row.names = FALSE)
-write.csv(summary_by_component, 
-          file.path(output_dir, "Summary_By_Component.csv"), 
-          row.names = FALSE)
-write.csv(summary_by_region, 
-          file.path(output_dir, "Summary_By_Region.csv"), 
-          row.names = FALSE)
-
-cat(glue("\n✓ All tables saved to: {output_dir}\n"))
 
 cat("\n\n", rep("=", 80), "\n")
 cat("MECHANISTIC DIAGNOSTICS COMPLETE (CORRECTED VERSION)\n")
 cat(rep("=", 80), "\n\n")
 
 cat("KEY CORRECTIONS APPLIED:\n")
-cat("  ✓ Annual analyses: 804 monthly → 67 annual (aggregated)\n")
-cat("  ✓ Block length: l=3 for annual data (was incorrectly l=12)\n")
-cat("  ✓ Lag-1 autocorrelation: Now appropriate for annual data (~0.1-0.3)\n")
-cat("  ✓ Physical interpretation: Based on true annual trends\n\n")
+cat("  ✓ annual analyses: 804 monthly → 67 annual (aggregated)\n")
+cat("  ✓ block length: l=3 for annual data (was incorrectly l=12)\n")
+cat("  ✓ lag-1 autocorrelation: now appropriate for annual data (~0.1-0.3)\n")
+cat("  ✓ physical interpretation: based on true annual trends\n")
+# Added check for pre-existing output files
+cat("  ✓ output check: skips analysis if 'Table_Mechanistic_Complete.csv' exists\n\n")
 
 cat("METHODOLOGICAL CONSISTENCY:\n")
-cat("  ✓ Matches storminess index analysis (annual aggregation)\n")
-cat("  ✓ Matches regional analyses (annual aggregation)\n")
-cat("  ✓ Matches seasonal analyses (annual seasonal means)\n")
-cat("  ✓ All bootstrap CIs use appropriate block lengths\n\n")
+cat("  ✓ matches storminess index analysis (annual aggregation)\n")
+cat("  ✓ matches regional analyses (annual aggregation)\n")
+cat("  ✓ matches seasonal analyses (annual seasonal means)\n")
+cat("  ✓ all bootstrap CIs use appropriate block lengths\n\n")
 ```
 
 ```{r}
@@ -8216,11 +8255,12 @@ cat("  ✓ All bootstrap CIs use appropriate block lengths\n\n")
 processed_dir <- here::here("Data", "processed")
 results_dir <- here::here("Data", "processed", "mechanistic_diagnostics")
 
-# Load all tables
-table_annual <- read_csv(file.path(results_dir, "Table_Mechanistic_Annual.csv"))
-table_seasonal_mke <- read_csv(file.path(results_dir, "Table_Mechanistic_Seasonal_MKE.csv"))
-table_seasonal_eke <- read_csv(file.path(results_dir, "Table_Mechanistic_Seasonal_EKE.csv"))
-all_results <- read_csv(file.path(results_dir, "Table_Mechanistic_Complete.csv"))
+# --- CORRECTION: Load only the complete results table, as separate seasonal tables were not generated. ---
+output_file_name <- "Table_Mechanistic_Complete.csv"
+all_results <- read_csv(file.path(results_dir, output_file_name))
+
+cat(glue("\n✓ Loaded combined results from: {output_file_name}\n"))
+
 
 # Create output directory for plots
 plot_dir <- file.path(results_dir, "visualizations")
@@ -8228,7 +8268,7 @@ if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
 
 # --- 3. PREPARE DATA ---
 
-# Clean region names for plotting
+# Clean region names for plotting and define Season order
 all_results <- all_results %>%
   mutate(
     Region_short = case_when(
@@ -8245,12 +8285,15 @@ all_results <- all_results %>%
 # PLOT 1: HEATMAP OF P-VALUES (ALL METRICS)
 # ============================================================================
 
-cat("\nGenerating Plot 1: P-value Heatmap...\n")
+cat("\nGenerating Plot 1: p-value heatmap...\n")
 
 # Prepare data for heatmap
 heatmap_data <- all_results %>%
   select(Component, Region_short, Time_Scale, Pvalue) %>%
+  # Ensure Time_Scale uses the ordered factor for correct plot rendering
   mutate(
+    Time_Scale = factor(Time_Scale, 
+                        levels = c("Annual", "DJF", "MAM", "JJA", "SON", "DJFM", "FMA")),
     Significance = case_when(
       Pvalue < 0.001 ~ "p < 0.001",
       Pvalue < 0.01 ~ "p < 0.01",
@@ -8275,10 +8318,10 @@ p1 <- ggplot(heatmap_data,
       name = "p-value"
     ) +
   labs(
-    title = "Statistical Significance: Kinetic Energy Trends (1958-2024)",
-    subtitle = "All tests non-significant (p > 0.05) | Pre-Whitened Mann-Kendall",
-    x = "Temporal Scale",
-    y = "Spatial Domain"
+    title = "statistical significance: kinetic energy trends (1958-2024)",
+    subtitle = "all tests non-significant (p > 0.05) | pre-whitened mann-kendall",
+    x = "temporal scale",
+    y = "spatial domain"
   ) +
   theme_minimal(base_size = 14) +
   theme(
@@ -8294,22 +8337,22 @@ p1 <- ggplot(heatmap_data,
 ggsave(file.path(plot_dir, "Fig1_Pvalue_Heatmap.png"), 
        plot = p1, width = 12, height = 10, dpi = 300)
 
-cat("  ✓ Saved: Fig1_Pvalue_Heatmap.png\n")
+cat("  ✓ saved: Fig1_Pvalue_Heatmap.png\n")
 
 # ============================================================================
 # PLOT 2: FOREST PLOT (ANNUAL TRENDS WITH CI)
 # ============================================================================
 
-cat("\nGenerating Plot 2: Forest Plot (Annual)...\n")
+cat("\nGenerating Plot 2: forest plot (annual)...\n")
 
 annual_data <- all_results %>%
   filter(Time_Scale == "Annual") %>%
   mutate(
     Component_label = factor(Component, 
                             levels = c("MKE", "EKE", "MKE/EKE Ratio"),
-                            labels = c("MKE (Mean Circulation)", 
-                                      "EKE (Eddy Activity)", 
-                                      "MKE/EKE Ratio"))
+                            labels = c("MKE (mean circulation)", 
+                                      "EKE (eddy activity)", 
+                                      "MKE/EKE ratio"))
   )
 
 p2 <- ggplot(annual_data, 
@@ -8321,10 +8364,10 @@ p2 <- ggplot(annual_data,
   facet_wrap(~ Component_label, ncol = 1, scales = "free_x") +
   scale_color_manual(values = c("#1E88E5", "#D32F2F", "#7B1FA2")) +
   labs(
-    title = "Annual Kinetic Energy Trends with 95% Bootstrap CI",
-    subtitle = "1958-2024 | All confidence intervals include zero",
-    x = "Sen's Slope (per decade)",
-    y = "Spatial Domain"
+    title = "annual kinetic energy trends with 95% bootstrap ci",
+    subtitle = "1958-2024 | all confidence intervals include zero",
+    x = "sen's slope (per decade)",
+    y = "spatial domain"
   ) +
   theme_minimal(base_size = 14) +
   theme(
@@ -8339,13 +8382,13 @@ p2 <- ggplot(annual_data,
 ggsave(file.path(plot_dir, "Fig2_Forest_Plot_Annual.png"), 
        plot = p2, width = 12, height = 9, dpi = 300)
 
-cat("  ✓ Saved: Fig2_Forest_Plot_Annual.png\n")
+cat("  ✓ saved: Fig2_Forest_Plot_Annual.png\n")
 
 # ============================================================================
 # PLOT 3: SEASONAL TRENDS COMPARISON (MKE vs EKE)
 # ============================================================================
 
-cat("\nGenerating Plot 3: Seasonal Trends Comparison...\n")
+cat("\nGenerating Plot 3: seasonal trends comparison...\n")
 
 seasonal_data <- all_results %>%
   filter(Time_Scale != "Annual", Component != "MKE/EKE Ratio") %>%
@@ -8364,14 +8407,14 @@ p3 <- ggplot(seasonal_data,
   facet_wrap(~ Region_short, ncol = 1) +
   scale_fill_manual(
     values = c("MKE" = "#1E88E5", "EKE" = "#D32F2F"),
-    labels = c("MKE (Mean)", "EKE (Eddies)"),
-    name = "Component"
+    labels = c("MKE (mean)", "EKE (eddies)"),
+    name = "component"
   ) +
   labs(
-    title = "Seasonal Kinetic Energy Trends by Region",
-    subtitle = "1958-2024 | All trends non-significant",
-    x = "Season",
-    y = "Sen's Slope (m²/s² per decade)"
+    title = "seasonal kinetic energy trends by region",
+    subtitle = "1958-2024 | all trends non-significant",
+    x = "season",
+    y = "sen's slope (m²/s² per decade)"
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -8386,13 +8429,13 @@ p3 <- ggplot(seasonal_data,
 ggsave(file.path(plot_dir, "Fig3_Seasonal_Comparison.png"), 
        plot = p3, width = 12, height = 10, dpi = 300)
 
-cat("  ✓ Saved: Fig3_Seasonal_Comparison.png\n")
+cat("  ✓ saved: Fig3_Seasonal_Comparison.png\n")
 
 # ============================================================================
 # PLOT 4: MKE/EKE RATIO TRENDS
 # ============================================================================
 
-cat("\nGenerating Plot 4: MKE/EKE Ratio Trends...\n")
+cat("\nGenerating Plot 4: mke/eke ratio trends...\n")
 
 ratio_data <- all_results %>%
   filter(Component == "MKE/EKE Ratio") %>%
@@ -8410,13 +8453,13 @@ p4 <- ggplot(ratio_data,
                 position = position_dodge(width = 0.5)) +
   scale_color_manual(
     values = c("#1E88E5", "#D32F2F", "#7B1FA2"),
-    name = "Region"
+    name = "region"
   ) +
   labs(
-    title = "MKE/EKE Ratio Trends: Energy Partitioning Stability",
-    subtitle = "1958-2024 | All trends non-significant (energy balance unchanged)",
-    x = "Temporal Scale",
-    y = "Sen's Slope (dimensionless per decade)"
+    title = "mke/eke ratio trends: energy partitioning stability",
+    subtitle = "1958-2024 | all trends non-significant (energy balance unchanged)",
+    x = "temporal scale",
+    y = "sen's slope (dimensionless per decade)"
   ) +
   theme_minimal(base_size = 14) +
   theme(
@@ -8430,15 +8473,16 @@ p4 <- ggplot(ratio_data,
 ggsave(file.path(plot_dir, "Fig4_Ratio_Trends.png"), 
        plot = p4, width = 12, height = 7, dpi = 300)
 
-cat("  ✓ Saved: Fig4_Ratio_Trends.png\n")
+cat("  ✓ saved: Fig4_Ratio_Trends.png\n")
 
 # ============================================================================
 # PLOT 5: SUMMARY DASHBOARD (MULTI-PANEL)
 # ============================================================================
 
-cat("\nGenerating Plot 5: Summary Dashboard...\n")
+cat("\nGenerating Plot 5: summary dashboard...\n")
 
 # Panel A: Annual trends
+# NOTE: annual_data already filtered and defined in PLOT 2
 panel_a <- annual_data %>%
   ggplot(aes(x = Component, y = Slope, fill = Region_short)) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
@@ -8447,9 +8491,9 @@ panel_a <- annual_data %>%
                 position = position_dodge(width = 0.8), width = 0.3) +
   scale_fill_manual(
     values = c("#1E88E5", "#D32F2F", "#7B1FA2"),
-    name = "Region"
+    name = "region"
   ) +
-  labs(title = "A) Annual Trends", x = "", y = "Slope (per decade)") +
+  labs(title = "a) annual trends", x = "", y = "slope (per decade)") +
   theme_minimal(base_size = 11) +
   theme(legend.position = "right",
         plot.title = element_text(face = "bold"),
@@ -8463,7 +8507,9 @@ sig_summary <- all_results %>%
     Significant = sum(Pvalue < 0.05, na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  mutate(Pct_significant = Significant / Total_tests * 100)
+  mutate(Pct_significant = Significant / Total_tests * 100,
+         Component = factor(Component, 
+                            levels = c("MKE", "EKE", "MKE/EKE Ratio"))) # Ensure order for plotting
 
 panel_b <- ggplot(sig_summary, 
                   aes(x = Component, y = Total_tests, fill = Component)) +
@@ -8472,8 +8518,8 @@ panel_b <- ggplot(sig_summary,
             vjust = -0.5, fontface = "bold", size = 4) +
   facet_wrap(~ Region_short, ncol = 3) +
   scale_fill_manual(values = c("#1E88E5", "#D32F2F", "#7B1FA2")) +
-  labs(title = "B) Significance Summary (p<0.05)", 
-       x = "", y = "Number of Tests") +
+  labs(title = "b) significance summary (p<0.05)", 
+       x = "", y = "number of tests") +
   theme_minimal(base_size = 11) +
   theme(legend.position = "none",
         plot.title = element_text(face = "bold"),
@@ -8485,7 +8531,7 @@ panel_c <- all_results %>%
   geom_boxplot(alpha = 0.7) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray40") +
   scale_fill_manual(values = c("#1E88E5", "#D32F2F", "#7B1FA2")) +
-  labs(title = "C) Autocorrelation (ρ₁)", x = "", y = "Lag-1 ACF") +
+  labs(title = "c) autocorrelation (ρ₁)", x = "", y = "lag-1 acf") +
   theme_minimal(base_size = 11) +
   theme(legend.position = "none",
         plot.title = element_text(face = "bold"))
@@ -8493,8 +8539,8 @@ panel_c <- all_results %>%
 # Combine panels
 p5 <- (panel_a / (panel_b | panel_c)) +
   plot_annotation(
-    title = "Mechanistic Diagnostics Summary: Arctic Kinetic Energy (1958-2024)",
-    subtitle = "Comprehensive stability across all metrics, regions, and temporal scales",
+    title = "mechanistic diagnostics summary: arctic kinetic energy (1958-2024)",
+    subtitle = "comprehensive stability across all metrics, regions, and temporal scales",
     theme = theme(
       plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
       plot.subtitle = element_text(size = 12, hjust = 0.5)
@@ -8504,7 +8550,7 @@ p5 <- (panel_a / (panel_b | panel_c)) +
 ggsave(file.path(plot_dir, "Fig5_Summary_Dashboard.png"), 
        plot = p5, width = 14, height = 10, dpi = 300)
 
-cat("  ✓ Saved: Fig5_Summary_Dashboard.png\n")
+cat("  ✓ saved: Fig5_Summary_Dashboard.png\n")
 
 # ============================================================================
 # GENERATE SUMMARY STATISTICS TABLE
@@ -8528,25 +8574,27 @@ summary_stats <- all_results %>%
 write.csv(summary_stats, file.path(plot_dir, "Summary_Statistics.csv"), row.names = FALSE)
 
 # ============================================================================
-# PRINT SUMMARY
+# PRINT SUMMARYz
 # ============================================================================
 
 cat("\n", rep("=", 80), "\n")
 cat("VISUALIZATION COMPLETE!\n")
 cat(rep("=", 80), "\n\n")
 
-cat("Generated Figures:\n")
-cat("  1. Fig1_Pvalue_Heatmap.png - P-value heatmap (all metrics)\n")
-cat("  2. Fig2_Forest_Plot_Annual.png - Forest plot with 95% CI\n")
-cat("  3. Fig3_Seasonal_Comparison.png - Seasonal MKE vs EKE\n")
+cat("generated figures:\n")
+cat("  1. Fig1_Pvalue_Heatmap.png - p-value heatmap (all metrics)\n")
+cat("  2. Fig2_Forest_Plot_Annual.png - forest plot with 95% ci\n")
+cat("  3. Fig3_Seasonal_Comparison.png - seasonal MKE vs EKE\n")
 cat("  4. Fig4_Ratio_Trends.png - MKE/EKE ratio trends\n")
-cat("  5. Fig5_Summary_Dashboard.png - Multi-panel dashboard\n")
-cat("  6. Fig6_Publication_Heatmap.png - Publication-quality heatmap\n")
-cat("  7. Fig7_Comprehensive_Summary.png - Cross-metric comparison\n\n")
+cat("  5. Fig5_Summary_Dashboard.png - multi-panel dashboard\n")
+# NOTE: The following file names are not generated by the code, only print the files that were generated.
+# cat("  6. Fig6_Publication_Heatmap.png - Publication-quality heatmap\n")
+# cat("  7. Fig7_Comprehensive_Summary.png - Cross-metric comparison\n\n")
+cat("\n\n")
 
-cat(glue("All files saved to: {plot_dir}\n\n"))
+cat(glue("all files saved to: {plot_dir}\n\n"))
 
-cat("Summary Statistics:\n")
+cat("summary statistics:\n")
 print(knitr::kable(summary_stats, format = "markdown", digits = 3))
 
 cat("\n", rep("=", 80), "\n")
@@ -8556,15 +8604,15 @@ cat(rep("=", 80), "\n")
 total_tests <- nrow(all_results)
 total_sig <- sum(all_results$Pvalue < 0.05, na.rm = TRUE)
 
-cat(glue("\nTotal tests performed: {total_tests}\n"))
-cat(glue("Significant results (p<0.05): {total_sig} ({round(total_sig/total_tests*100, 1)}%)\n\n"))
+cat(glue("\ntotal tests performed: {total_tests}\n"))
+cat(glue("significant results (p<0.05): {total_sig} ({round(total_sig/total_tests*100, 1)}%)\n\n"))
 
 if (total_sig == 0) {
   cat("✓ COMPREHENSIVE ATMOSPHERIC STABILITY CONFIRMED\n")
-  cat("  → Mean circulation (MKE) stable across all scales\n")
-  cat("  → Average storm strength (EKE) stable across all scales\n")
-  cat("  → Energy partitioning (MKE/EKE) stable across all scales\n")
-  cat("  → Storm variability (Storminess) stable [from main analysis]\n\n")
+  cat("  → mean circulation (MKE) stable across all scales\n")
+  cat("  → average storm strength (EKE) stable across all scales\n")
+  cat("  → energy partitioning (MKE/EKE) stable across all scales\n")
+  cat("  → storm variability (storminess) stable [from main analysis]\n\n")
   cat("INTERPRETATION:\n")
   cat("Arctic atmospheric dynamics remained unchanged over 1958-2024\n")
   cat("across both first moment (mean) and second moment (variance),\n")
@@ -8572,7 +8620,7 @@ if (total_sig == 0) {
 } else {
   cat("⚠ PARTIAL CHANGES DETECTED\n")
   cat(glue("  {total_sig} out of {total_tests} tests show significance\n"))
-  cat("  Review figures to identify which metrics/regions/seasons changed\n")
+  cat("  review figures to identify which metrics/regions/seasons changed\n")
 }
 
 cat("\n", rep("=", 80), "\n")
