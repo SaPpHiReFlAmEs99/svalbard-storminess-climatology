@@ -17,9 +17,24 @@ library(rnaturalearthdata)
 library(maps)
 library(lubridate)
 library(gridExtra)
+library(here)
+
+library(ncdf4)
+library(stars)
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(patchwork)
+library(viridis)
+library(dplyr)
+library(lubridate)
+library(scales)
+library(here)
 ```
 
-# Phase 1
+# Pan Arctic
+
+## Phase 1
 
 ```{r summary}
 # ============================================================================
@@ -1802,3 +1817,968 @@ cat("  • Slow ACF decay indicates long-range persistence\n\n")
 cat(rep("=", 80), "\n")
 ```
 
+```{r distribution-normality}
+# ============================================================================
+# PHASE 1: DISTRIBUTION AND NORMALITY ASSESSMENT
+# Pan-Arctic Storminess Index (1958-2024)
+# ============================================================================
+#
+# PURPOSE: Assess the statistical distribution of the storminess index:
+#   - Histogram with fitted normal distribution
+#   - Q-Q plot to check normality assumption
+#   - Box plots by decade to detect temporal changes in distribution
+#   - Summary statistics
+#
+# INTERPRETATION:
+#   - Informs choice of parametric vs non-parametric tests
+#   - Identifies outliers and extreme values
+#   - Assesses homogeneity of variance over time
+#
+# INPUT: Requires 'storm_df' data frame with columns: date, storminess
+# ============================================================================
+
+# --- SETUP ---
+plot_dir <- here("Plots", "phase1_diagnostics")
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+cat("\n", rep("=", 80), "\n")
+cat("PHASE 1: DISTRIBUTION AND NORMALITY ASSESSMENT\n")
+cat(rep("=", 80), "\n\n")
+
+# ============================================================================
+# STEP 1: CALCULATE DISTRIBUTION STATISTICS
+# ============================================================================
+
+cat("Calculating distribution statistics...\n")
+
+# Basic statistics
+mean_val <- mean(storm_df$storminess, na.rm = TRUE)
+median_val <- median(storm_df$storminess, na.rm = TRUE)
+sd_val <- sd(storm_df$storminess, na.rm = TRUE)
+min_val <- min(storm_df$storminess, na.rm = TRUE)
+max_val <- max(storm_df$storminess, na.rm = TRUE)
+
+# Skewness and Kurtosis
+# Skewness: measure of asymmetry (0 = symmetric, >0 = right skew, <0 = left skew)
+# Kurtosis: measure of tail heaviness (3 = normal, >3 = heavy tails, <3 = light tails)
+n <- length(storm_df$storminess)
+skewness <- (1/n) * sum((storm_df$storminess - mean_val)^3) / sd_val^3
+kurtosis <- (1/n) * sum((storm_df$storminess - mean_val)^4) / sd_val^4
+
+# Excess kurtosis (subtract 3 to compare with normal distribution)
+excess_kurtosis <- kurtosis - 3
+
+# Quartiles
+q1 <- quantile(storm_df$storminess, 0.25, na.rm = TRUE)
+q3 <- quantile(storm_df$storminess, 0.75, na.rm = TRUE)
+iqr <- q3 - q1
+
+# Shapiro-Wilk test for normality (if n < 5000)
+if (n < 5000) {
+  shapiro_test <- shapiro.test(storm_df$storminess)
+  shapiro_p <- shapiro_test$p.value
+  shapiro_w <- shapiro_test$statistic
+} else {
+  # For large samples, use Kolmogorov-Smirnov test
+  ks_test <- ks.test(storm_df$storminess, "pnorm", mean_val, sd_val)
+  shapiro_p <- ks_test$p.value
+  shapiro_w <- ks_test$statistic
+}
+
+cat(sprintf("  Mean:             %.2f m⁴/s⁴\n", mean_val))
+cat(sprintf("  Median:           %.2f m⁴/s⁴\n", median_val))
+cat(sprintf("  Std. Deviation:   %.2f m⁴/s⁴\n", sd_val))
+cat(sprintf("  Skewness:         %.3f\n", skewness))
+cat(sprintf("  Excess Kurtosis:  %.3f\n", excess_kurtosis))
+cat(sprintf("  Shapiro-Wilk W:   %.4f (p = %.4f)\n\n", shapiro_w, shapiro_p))
+
+if (shapiro_p < 0.05) {
+  cat("  → Data significantly deviates from normality (p < 0.05)\n")
+  cat("  → Non-parametric methods are appropriate\n\n")
+} else {
+  cat("  → Data does not significantly deviate from normality (p ≥ 0.05)\n\n")
+}
+
+# ============================================================================
+# STEP 2: PREPARE DATA BY DECADE
+# ============================================================================
+
+cat("Preparing decadal breakdown...\n")
+
+# Add decade column
+storm_df <- storm_df %>%
+  mutate(
+    decade = floor(year(date) / 10) * 10,
+    decade_label = paste0(decade, "s")
+  )
+
+# Count observations per decade
+decade_counts <- storm_df %>%
+  group_by(decade_label) %>%
+  summarise(n = n(), .groups = "drop")
+
+cat("  Observations per decade:\n")
+for (i in 1:nrow(decade_counts)) {
+  cat(sprintf("    %s: %d months\n", decade_counts$decade_label[i], decade_counts$n[i]))
+}
+cat("\n")
+
+# ============================================================================
+# STEP 3: CREATE FOUR-PANEL DIAGNOSTIC PLOT
+# ============================================================================
+
+cat("Creating distribution diagnostic plots...\n")
+
+# Common theme
+common_theme <- theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(size = 12, face = "bold", hjust = 0),
+    axis.title = element_text(size = 10, face = "bold"),
+    axis.text = element_text(size = 9),
+    panel.grid.minor = element_line(linewidth = 0.2, color = "gray90"),
+    panel.grid.major = element_line(linewidth = 0.3, color = "gray85"),
+    panel.background = element_rect(fill = "#FFF9F0", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+# --- PANEL A: HISTOGRAM WITH NORMAL CURVE ---
+p1 <- ggplot(storm_df, aes(x = storminess)) +
+  geom_histogram(aes(y = after_stat(density)), 
+                 bins = 40, fill = "gray60", color = "gray30", alpha = 0.7) +
+  stat_function(fun = dnorm, 
+                args = list(mean = mean_val, sd = sd_val),
+                color = "#D62728", linewidth = 1.2) +
+  geom_vline(xintercept = mean_val, linetype = "dashed", 
+             color = "black", linewidth = 0.8) +
+  geom_vline(xintercept = median_val, linetype = "dotted", 
+             color = "#1F77B4", linewidth = 0.8) +
+  labs(
+    title = "A. Histogram with Normal Distribution",
+    subtitle = sprintf("Skewness = %.3f, Excess Kurtosis = %.3f", 
+                      skewness, excess_kurtosis),
+    x = expression(paste("Storminess Index (m"^4, " s"^{-4}, ")")),
+    y = "Density"
+  ) +
+  common_theme +
+  annotate("text", x = mean_val, y = Inf, 
+           label = "Mean", vjust = 1.5, hjust = -0.1, size = 3, fontface = "bold") +
+  annotate("text", x = median_val, y = Inf, 
+           label = "Median", vjust = 1.5, hjust = 1.1, size = 3, 
+           fontface = "bold", color = "#1F77B4")
+
+# --- PANEL B: Q-Q PLOT ---
+# Calculate theoretical quantiles
+theoretical_q <- qnorm(ppoints(length(storm_df$storminess)))
+sample_q <- sort(storm_df$storminess)
+
+qq_df <- data.frame(
+  theoretical = theoretical_q,
+  sample = sample_q
+)
+
+p2 <- ggplot(qq_df, aes(x = theoretical, y = sample)) +
+  geom_point(alpha = 0.5, size = 1.5, color = "gray40") +
+  geom_abline(intercept = mean_val, slope = sd_val, 
+              color = "#D62728", linewidth = 1.2) +
+  labs(
+    title = "B. Q-Q Plot (Normal Distribution)",
+    subtitle = sprintf("Shapiro-Wilk W = %.4f, p = %.4f", shapiro_w, shapiro_p),
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles"
+  ) +
+  common_theme
+
+# --- PANEL C: BOX PLOTS BY DECADE ---
+p3 <- ggplot(storm_df, aes(x = decade_label, y = storminess)) +
+  geom_boxplot(fill = "gray70", color = "gray30", alpha = 0.7,
+               outlier.color = "#D62728", outlier.size = 2) +
+  geom_hline(yintercept = mean_val, linetype = "dashed", 
+             color = "black", linewidth = 0.7) +
+  labs(
+    title = "C. Distribution by Decade",
+    subtitle = "Red points indicate outliers (> 1.5 × IQR from quartiles)",
+    x = "Decade",
+    y = expression(paste("Storminess Index (m"^4, " s"^{-4}, ")"))
+  ) +
+  common_theme +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# --- PANEL D: VARIANCE OVER TIME (ROLLING WINDOW) ---
+# Calculate rolling standard deviation (24-month window)
+storm_df <- storm_df %>%
+  arrange(date) %>%
+  mutate(
+    rolling_sd = zoo::rollapply(storminess, width = 24, FUN = sd, 
+                                fill = NA, align = "center")
+  )
+
+p4 <- ggplot(storm_df, aes(x = date, y = rolling_sd)) +
+  geom_line(color = "#1F77B4", linewidth = 0.8) +
+  geom_hline(yintercept = sd_val, linetype = "dashed", 
+             color = "black", linewidth = 0.7) +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  labs(
+    title = "D. Temporal Variability (24-month Rolling Std. Dev.)",
+    subtitle = "Assesses homogeneity of variance over time",
+    x = "Year",
+    y = expression(paste("Rolling Std. Dev. (m"^4, " s"^{-4}, ")"))
+  ) +
+  common_theme
+
+# --- COMBINE ALL PANELS ---
+combined_plot <- grid.arrange(
+  p1, p2, p3, p4,
+  ncol = 2,
+  top = grid::textGrob(
+    "Distribution and Normality Assessment: Pan-Arctic Storminess Index (1958–2024)",
+    gp = grid::gpar(fontsize = 15, fontface = "bold")
+  ),
+  bottom = grid::textGrob(
+    sprintf("n = %d | Mean = %.2f | SD = %.2f | Skewness = %.3f | Excess Kurtosis = %.3f",
+            n, mean_val, sd_val, skewness, excess_kurtosis),
+    gp = grid::gpar(fontsize = 9, col = "gray40")
+  )
+)
+
+# ============================================================================
+# STEP 4: SAVE PLOT
+# ============================================================================
+
+output_file <- file.path(plot_dir, "Fig_Distribution_Normality_Assessment.png")
+
+ggsave(
+  filename = output_file,
+  plot = combined_plot,
+  width = 14,
+  height = 11,
+  dpi = 300,
+  bg = "white"
+)
+
+cat(sprintf("  ✓ Distribution assessment plot saved: %s\n\n", basename(output_file)))
+
+# ============================================================================
+# STEP 5: IDENTIFY AND REPORT OUTLIERS
+# ============================================================================
+
+cat("Outlier Analysis:\n")
+cat(rep("-", 50), "\n")
+
+# Define outliers using IQR method
+lower_fence <- q1 - 1.5 * iqr
+upper_fence <- q3 + 1.5 * iqr
+
+outliers <- storm_df %>%
+  filter(storminess < lower_fence | storminess > upper_fence) %>%
+  select(date, storminess) %>%
+  arrange(desc(storminess))
+
+cat(sprintf("  Lower fence (Q1 - 1.5×IQR): %.2f\n", lower_fence))
+cat(sprintf("  Upper fence (Q3 + 1.5×IQR): %.2f\n", upper_fence))
+cat(sprintf("  Number of outliers: %d (%.1f%% of data)\n\n", 
+            nrow(outliers), 100 * nrow(outliers) / n))
+
+if (nrow(outliers) > 0) {
+  cat("  Top 10 extreme values:\n")
+  for (i in 1:min(10, nrow(outliers))) {
+    cat(sprintf("    %s: %.2f m⁴/s⁴\n", 
+                format(outliers$date[i], "%Y-%m-%d"), 
+                outliers$storminess[i]))
+  }
+  cat("\n")
+}
+
+# ============================================================================
+# STEP 6: SUMMARY AND INTERPRETATION
+# ============================================================================
+
+cat(rep("=", 80), "\n")
+cat("DISTRIBUTION ASSESSMENT COMPLETE\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Key Findings:\n")
+cat(rep("-", 50), "\n")
+
+cat(sprintf("1. Central Tendency:\n"))
+cat(sprintf("   Mean = %.2f m⁴/s⁴, Median = %.2f m⁴/s⁴\n", mean_val, median_val))
+if (abs(mean_val - median_val) / sd_val > 0.1) {
+  cat("   → Noticeable difference suggests asymmetry\n")
+} else {
+  cat("   → Mean ≈ Median suggests symmetric distribution\n")
+}
+
+cat(sprintf("\n2. Distribution Shape:\n"))
+if (abs(skewness) < 0.5) {
+  cat(sprintf("   Skewness = %.3f → Approximately symmetric\n", skewness))
+} else if (skewness > 0) {
+  cat(sprintf("   Skewness = %.3f → Positively skewed (right tail)\n", skewness))
+} else {
+  cat(sprintf("   Skewness = %.3f → Negatively skewed (left tail)\n", skewness))
+}
+
+if (abs(excess_kurtosis) < 0.5) {
+  cat(sprintf("   Excess Kurtosis = %.3f → Normal tail behavior\n", excess_kurtosis))
+} else if (excess_kurtosis > 0) {
+  cat(sprintf("   Excess Kurtosis = %.3f → Heavy tails (more extremes)\n", excess_kurtosis))
+} else {
+  cat(sprintf("   Excess Kurtosis = %.3f → Light tails (fewer extremes)\n", excess_kurtosis))
+}
+
+cat(sprintf("\n3. Normality Test:\n"))
+cat(sprintf("   Shapiro-Wilk W = %.4f, p-value = %.4f\n", shapiro_w, shapiro_p))
+if (shapiro_p < 0.05) {
+  cat("   → REJECT null hypothesis of normality (p < 0.05)\n")
+  cat("   → Data is NOT normally distributed\n")
+  cat("   → Non-parametric tests (Mann-Kendall) are appropriate\n")
+} else {
+  cat("   → FAIL TO REJECT null hypothesis (p ≥ 0.05)\n")
+  cat("   → Data approximates normal distribution\n")
+}
+
+cat(sprintf("\n4. Temporal Homogeneity:\n"))
+cat("   Check Panel D for variance changes over time\n")
+cat("   → Stable variance supports stationarity assumption\n")
+cat("   → Increasing variance may indicate heteroscedasticity\n")
+
+cat("\n\nGenerated File:\n")
+cat(sprintf("  %s\n\n", basename(output_file)))
+
+cat("Interpretation Guide:\n")
+cat("  Panel A: Shows overall distribution shape vs. normal curve\n")
+cat("  Panel B: Deviations from diagonal indicate non-normality\n")
+cat("  Panel C: Compares distributions across decades\n")
+cat("  Panel D: Assesses if variability changes over time\n\n")
+
+cat(rep("=", 80), "\n")
+```
+
+```{r monthly-climatology}
+# ============================================================================
+# PHASE 1: MONTHLY CLIMATOLOGY - MEAN ANNUAL CYCLE
+# Pan-Arctic Storminess Index (1958-2024)
+# ============================================================================
+#
+# PURPOSE: Characterize the climatological mean annual cycle:
+#   - Mean storminess for each calendar month
+#   - Variability within each month (error bars)
+#   - Peak and trough identification
+#   - Seasonal patterns
+#
+# This establishes the baseline seasonal cycle against which 
+# all subsequent analyses are compared.
+#
+# INPUT: Requires 'storm_df' data frame with columns: date, storminess
+# ============================================================================
+
+# --- SETUP ---
+plot_dir <- here("Plots", "phase1_diagnostics")
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+cat("\n", rep("=", 80), "\n")
+cat("PHASE 1: MONTHLY CLIMATOLOGY - MEAN ANNUAL CYCLE\n")
+cat(rep("=", 80), "\n\n")
+
+# ============================================================================
+# STEP 1: CALCULATE MONTHLY CLIMATOLOGY
+# ============================================================================
+
+cat("Calculating monthly climatological statistics...\n")
+
+# Calculate statistics for each calendar month
+monthly_clim <- storm_df %>%
+  mutate(month = month(date, label = TRUE, abbr = TRUE)) %>%
+  group_by(month) %>%
+  summarise(
+    mean = mean(storminess, na.rm = TRUE),
+    median = median(storminess, na.rm = TRUE),
+    sd = sd(storminess, na.rm = TRUE),
+    se = sd / sqrt(n()),  # Standard error
+    q25 = quantile(storminess, 0.25, na.rm = TRUE),
+    q75 = quantile(storminess, 0.75, na.rm = TRUE),
+    min = min(storminess, na.rm = TRUE),
+    max = max(storminess, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    month_num = as.numeric(month),
+    ci_lower = mean - 1.96 * se,  # 95% CI
+    ci_upper = mean + 1.96 * se
+  )
+
+# Identify peak and trough months
+peak_month <- monthly_clim$month[which.max(monthly_clim$mean)]
+peak_value <- max(monthly_clim$mean)
+trough_month <- monthly_clim$month[which.min(monthly_clim$mean)]
+trough_value <- min(monthly_clim$mean)
+annual_range <- peak_value - trough_value
+
+cat("\nMonthly Climatology Statistics:\n")
+cat(rep("-", 70), "\n")
+cat(sprintf("%-5s | %8s | %8s | %8s | %8s | %s\n", 
+            "Month", "Mean", "Median", "Std Dev", "Range", "N"))
+cat(rep("-", 70), "\n")
+
+for (i in 1:nrow(monthly_clim)) {
+  cat(sprintf("%-5s | %8.2f | %8.2f | %8.2f | %8.2f | %d\n",
+              monthly_clim$month[i],
+              monthly_clim$mean[i],
+              monthly_clim$median[i],
+              monthly_clim$sd[i],
+              monthly_clim$max[i] - monthly_clim$min[i],
+              monthly_clim$n[i]))
+}
+
+cat(rep("-", 70), "\n\n")
+
+cat(sprintf("Key Findings:\n"))
+cat(sprintf("  Peak month:        %s (%.2f m⁴/s⁴)\n", peak_month, peak_value))
+cat(sprintf("  Trough month:      %s (%.2f m⁴/s⁴)\n", trough_month, trough_value))
+cat(sprintf("  Annual amplitude:  %.2f m⁴/s⁴ (%.1f%% of annual mean)\n\n", 
+            annual_range, 100 * annual_range / mean(storm_df$storminess)))
+
+# Identify seasonal patterns
+winter_months <- c("Dec", "Jan", "Feb")
+spring_months <- c("Mar", "Apr", "May")
+summer_months <- c("Jun", "Jul", "Aug")
+autumn_months <- c("Sep", "Oct", "Nov")
+
+winter_mean <- mean(monthly_clim$mean[monthly_clim$month %in% winter_months])
+spring_mean <- mean(monthly_clim$mean[monthly_clim$month %in% spring_months])
+summer_mean <- mean(monthly_clim$mean[monthly_clim$month %in% summer_months])
+autumn_mean <- mean(monthly_clim$mean[monthly_clim$month %in% autumn_months])
+
+cat("Seasonal Averages:\n")
+cat(sprintf("  Winter (DJF):  %.2f m⁴/s⁴\n", winter_mean))
+cat(sprintf("  Spring (MAM):  %.2f m⁴/s⁴\n", spring_mean))
+cat(sprintf("  Summer (JJA):  %.2f m⁴/s⁴\n", summer_mean))
+cat(sprintf("  Autumn (SON):  %.2f m⁴/s⁴\n\n", autumn_mean))
+
+# ============================================================================
+# STEP 2: CREATE MAIN CLIMATOLOGY PLOT
+# ============================================================================
+
+cat("Creating monthly climatology plot...\n")
+
+p_main <- ggplot(monthly_clim, aes(x = month, y = mean, group = 1)) +
+  
+  # Shaded seasonal backgrounds
+  annotate("rect", xmin = 0.5, xmax = 3.5, ymin = -Inf, ymax = Inf,
+           fill = "#E3F2FD", alpha = 0.3) +  # Winter (Dec-Feb)
+  annotate("rect", xmin = 3.5, xmax = 6.5, ymin = -Inf, ymax = Inf,
+           fill = "#F1F8E9", alpha = 0.3) +  # Spring (Mar-May)
+  annotate("rect", xmin = 6.5, xmax = 9.5, ymin = -Inf, ymax = Inf,
+           fill = "#FFF9C4", alpha = 0.3) +  # Summer (Jun-Aug)
+  annotate("rect", xmin = 9.5, xmax = 12.5, ymin = -Inf, ymax = Inf,
+           fill = "#FFE0B2", alpha = 0.3) +  # Autumn (Sep-Nov)
+  
+  # Error bars (95% CI)
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), 
+                width = 0.3, color = "gray40", linewidth = 0.6) +
+  
+  # Connect months with line
+  geom_line(color = "#1F77B4", linewidth = 1.3) +
+  
+  # Points for each month
+  geom_point(size = 4, color = "#1F77B4", fill = "#1F77B4", shape = 21) +
+  
+  # Highlight peak month
+  geom_point(data = subset(monthly_clim, month == peak_month),
+             size = 5, color = "#D62728", shape = 17) +
+  
+  # Highlight trough month
+  geom_point(data = subset(monthly_clim, month == trough_month),
+             size = 5, color = "#2CA02C", shape = 17) +
+  
+  # Horizontal line at annual mean
+  geom_hline(yintercept = mean(storm_df$storminess), 
+             linetype = "dashed", color = "black", linewidth = 0.8) +
+  
+  # Labels and scales
+  scale_y_continuous(
+    breaks = seq(0, ceiling(max(monthly_clim$ci_upper)/20)*20, by = 20),
+    expand = expansion(mult = c(0.02, 0.08))
+  ) +
+  
+  labs(
+    title = "Mean Annual Cycle of Arctic Storminess (1958–2024)",
+    subtitle = sprintf("Peak: %s (%.1f m⁴ s⁻⁴) | Trough: %s (%.1f m⁴ s⁻⁴) | Amplitude: %.1f m⁴ s⁻⁴",
+                      peak_month, peak_value, trough_month, trough_value, annual_range),
+    x = "Month",
+    y = expression(paste("Mean Storminess Index (m"^4, " s"^{-4}, ")"))
+  ) +
+  
+  # Theme
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, 
+                              margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, 
+                                 margin = margin(b = 15), color = "gray30"),
+    axis.title.x = element_text(size = 12, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+    axis.text = element_text(size = 11),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major = element_line(linewidth = 0.4, color = "gray85"),
+    panel.background = element_rect(fill = "#FFF9F0", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(15, 15, 15, 15)
+  ) +
+  
+  # Annotations for peak and trough
+  annotate("text", x = which(monthly_clim$month == peak_month), 
+           y = peak_value + annual_range * 0.15,
+           label = "Peak", color = "#D62728", fontface = "bold", size = 4) +
+  
+  annotate("text", x = which(monthly_clim$month == trough_month), 
+           y = trough_value - annual_range * 0.15,
+           label = "Trough", color = "#2CA02C", fontface = "bold", size = 4) +
+  
+  # Season labels
+  annotate("text", x = 2, y = Inf, label = "Winter", 
+           vjust = 1.5, size = 3.5, fontface = "italic", color = "#1565C0") +
+  annotate("text", x = 5, y = Inf, label = "Spring", 
+           vjust = 1.5, size = 3.5, fontface = "italic", color = "#558B2F") +
+  annotate("text", x = 8, y = Inf, label = "Summer", 
+           vjust = 1.5, size = 3.5, fontface = "italic", color = "#F9A825") +
+  annotate("text", x = 11, y = Inf, label = "Autumn", 
+           vjust = 1.5, size = 3.5, fontface = "italic", color = "#EF6C00") +
+  
+  # Legend for error bars
+  annotate("text", x = 1, y = min(monthly_clim$ci_lower) + annual_range * 0.05,
+           label = "Error bars: 95% CI", hjust = 0, size = 3, 
+           color = "gray40", fontface = "italic")
+
+p_main <- p_main +
+  annotate("text", 
+           x = 12.5, 
+           y = mean(storm_df$storminess) + 3,  # Slightly above the line
+           label = sprintf("Annual mean: %.1f m⁴/s⁴", mean(storm_df$storminess)),
+           hjust = 1, size = 3.5, color = "black", fontface = "italic")
+
+# ============================================================================
+# STEP 3: SAVE MAIN PLOT
+# ============================================================================
+
+output_file <- file.path(plot_dir, "Fig_Monthly_Climatology.png")
+
+ggsave(
+  filename = output_file,
+  plot = p_main,
+  width = 14,
+  height = 8,
+  dpi = 300,
+  bg = "white"
+)
+
+cat(sprintf("  ✓ Monthly climatology plot saved: %s\n\n", basename(output_file)))
+
+# ============================================================================
+# STEP 4: CREATE SUPPLEMENTARY VARIABILITY PLOT
+# ============================================================================
+
+cat("Creating supplementary variability plot...\n")
+
+p_variability <- ggplot(monthly_clim, aes(x = month, y = sd, group = 1)) +
+  
+  # Seasonal backgrounds (same as main plot)
+  annotate("rect", xmin = 0.5, xmax = 3.5, ymin = -Inf, ymax = Inf,
+           fill = "#E3F2FD", alpha = 0.3) +
+  annotate("rect", xmin = 3.5, xmax = 6.5, ymin = -Inf, ymax = Inf,
+           fill = "#F1F8E9", alpha = 0.3) +
+  annotate("rect", xmin = 6.5, xmax = 9.5, ymin = -Inf, ymax = Inf,
+           fill = "#FFF9C4", alpha = 0.3) +
+  annotate("rect", xmin = 9.5, xmax = 12.5, ymin = -Inf, ymax = Inf,
+           fill = "#FFE0B2", alpha = 0.3) +
+  
+  # Bar plot
+  geom_col(fill = "#1F77B4", alpha = 0.7, color = "gray30", linewidth = 0.3) +
+  
+  # Line connecting tops
+  geom_line(color = "#D62728", linewidth = 1.1) +
+  geom_point(color = "#D62728", size = 3) +
+  
+  # Mean line
+  geom_hline(yintercept = mean(monthly_clim$sd), 
+             linetype = "dashed", color = "black", linewidth = 0.7) +
+  
+  # Annotation for mean SD line
+  annotate("text", 
+           x = 12.5, 
+           y = mean(monthly_clim$sd) + 2,
+           label = sprintf("Mean SD: %.1f m⁴/s⁴", mean(monthly_clim$sd)),
+           hjust = 1, size = 3.5, color = "black", fontface = "italic") +
+  
+  labs(
+    title = "Monthly Variability of Arctic Storminess (1958–2024)",
+    subtitle = "Standard deviation shows month-to-month consistency",
+    x = "Month",
+    y = z
+  ) +
+  
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, 
+                              margin = margin(b = 5)),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, 
+                                 margin = margin(b = 15), color = "gray30"),
+    axis.title.x = element_text(size = 12, face = "bold", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 12, face = "bold", margin = margin(r = 10)),
+    axis.text = element_text(size = 11),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major = element_line(linewidth = 0.4, color = "gray85"),
+    panel.background = element_rect(fill = "#FFF9F0", color = NA),
+    plot.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(15, 15, 15, 15)
+  )
+
+output_file_var <- file.path(plot_dir, "Fig_Monthly_Variability.png")
+
+ggsave(
+  filename = output_file_var,
+  plot = p_variability,
+  width = 14,
+  height = 7,
+  dpi = 300,
+  bg = "white"
+)
+
+# ============================================================================
+# STEP 5: SUMMARY AND INTERPRETATION
+# ============================================================================
+
+cat(rep("=", 80), "\n")
+cat("MONTHLY CLIMATOLOGY ANALYSIS COMPLETE\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Key Findings:\n")
+cat(rep("-", 50), "\n")
+
+cat(sprintf("1. Annual Cycle Characteristics:\n"))
+cat(sprintf("   Peak month:     %s (%.2f m⁴/s⁴)\n", peak_month, peak_value))
+cat(sprintf("   Trough month:   %s (%.2f m⁴/s⁴)\n", trough_month, trough_value))
+cat(sprintf("   Amplitude:      %.2f m⁴/s⁴ (%.1f%% of mean)\n\n", 
+            annual_range, 100 * annual_range / mean(storm_df$storminess)))
+
+cat("2. Seasonal Pattern:\n")
+if (winter_mean == max(c(winter_mean, spring_mean, summer_mean, autumn_mean))) {
+  cat("   → Winter is the stormiest season\n")
+} else if (autumn_mean == max(c(winter_mean, spring_mean, summer_mean, autumn_mean))) {
+  cat("   → Autumn is the stormiest season\n")
+}
+if (summer_mean == min(c(winter_mean, spring_mean, summer_mean, autumn_mean))) {
+  cat("   → Summer is the quietest season\n")
+}
+
+cat("\n3. Variability Pattern:\n")
+max_sd_month <- monthly_clim$month[which.max(monthly_clim$sd)]
+min_sd_month <- monthly_clim$month[which.min(monthly_clim$sd)]
+cat(sprintf("   Highest variability: %s (σ = %.2f)\n", 
+            max_sd_month, max(monthly_clim$sd)))
+cat(sprintf("   Lowest variability:  %s (σ = %.2f)\n", 
+            min_sd_month, min(monthly_clim$sd)))
+
+cat("\n\nGenerated Files:\n")
+cat(sprintf("  1. %s (main climatology)\n", basename(output_file)))
+cat(sprintf("  2. %s (variability)\n\n", basename(output_file_var)))
+
+cat("Interpretation Notes:\n")
+cat("  • Strong annual cycle indicates seasonal forcing mechanisms\n")
+cat("  • Peak in winter/autumn suggests extratropical cyclone dominance\n")
+cat("  • Error bars show 95% confidence intervals for each month\n")
+cat("  • Higher winter variability reflects more variable storm activity\n\n")
+
+cat(rep("=", 80), "\n")
+```
+
+```{r storminess-index-climatological-maps}
+# ============================================================================
+# PHASE 1: STORMINESS INDEX CLIMATOLOGICAL MAPS
+#
+# PURPOSE: Create polar projection maps showing the long-term mean
+#          spatial distribution of the storminess index
+#   Figure 1: Annual Mean
+#   Figure 2: Seasonal Means (DJF, MAM, JJA, SON)
+#
+# This completes Section 1.2: Characterization of the Mean State
+# ============================================================================
+
+# --- SETUP ---
+processed_dir <- here("data", "processed")
+plot_dir <- here("Plots", "phase1_diagnostics")
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+cat("\n", rep("=", 80), "\n")
+cat("PHASE 1: STORMINESS INDEX CLIMATOLOGICAL MAPS\n")
+cat(rep("=", 80), "\n\n")
+
+# ============================================================================
+# DEFINE SEASONS
+# ============================================================================
+
+season_definitions <- list(
+  Annual = list(months = 1:12, name = "Annual Mean", abbr = "ANN", label = "Annual Mean"),
+  DJF = list(months = c(12, 1, 2), name = "Winter", abbr = "DJF", label = "Winter (DJF)"),
+  MAM = list(months = c(3, 4, 5), name = "Spring", abbr = "MAM", label = "Spring (MAM)"),
+  JJA = list(months = c(6, 7, 8), name = "Summer", abbr = "JJA", label = "Summer (JJA)"),
+  SON = list(months = c(9, 10, 11), name = "Autumn", abbr = "SON", label = "Autumn (SON)")
+)
+
+# ============================================================================
+# LOAD STORMINESS INDEX DATA
+# ============================================================================
+
+cat("Loading storminess index NetCDF data...\n")
+
+nc_storm <- nc_open(file.path(processed_dir, "ERA5_storminess_index_monthly_1958-2024.nc"))
+
+storminess <- ncvar_get(nc_storm, "storminess_index")
+lat <- ncvar_get(nc_storm, "latitude")
+lon <- ncvar_get(nc_storm, "longitude")
+
+nc_close(nc_storm)
+
+# Check and fix dimension order
+cat(sprintf("  Original dimensions: [%s]\n", paste(dim(storminess), collapse = ", ")))
+
+# Permute to [time, lat, lon] if needed
+if (dim(storminess)[1] == length(lon)) {
+  cat("  Permuting dimensions to [time, lat, lon]...\n")
+  storminess <- aperm(storminess, c(3, 2, 1))
+}
+
+n_times <- dim(storminess)[1]
+dates <- seq(as.Date("1958-01-01"), by = "month", length.out = n_times)
+
+cat(sprintf("  Final dimensions: [%d times, %d lats, %d lons]\n", 
+            dim(storminess)[1], dim(storminess)[2], dim(storminess)[3]))
+
+# ============================================================================
+# CALCULATE SEASONAL CLIMATOLOGIES
+# ============================================================================
+
+cat("\nCalculating seasonal climatologies...\n")
+
+seasonal_data <- list()
+all_values <- c()
+
+for (season_name in names(season_definitions)) {
+  months <- season_definitions[[season_name]]$months
+  season_indices <- which(month(dates) %in% months)
+  
+  # Calculate mean across time for each grid point
+  storm_season <- apply(storminess[season_indices, , ], c(2, 3), mean, na.rm = TRUE)
+  
+  seasonal_data[[season_name]] <- storm_season
+  all_values <- c(all_values, as.vector(storm_season))
+  
+  cat(sprintf("  %s: Mean = %.2f, Range = [%.2f, %.2f] m⁴/s⁴\n",
+              season_definitions[[season_name]]$label,
+              mean(storm_season, na.rm = TRUE),
+              min(storm_season, na.rm = TRUE),
+              max(storm_season, na.rm = TRUE)))
+}
+
+# Calculate global range for uniform color scale
+global_range <- range(all_values, na.rm = TRUE)
+cat(sprintf("\n*** GLOBAL COLOR RANGE: %.1f to %.1f m⁴/s⁴ ***\n\n", 
+            global_range[1], global_range[2]))
+
+# ============================================================================
+# PREPARE CARTOGRAPHIC ELEMENTS
+# ============================================================================
+
+cat("Preparing cartographic elements...\n")
+
+arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
+view_radius <- 3700000
+plot_radius <- 4400000
+
+circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
+  st_buffer(dist = view_radius)
+
+square_box <- st_as_sfc(st_bbox(c(
+  xmin = -plot_radius, xmax = plot_radius,
+  ymin = -plot_radius, ymax = plot_radius
+), crs = arctic_crs))
+inverse_mask <- st_difference(square_box, circle_mask)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world_polar <- st_transform(world, crs = arctic_crs)
+
+graticules <- st_graticule(
+  lon = seq(-180, 180, by = 60),
+  lat = c(60, 70, 80),
+  crs = 4326
+) %>%
+  st_transform(crs = arctic_crs)
+
+lat_labels <- data.frame(lon = 180, lat = c(60, 70, 80)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lat_labels$label <- c("60°N", "70°N", "80°N")
+
+lon_labels <- data.frame(lon = seq(0, 300, by = 60), lat = 54) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lon_labels$label <- c("0°", "60°E", "120°E", "180°", "120°W", "60°W")
+
+cat("  ✓ Cartographic elements prepared\n")
+
+# --- FIX 1: Calculate percentile-based color limits ---
+# Use 1st and 99th percentiles to avoid extreme value skewing
+color_lower <- quantile(all_values, 0.01, na.rm = TRUE)
+color_upper <- quantile(all_values, 0.99, na.rm = TRUE)
+
+cat(sprintf("\n*** COLOR SCALE (1st-99th percentile): %.1f to %.1f m⁴/s⁴ ***\n", 
+            color_lower, color_upper))
+cat(sprintf("*** Full range was: %.1f to %.1f m⁴/s⁴ ***\n\n", 
+            global_range[1], global_range[2]))
+
+# ============================================================================
+# FUNCTION: CREATE SINGLE MAP
+# ============================================================================
+
+create_storminess_map <- function(data_matrix, title, show_legend = TRUE) {
+  
+  # Create stars object
+ lon_vec <- as.vector(lon)
+  lat_vec <- as.vector(lat)
+  
+  data_list <- list(storminess = t(data_matrix))
+  dims <- st_dimensions(x = lon_vec, y = lat_vec)
+  
+  clim_stars <- st_as_stars(data_list, dimensions = dims) %>%
+    st_set_crs(4326)
+  
+  # Warp and mask
+  clim_polar <- st_warp(clim_stars, crs = arctic_crs)
+  clim_polar_masked <- clim_polar[circle_mask]
+  
+  # Create plot with PERCENTILE-BASED color scale
+  p <- ggplot() +
+    geom_stars(data = clim_polar_masked, aes(fill = storminess), na.rm = TRUE) +
+    scale_fill_viridis(
+      name = expression(paste("Storminess (m"^4, " s"^{-4}, ")")),
+      option = "inferno",
+      na.value = "transparent",
+      limits = c(color_lower, color_upper),  # Use percentile limits
+      oob = scales::squish,  # Squish values outside limits to the extremes
+      breaks = pretty(c(color_lower, color_upper), n = 5),
+      guide = if (show_legend) guide_colorbar(barwidth = 1, barheight = 12) else "none"
+    ) +
+    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.3) +
+    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+    geom_sf(data = inverse_mask, fill = "white", color = NA) +
+    geom_sf_text(data = lat_labels, aes(label = label), size = 3, color = "black", hjust = 1.2) +
+    geom_sf_text(data = lon_labels, aes(label = label), size = 3, color = "black") +
+    coord_sf(xlim = c(-plot_radius, plot_radius), 
+             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+    labs(title = title) +
+    theme_void(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+      legend.position = if (show_legend) "right" else "none",
+      legend.key.width = unit(0.8, "cm"),
+      legend.key.height = unit(2.5, "cm"),
+      panel.background = element_rect(fill = "gray95", color = NA),
+      plot.margin = margin(5, 5, 5, 5)
+    )
+  
+  return(p)
+}
+
+# ============================================================================
+# FIGURE 1: ANNUAL MEAN CLIMATOLOGY
+# ============================================================================
+
+cat("\n=== FIGURE 1: ANNUAL MEAN CLIMATOLOGY ===\n")
+
+p_annual <- create_storminess_map(
+  seasonal_data[["Annual"]], 
+  "Annual Mean (1958–2024)"
+)
+
+fig1 <- p_annual +
+  plot_annotation(
+    title = "Arctic Storminess Index Climatology: Annual Mean",
+    subtitle = "Lambert Azimuthal Equal-Area Projection | Monthly variance of synoptic-scale EKE",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray30")
+    )
+  )
+
+output_file1 <- file.path(plot_dir, "Fig_Climatology_Storminess_Annual.png")
+ggsave(output_file1, fig1, width = 10, height = 10, dpi = 300, bg = "white")
+cat(sprintf("  ✓ Saved: %s\n", basename(output_file1)))
+
+# ============================================================================
+# FIGURE 2: SEASONAL CLIMATOLOGIES (4-PANEL)
+# ============================================================================
+
+cat("\n=== FIGURE 2: SEASONAL CLIMATOLOGIES ===\n")
+
+# Create individual season maps
+p_djf <- create_storminess_map(seasonal_data[["DJF"]], "Winter (DJF)", show_legend = FALSE)
+p_mam <- create_storminess_map(seasonal_data[["MAM"]], "Spring (MAM)", show_legend = FALSE)
+p_jja <- create_storminess_map(seasonal_data[["JJA"]], "Summer (JJA)", show_legend = FALSE)
+p_son <- create_storminess_map(seasonal_data[["SON"]], "Autumn (SON)", show_legend = TRUE)
+
+# Combine into 2x2 grid
+fig2 <- (p_djf | p_mam) / (p_jja | p_son) +
+  plot_annotation(
+    title = "Arctic Storminess Index Climatology: Seasonal Means (1958–2024)",
+    subtitle = "Lambert Azimuthal Equal-Area Projection | Uniform color scale across all seasons",
+    theme = theme(
+      plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 12, hjust = 0.5, color = "gray30")
+    )
+  )
+
+output_file2 <- file.path(plot_dir, "Fig_Climatology_Storminess_Seasonal.png")
+ggsave(output_file2, fig2, width = 16, height = 16, dpi = 300, bg = "white")
+cat(sprintf("  ✓ Saved: %s\n", basename(output_file2)))
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+
+cat("\n", rep("=", 80), "\n")
+cat("STORMINESS INDEX CLIMATOLOGY MAPS COMPLETE!\n")
+cat(rep("=", 80), "\n\n")
+
+cat("Generated Figures:\n")
+cat(sprintf("  1. %s (Annual mean)\n", basename(output_file1)))
+cat(sprintf("  2. %s (2×2 seasonal grid)\n", basename(output_file2)))
+cat(sprintf("  3. %s (5-panel comparison)\n\n", basename(output_file3)))
+
+cat("Climatology Statistics:\n")
+cat(rep("-", 60), "\n")
+for (season_name in names(season_definitions)) {
+  data <- seasonal_data[[season_name]]
+  cat(sprintf("  %-15s: Mean = %6.2f, SD = %6.2f m⁴/s⁴\n",
+              season_definitions[[season_name]]$label,
+              mean(data, na.rm = TRUE),
+              sd(data, na.rm = TRUE)))
+}
+
+cat(sprintf("\nGlobal color range: %.1f to %.1f m⁴/s⁴\n\n", 
+            global_range[1], global_range[2]))
+
+cat("Key Features:\n")
+cat("  ✓ Uniform color scale across all maps for direct comparison\n")
+cat("  ✓ Lambert Azimuthal Equal-Area projection (preserves area)\n")
+cat("  ✓ Shows WHERE storminess is highest/lowest on average\n")
+cat("  ✓ Seasonal differences clearly visible\n\n")
+
+cat("Interpretation Guide:\n")
+cat("  • High values (yellow/white): Regions of intense storm activity\n")
+cat("  • Low values (dark): Regions of weak storm activity\n")
+cat("  • Compare DJF vs SON for winter-autumn differences\n")
+cat("  • Note the North Atlantic storm track pathway\n\n")
+
+cat(rep("=", 80), "\n")
+```
