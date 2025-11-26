@@ -18,7 +18,6 @@ library(maps)
 library(lubridate)
 library(gridExtra)
 library(here)
-
 library(ncdf4)
 library(stars)
 library(sf)
@@ -45,7 +44,7 @@ cat("\n", rep("=", 80), "\n")
 cat("CREATING STUDY AREA MAP (POLAR PROJECTION)\n")
 cat(rep("=", 80), "\n\n")
 
-# ============================================================================
+# ============================================================================z
 # DEFINE PROJECTION (same as your existing code)
 # ============================================================================
 
@@ -3605,4 +3604,109 @@ for (region in regions) {
               region$name, region$abbr))
 }
 cat("\n")
+```
+
+```{r mean-eke}
+# ==============================================================================
+# ANALYSIS OF MEAN EDDY KINETIC ENERGY (EKE) TRENDS (1958-2024)
+# Purpose: Test if the average storm strength (amplitude) has changed.
+# ==============================================================================
+
+# --- 1. Load Data ---
+# Adjust filename if necessary. This should be the MONTHLY MEAN EKE file.
+eke_path <- here("Data_raw", "processed", "ERA5_EKE_monthly_raw.nc") 
+
+if (!file.exists(eke_path)) {
+  stop("File not found. Please check path.")
+}
+
+nc <- nc_open(eke_path)
+eke_array <- ncvar_get(nc, "eke") # Expected dims: [lon, lat, time] or [time, lat, lon]
+lat <- ncvar_get(nc, "latitude")
+time <- ncvar_get(nc, "time")
+nc_close(nc)
+
+# Handle dimensions (Ensure [time, lat, lon])
+# If dims are [lon, lat, time] (360, 35, 804), transpose:
+if (dim(eke_array)[1] == 360) {
+  eke_array <- aperm(eke_array, c(3, 2, 1))
+}
+
+# --- 2. Refine Domain (>= 60N) ---
+lat_idx <- which(lat >= 60)
+lat_arctic <- lat[lat_idx]
+eke_arctic <- eke_array[, lat_idx, ] # [time, lat, lon]
+
+# --- 3. Create Area-Weighted Time Series ---
+# Weights based on cosine of latitude
+weights <- cos(lat_arctic * pi / 180)
+weights_mat <- matrix(weights, nrow = length(lat_arctic), ncol = dim(eke_arctic)[3], byrow = FALSE)
+
+# Calculate spatial mean for each month
+eke_ts_monthly <- apply(eke_arctic, 1, function(slice) {
+  weighted.mean(slice, weights_mat, na.rm = TRUE)
+})
+
+# Create Dates
+dates <- seq(as.Date("1958-01-15"), by = "month", length.out = 804)
+
+# --- 4. Aggregate to ANNUAL Means ---
+# Critical for trend analysis to remove seasonality
+df_monthly <- data.frame(date = dates, eke = eke_ts_monthly, year = as.numeric(format(dates, "%Y")))
+eke_ts_annual <- aggregate(eke ~ year, data = df_monthly, FUN = mean)
+ts_vector <- eke_ts_annual$eke
+
+# --- 5. Robust Trend Analysis ---
+
+# A. Pre-Whitened Mann-Kendall (Significance)
+acf_res <- acf(ts_vector, plot = FALSE)$acf[2]
+cat(sprintf("Lag-1 Autocorrelation (Annual Mean EKE): %.3f\n", acf_res))
+
+# Pre-whiten
+n <- length(ts_vector)
+ts_pw <- ts_vector[2:n] - acf_res * ts_vector[1:(n-1)]
+mk_res <- mk.test(ts_pw)
+
+# B. Sen's Slope (Magnitude)
+sens <- sens.slope(ts_vector)
+slope_decade <- sens$estimates * 10
+baseline_mean <- mean(ts_vector[1:10]) # 1958-1967
+total_change <- slope_decade * 6.7
+pct_change <- (total_change / baseline_mean) * 100
+
+# C. Bootstrap CI
+boot_func <- function(data) {
+  ts_boot <- ts(data, start = 1958, frequency = 1)
+  sens.slope(ts_boot)$estimates
+}
+set.seed(123)
+boot_res <- tsboot(ts_vector, boot_func, R = 5000, l = 3, sim = "fixed")
+boot_ci <- boot.ci(boot_res, type = "perc")
+ci_lower <- boot_ci$percent[4] * 10
+ci_upper <- boot_ci$percent[5] * 10
+
+# --- 6. Report Results ---
+cat("\n=== RESULTS: MEAN EKE TREND (1958-2024) ===\n")
+cat(sprintf("Baseline Mean: %.2f m2/s2\n", baseline_mean))
+cat(sprintf("Sen's Slope: %.4f m2/s2 per decade\n", slope_decade))
+cat(sprintf("Total Change: %.2f m2/s2 (%.1f%%)\n", total_change, pct_change))
+cat(sprintf("P-Value (PW-MK): %.4f\n", mk_res$p.value))
+cat(sprintf("95%% CI: [%.4f, %.4f]\n", ci_lower, ci_upper))
+
+if (ci_lower < 0 && ci_upper > 0) {
+  cat("CONCLUSION: No significant trend in Mean EKE.\n")
+} else {
+  cat("CONCLUSION: Significant trend detected.\n")
+}
+
+# --- 7. Plot ---
+ggplot(eke_ts_annual, aes(x = year, y = eke)) +
+  geom_line(color = "darkblue") +
+  geom_point() +
+  geom_smooth(method = "lm", color = "red", se = FALSE, linetype = "dashed") +
+  labs(title = "Pan-Arctic Mean Eddy Kinetic Energy (1958-2024)",
+       subtitle = "Annual Mean of 850 hPa EKE (>= 60N)",
+       y = expression("EKE [m"^2*"/s"^2*"]"),
+       x = "Year") +
+  theme_bw()
 ```

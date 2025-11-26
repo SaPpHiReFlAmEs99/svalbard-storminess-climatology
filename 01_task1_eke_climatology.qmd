@@ -1079,7 +1079,7 @@ ds.close()
 
 ```{python}
 # ============================================================================
-# CORRECTED ARCTIC STORMINESS CLIMATOLOGY (1958-2024)
+# ARCTIC STORMINESS CLIMATOLOGY (1958-2024)
 # Using Monthly Climatology for Proper Reynolds Decomposition
 # ============================================================================
 
@@ -1106,7 +1106,7 @@ log_message("Using Monthly Climatology Approach")
 log_message("="*70)
 
 # ============================================================================
-# STEP 3 (REVISED): CALCULATE MONTHLY CLIMATOLOGY
+# STEP 3 : CALCULATE MONTHLY CLIMATOLOGY
 # ============================================================================
 #
 # WHAT: Calculate the long-term mean for EACH calendar month separately
@@ -1168,7 +1168,7 @@ else:
     log_message(">> SUCCESS: Monthly climatology saved")
 
 # ============================================================================
-# STEP 4 (REVISED): REYNOLDS DECOMPOSITION AND BANDPASS FILTERING
+# STEP 4 : REYNOLDS DECOMPOSITION AND BANDPASS FILTERING
 # ============================================================================
 #
 # WHAT: 1. Subtract monthly climatology to get "anomalies" (u', v')
@@ -2069,127 +2069,715 @@ print(times[:-1][gaps > pd.Timedelta('6H')])
 ds.close()
 ```
 
+## Reynolds decomposition on raw data
+
+```{python}
+# ============================================================================
+# ARCTIC STORMINESS CLIMATOLOGY (1958-2024)
+# SENSITIVITY TEST: Bandpass Filter Only (No Prior Deseasonalization)
+# ============================================================================
+#
+# PURPOSE: Test whether the 2-6 day Butterworth bandpass filter alone is 
+#          sufficient to isolate synoptic-scale eddies, without first 
+#          subtracting monthly climatological means.
+#
+# RATIONALE :
+#   1. The bandpass filter removes ALL frequencies outside 2-6 days, including
+#      the seasonal cycle (period = 365 days >> 6 days). So deseasonalization
+#      may be redundant.
+#   
+#   2. The original approach of subtracting step-function monthly climatologies
+#      creates discontinuities at month boundaries. These sudden jumps have
+#      broadband Fourier spectra that could partially bleed into the 2-6 day
+#      passband, potentially contaminating the storm signal.
+#   
+#   3. By applying the filter directly to raw winds, we avoid these artifacts
+#      entirely and let the filter do all the work of defining "background flow"
+#      (anything slower than 6 days).
+#
+# COMPARISON: Results should be compared with the original methodology to
+#             quantify whether deseasonalization affects the final storminess
+#             trends. If results are nearly identical, the simpler approach
+#             (filter only) is preferred.
+#
+# ============================================================================
+
+import xarray as xr
+import os
+import cupy as cp
+import cupyx.scipy.signal as cusignal
+from scipy import signal
+import numpy as np
+from datetime import datetime
+
+# Define paths
+PROCESSED_DATA_DIR = "E:/ERA5_data/processed"
+OUTPUT_DIR = os.path.join(PROCESSED_DATA_DIR, "raw_reynolds_decomposition")
+
+# Create output directory if it doesn't exist
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def log_message(msg):
+    """Log messages with timestamp"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {msg}")
+
+log_message("=" * 70)
+log_message("SENSITIVITY TEST: BANDPASS FILTER WITHOUT DESEASONALIZATION")
+log_message("Following Stefan Brönnimann's methodological suggestion")
+log_message("=" * 70)
+
+# ============================================================================
+# NOTE: STEP 3 (MONTHLY CLIMATOLOGY) IS INTENTIONALLY SKIPPED
+# ============================================================================
+#
+# In the original methodology, we calculated monthly climatological means and
+# subtracted them before filtering. Here we skip this entirely because:
+#
+#   1. The 2-6 day bandpass filter will remove the seasonal cycle anyway
+#      (seasonal period = 365 days, which is far outside the 6-day cutoff)
+#
+#   2. Subtracting step-function monthly means creates artificial discontinuities
+#      at month boundaries (e.g., Jan 31 23:00 → Feb 1 00:00). These jumps
+#      contain high-frequency energy that could contaminate the 2-6 day band.
+#
+#   3. This test will reveal whether the deseasonalization step affects results
+#      or is simply redundant preprocessing.
+#
+# ============================================================================
+
+# ============================================================================
+# STEP 4 (MODIFIED): DIRECT BANDPASS FILTERING OF RAW WINDS
+# ============================================================================
+#
+# WHAT: Apply 2-6 day bandpass filter directly to raw wind components (u, v)
+#       WITHOUT any prior deseasonalization or anomaly calculation.
+#
+# WHY:  The Butterworth bandpass filter is designed to:
+#       - REMOVE: All variability with periods > 6 days (including seasonal cycle,
+#         interannual variability, planetary waves, blocking patterns)
+#       - REMOVE: All variability with periods < 2 days (diurnal cycle, turbulence,
+#         high-frequency noise)
+#       - RETAIN: Only 2-6 day variability (synoptic-scale storms/cyclones)
+#
+#       The filter itself defines what constitutes "background flow" (anything
+#       slower than 6 days) without needing explicit climatology subtraction.
+#
+# DIFFERENCE FROM ORIGINAL:
+#       Original:  u_eddy = filter(u - u_climatology)
+#       This test: u_eddy = filter(u)
+#
+#       If results are equivalent, the simpler approach is preferred.
+#
+# ============================================================================
+
+log_message("\n" + "=" * 70)
+log_message("STEP 4 (MODIFIED): DIRECT BANDPASS FILTERING")
+log_message("=" * 70)
+
+def vector_bandpass_filter_gpu(data_array, time_dim, fs, lowcut_days, highcut_days, order=5):
+    """
+    Apply 2-6 day bandpass filter using GPU acceleration.
+    
+    This implements the Butterworth bandpass filter following Yau & Chang (2020):
+    - Filters out slow-moving features (>6 days) including seasonal cycle
+    - Filters out high-frequency noise (<2 days) including diurnal cycle
+    - Retains synoptic-scale eddies (storms) in the 2-6 day period band
+    - Uses GPU (CuPy) for massive speedup on large datasets
+    
+    Parameters:
+    -----------
+    data_array : xarray.DataArray
+        Input data to filter (raw u or v wind components)
+    time_dim : str
+        Name of time dimension (usually 'time')
+    fs : float
+        Sampling frequency (4 = four times per day for 6-hourly data)
+    lowcut_days : float
+        Lower period cutoff in days (6.0 days = removes slower features)
+    highcut_days : float
+        Upper period cutoff in days (2.0 days = removes faster features)
+    order : int
+        Butterworth filter order (5 is standard)
+    
+    Returns:
+    --------
+    xarray.DataArray : Filtered data (eddy components)
+    
+    NOTES ON WHAT THE FILTER REMOVES:
+    ---------------------------------
+    The 6-day high-pass component removes:
+      - Seasonal cycle (365 days)
+      - Monthly variations (~30 days)
+      - Intraseasonal oscillations (30-60 days)
+      - Planetary waves (typically 10-30 days)
+      - Blocking patterns (5-15 days, partially)
+    
+    The 2-day low-pass component removes:
+      - Diurnal cycle (1 day)
+      - Semi-diurnal tides (0.5 days)
+      - High-frequency turbulence (< 1 day)
+      - Mesoscale phenomena (hours)
+    """
+    
+    # Convert period (days) to frequency (cycles per timestep)
+    # For 6-hourly data: fs = 4 samples/day
+    lowcut_freq = 1 / lowcut_days   # Low frequency bound (long period cutoff)
+    highcut_freq = 1 / highcut_days  # High frequency bound (short period cutoff)
+    
+    # Design Butterworth bandpass filter coefficients
+    # Order 5 forward-backward = effective order 10
+    b, a = signal.butter(order, [lowcut_freq, highcut_freq], btype='band', fs=fs)
+    
+    def filter_func_gpu(x):
+        """
+        Inner function that does the actual GPU filtering.
+        
+        Process:
+        1. Transfer data to GPU (CuPy array)
+        2. Detrend to remove any linear drift (important for numerical stability)
+        3. Apply forward-backward filter (filtfilt) for zero phase shift
+        4. Transfer result back to CPU (NumPy array)
+        
+        NOTE: The detrend here removes only the LINEAR trend within each chunk,
+        not the seasonal cycle. This is a numerical stability measure, not
+        a deseasonalization step.
+        """
+        x_gpu = cp.asarray(x.astype('float64'))
+        filtered_gpu = cusignal.filtfilt(b, a, cusignal.detrend(x_gpu))
+        return cp.asnumpy(filtered_gpu)
+    
+    # Apply filter along time dimension using xarray's apply_ufunc
+    return xr.apply_ufunc(
+        filter_func_gpu, 
+        data_array,
+        input_core_dims=[[time_dim]],
+        output_core_dims=[[time_dim]],
+        exclude_dims={time_dim},
+        dask='parallelized',
+        output_dtypes=[data_array.dtype],
+        keep_attrs=True
+    )
 
 
+# Define file paths
+continuous_path = os.path.join(PROCESSED_DATA_DIR, "ERA5_1958-2025_std_res_vars_continuous.nc")
+eddy_path = os.path.join(OUTPUT_DIR, "ERA5_1958-2024_eddy_components_raw.nc")
+
+# Check if already processed
+if os.path.exists(eddy_path):
+    log_message("Checking existing eddy components file...")
+    try:
+        ds_test = xr.open_dataset(eddy_path, engine='netcdf4')
+        if 'u_eddy' in ds_test and 'v_eddy' in ds_test:
+            log_message(">> Eddy components already exist and are complete - skipping Step 4")
+            ds_test.close()
+        else:
+            log_message(">> Eddy components file is incomplete - will reprocess")
+            ds_test.close()
+            os.remove(eddy_path)
+    except:
+        log_message(">> Eddy components file is corrupted - will reprocess")
+        if os.path.exists(eddy_path):
+            os.remove(eddy_path)
+
+if not os.path.exists(eddy_path):
+    # ------------------------------------------------------------------------
+    # 4.1: LOAD RAW DATA (NO CLIMATOLOGY NEEDED)
+    # ------------------------------------------------------------------------
+    log_message("Loading continuous dataset...")
+    ds = xr.open_dataset(continuous_path, engine='netcdf4')
+    log_message(f"  Loaded: {len(ds.time)} timesteps")
+    log_message(f"  Period: {ds.time.values[0]} to {ds.time.values[-1]}")
+    
+    # NOTE: We skip climatology loading entirely!
+    log_message("\n  >>> SKIPPING monthly climatology subtraction <<<")
+    log_message("  >>> Bandpass filter will be applied directly to raw winds <<<")
+    
+    # ------------------------------------------------------------------------
+    # 4.2: NO ANOMALY CALCULATION - USE RAW WINDS DIRECTLY
+    # ------------------------------------------------------------------------
+    log_message("\nPreparing raw wind components for filtering...")
+    log_message("  NOTE: No deseasonalization applied")
+    log_message("  The bandpass filter will remove the seasonal cycle directly")
+    
+    # Use raw winds directly (no subtraction of climatology)
+    u_raw = ds['u']
+    v_raw = ds['v']
+    
+    log_message(f"\nRaw wind statistics:")
+    log_message(f"  u range: {float(u_raw.min()):.2f} to {float(u_raw.max()):.2f} m/s")
+    log_message(f"  v range: {float(v_raw.min()):.2f} to {float(v_raw.max()):.2f} m/s")
+    log_message(f"  Note: These contain the full signal including seasonal cycle")
+    
+    # ------------------------------------------------------------------------
+    # 4.3: SETUP CHUNKED PROCESSING WITH OVERLAP
+    # ------------------------------------------------------------------------
+    log_message("\n=== BANDPASS FILTERING (2-6 DAYS) ===")
+    log_message("Applying filter directly to raw winds (no prior deseasonalization)")
+    log_message("METHOD: Overlap-save algorithm for continuous filtering")
+    
+    chunk_size = 10000  # ~2.5 years per chunk
+    overlap = 500       # ~125 days overlap (>> 6-day filter period)
+    
+    total_timesteps = len(ds.time)
+    n_chunks = int(np.ceil(total_timesteps / chunk_size))
+    
+    log_message(f"\nProcessing strategy:")
+    log_message(f"  - {n_chunks} temporal chunks of {chunk_size} timesteps each")
+    log_message(f"  - {overlap} timestep overlap between chunks (~125 days)")
+    log_message(f"  - Overlap exceeds filter transition band by >10x for safety")
+    
+    u_eddy_list = []
+    v_eddy_list = []
+    
+    # ------------------------------------------------------------------------
+    # 4.4: PROCESS EACH CHUNK WITH GPU FILTERING
+    # ------------------------------------------------------------------------
+    for i in range(n_chunks):
+        start_idx = max(0, i * chunk_size - overlap)
+        end_idx = min(total_timesteps, (i + 1) * chunk_size + overlap)
+        
+        log_message(f"\n--- Chunk {i+1}/{n_chunks} ---")
+        log_message(f"  Processing timesteps {start_idx} to {end_idx} ({end_idx - start_idx} total)")
+        
+        # Extract temporal chunk of RAW winds (not anomalies)
+        u_chunk = u_raw.isel(time=slice(start_idx, end_idx))
+        v_chunk = v_raw.isel(time=slice(start_idx, end_idx))
+        
+        # Apply bandpass filter on GPU
+        log_message(f"  Applying 2-6 day bandpass filter on GPU...")
+        log_message(f"    - Removing periods > 6 days (including 365-day seasonal cycle)")
+        log_message(f"    - Removing periods < 2 days (diurnal cycle, turbulence)")
+        u_eddy_chunk = vector_bandpass_filter_gpu(u_chunk, 'time', fs=4, lowcut_days=6.0, highcut_days=2.0)
+        v_eddy_chunk = vector_bandpass_filter_gpu(v_chunk, 'time', fs=4, lowcut_days=6.0, highcut_days=2.0)
+        
+        # Trim overlap regions (discard edge effects)
+        log_message(f"  Trimming edge effects...")
+        if i == 0:
+            # First chunk: keep start, trim end
+            trim_end = -overlap if i < n_chunks - 1 else None
+            u_eddy_trimmed = u_eddy_chunk.isel(time=slice(None, trim_end))
+            v_eddy_trimmed = v_eddy_chunk.isel(time=slice(None, trim_end))
+            log_message(f"    First chunk: trim last {overlap} points")
+        elif i == n_chunks - 1:
+            # Last chunk: trim start, keep end
+            u_eddy_trimmed = u_eddy_chunk.isel(time=slice(overlap, None))
+            v_eddy_trimmed = v_eddy_chunk.isel(time=slice(overlap, None))
+            log_message(f"    Last chunk: trim first {overlap} points")
+        else:
+            # Middle chunks: trim both ends
+            u_eddy_trimmed = u_eddy_chunk.isel(time=slice(overlap, -overlap))
+            v_eddy_trimmed = v_eddy_chunk.isel(time=slice(overlap, -overlap))
+            log_message(f"    Middle chunk: trim {overlap} points from each end")
+        
+        u_eddy_list.append(u_eddy_trimmed)
+        v_eddy_list.append(v_eddy_trimmed)
+        
+        log_message(f"  >> Chunk filtered: {len(u_eddy_trimmed.time)} timesteps retained")
+    
+    # ------------------------------------------------------------------------
+    # 4.5: COMBINE ALL CHUNKS
+    # ------------------------------------------------------------------------
+    log_message("\nCombining all filtered chunks into continuous time series...")
+    u_eddy = xr.concat(u_eddy_list, dim='time')
+    v_eddy = xr.concat(v_eddy_list, dim='time')
+    
+    log_message(f"Final check: {len(u_eddy.time)} timesteps (expected: {total_timesteps})")
+    if len(u_eddy.time) != total_timesteps:
+        log_message(f"WARNING: Timestep mismatch!")
+    else:
+        log_message(">> All timesteps accounted for")
+    
+    # Restore original time coordinates
+    u_eddy['time'] = ds['time']
+    v_eddy['time'] = ds['time']
+    
+    log_message(f"\nFinal filtered dataset:")
+    log_message(f"  - Total timesteps: {len(u_eddy.time):,}")
+    log_message(f"  - Time span: {str(u_eddy.time.values[0])[:10]} to {str(u_eddy.time.values[-1])[:10]}")
+    log_message(f"  - u_eddy range: {float(u_eddy.min()):.2f} to {float(u_eddy.max()):.2f} m/s")
+    log_message(f"  - v_eddy range: {float(v_eddy.min()):.2f} to {float(v_eddy.max()):.2f} m/s")
+    
+    log_message("\nVERIFICATION THAT SEASONAL CYCLE WAS REMOVED:")
+    log_message("  The filtered u_eddy and v_eddy should oscillate around zero")
+    log_message("  (If seasonal cycle remained, we'd see systematic offsets)")
+    log_message(f"  u_eddy mean: {float(u_eddy.mean()):.6f} m/s (should be ~0)")
+    log_message(f"  v_eddy mean: {float(v_eddy.mean()):.6f} m/s (should be ~0)")
+    
+    # Truncate to analysis period (1958-2024)
+    log_message("\nTruncating filtered data to analysis period (1958-2024)...")
+    u_eddy = u_eddy.sel(time=slice('1958-01-01', '2024-12-31'))
+    v_eddy = v_eddy.sel(time=slice('1958-01-01', '2024-12-31'))
+
+    log_message(f"Final analysis dataset:")
+    log_message(f"  Timesteps: {len(u_eddy.time)}")
+    log_message(f"  Period: {str(u_eddy.time.values[0])[:10]} to {str(u_eddy.time.values[-1])[:10]}")
+    
+    # ------------------------------------------------------------------------
+    # 4.6: SAVE EDDY COMPONENTS
+    # ------------------------------------------------------------------------
+    log_message("\nSaving filtered eddy components to file...")
+    
+    eddy_ds = xr.Dataset(
+        {'u_eddy': u_eddy, 'v_eddy': v_eddy},
+        attrs={
+            'description': 'Bandpass-filtered (2-6 day) wind components - NO prior deseasonalization',
+            'methodology': 'Sensitivity test: filter applied directly to raw winds',
+            'comparison_with': 'ERA5_1958-2024_eddy_components_monthly.nc (original with deseasonalization)'
+        }
+    )
+    
+    # Use compression
+    encoding = {
+        'u_eddy': {'zlib': True, 'complevel': 4},
+        'v_eddy': {'zlib': True, 'complevel': 4}
+    }
+    
+    # Force computation before saving
+    log_message("  Computing data arrays (loading into RAM)...")
+    eddy_ds = eddy_ds.compute()
+    
+    log_message("  Writing to disk...")
+    eddy_ds.to_netcdf(eddy_path, encoding=encoding, format='NETCDF4')
+    
+    # Get file size
+    file_size_gb = os.path.getsize(eddy_path) / (1024**3)
+    log_message(f"  >> File saved: {file_size_gb:.2f} GB")
+    
+    # Clean up
+    ds.close()
+    del u_raw, v_raw, u_eddy, v_eddy, u_eddy_list, v_eddy_list, eddy_ds
+    
+    log_message(">> Step 4 complete: Eddy components saved successfully")
 
 
+# ============================================================================
+# STEP 5: CALCULATE KINETIC ENERGY BUDGET
+# ============================================================================
+#
+# NOTE: Steps 5.1 (TKE) and 5.2 (MKE) use the raw continuous data and are
+# identical to the original methodology. We only recalculate these if they
+# don't already exist in the main processed folder.
+#
+# Steps 5.3 (EKE) and 5.4 (Storminess Index) are recalculated using the new
+# eddy components from the filter-only approach, and saved to the new folder.
+#
+# ============================================================================
 
-# Results Summary
+log_message("\n" + "=" * 70)
+log_message("STEP 5: KINETIC ENERGY BUDGET")
+log_message("=" * 70)
 
-## Table 1: Annual Trends Across All Regions and Metrics
+# Use existing TKE and MKE from main folder (they don't depend on deseasonalization)
+tke_path = os.path.join(PROCESSED_DATA_DIR, 'ERA5_TKE_monthly.nc')
+mke_path = os.path.join(PROCESSED_DATA_DIR, 'ERA5_MKE_monthly.nc')
 
-| Metric | Period | Pan-Arctic (≥60°N) | Fram Strait (15°W-15°E, 76-82°N) | Svalbard/Barents (10°W-35°E, 74-81°N) |
-|--------------|--------------|--------------|--------------|----------------|
-| **Mean Storminess (m⁴/s⁴/decade)** | Annual | +0.0446<br>p=0.477<br>CI: \[-0.095, 0.098\] | +0.4437<br>p=0.303<br>CI: \[-0.370, 0.362\] | +0.2356<br>p=0.608<br>CI: \[-0.297, 0.285\] |
-| **P99 Intensity (m²/s²/decade)** | Annual | -0.0213<br>p=0.877<br>CI: \[-0.380, 0.371\] | +1.7171<br>p=0.109<br>CI: \[-1.647, 1.574\] | +0.9119<br>p=0.211<br>CI: \[-1.311, 1.249\] |
-| **P95 Frequency (events/decade)** | Annual | Field NS\*<br>MC p=0.208 | +2.8538<br>p=0.073<br>CI: \[-2.653, 2.579\] | +1.5893<br>p=0.215<br>CI: \[-2.194, 2.097\] |
+# New EKE and storminess for sensitivity test
+eke_path = os.path.join(OUTPUT_DIR, 'ERA5_EKE_monthly_raw.nc')
+storm_path = os.path.join(OUTPUT_DIR, 'ERA5_storminess_index_monthly_raw.nc')
 
-\*NS = Not Significant; Field significance assessed via Monte Carlo block bootstrap (500 iterations)
+# ------------------------------------------------------------------------
+# 5.1: TKE (use existing or calculate)
+# ------------------------------------------------------------------------
+log_message("\n5.1: Total Kinetic Energy (TKE)...")
+if not os.path.exists(tke_path):
+    log_message("  Calculating TKE from raw winds...")
+    ds = xr.open_dataset(continuous_path, engine='netcdf4')
+    tke_instant = 0.5 * (ds['u']**2 + ds['v']**2)
+    tke_monthly = tke_instant.resample(time='ME').mean(dim='time')
+    tke_monthly.name = 'tke'
+    tke_monthly.to_netcdf(tke_path)
+    ds.close()
+    log_message(">> TKE calculated and saved")
+else:
+    log_message(">> TKE already exists in main folder (reusing)")
 
-------------------------------------------------------------------------
+# ------------------------------------------------------------------------
+# 5.2: MKE (use existing or calculate)
+# ------------------------------------------------------------------------
+log_message("\n5.2: Mean Kinetic Energy (MKE)...")
+if not os.path.exists(mke_path):
+    log_message("  Calculating MKE from monthly-mean winds...")
+    ds = xr.open_dataset(continuous_path, engine='netcdf4')
+    u_monthly_mean = ds['u'].resample(time='ME').mean(dim='time')
+    v_monthly_mean = ds['v'].resample(time='ME').mean(dim='time')
+    mke_monthly = 0.5 * (u_monthly_mean**2 + v_monthly_mean**2)
+    mke_monthly.name = 'mke'
+    mke_monthly.to_netcdf(mke_path)
+    ds.close()
+    log_message(">> MKE calculated and saved")
+else:
+    log_message(">> MKE already exists in main folder (reusing)")
 
-## Table 2: Seasonal Trends - Mean Storminess Index (m⁴/s⁴/decade)
+# ------------------------------------------------------------------------
+# 5.3: EKE (recalculate using new eddy components)
+# ------------------------------------------------------------------------
+log_message("\n5.3: Eddy Kinetic Energy (EKE) - using filter-only eddy components...")
+log_message("     Decomposition relative to EACH MONTH'S OWN MEAN for budget closure")
 
-| Season | Pan-Arctic (≥60°N) | Fram Strait | Svalbard/Barents |
-|-----------------|--------------------|-----------------|-------------------|
-| **DJF (Winter)** | -2.89<br>p\>0.15<br>FDR p\>0.60 | No sig. trend<br>p\>0.05 | No sig. trend<br>p\>0.10 |
-| **MAM (Spring)** | +2.51<br>p\>0.15<br>FDR p\>0.60 | No sig. trend<br>p\>0.05 | +8.4<br>p=0.097<br>CI: \[-8.4, 9.0\] |
-| **JJA (Summer)** | No sig. trend<br>p\>0.15<br>FDR p\>0.60 | No sig. trend<br>p\>0.05 | No sig. trend<br>p\>0.10 |
-| **SON (Autumn)** | +0.30<br>p\>0.15<br>FDR p\>0.60 | No sig. trend<br>p\>0.05 | No sig. trend<br>p\>0.10 |
+if not os.path.exists(eke_path):
+    ds = xr.open_dataset(continuous_path, engine='netcdf4')
+    
+    log_message("  Processing month-by-month to ensure proper decomposition...")
+    
+    # Group data by month-end periods
+    grouped = ds.resample(time='ME')
+    
+    eke_monthly_list = []
+    month_coords = []
+    
+    for label, group in grouped:
+        # For this specific month's data:
+        # Calculate the mean wind for THIS month
+        u_mean_this_month = group['u'].mean(dim='time')
+        v_mean_this_month = group['v'].mean(dim='time')
+        
+        # Calculate anomalies relative to THIS month's mean
+        u_anom = group['u'] - u_mean_this_month
+        v_anom = group['v'] - v_mean_this_month
+        
+        # Calculate instantaneous EKE
+        eke_instant = 0.5 * (u_anom**2 + v_anom**2)
+        
+        # Calculate mean EKE for this month
+        eke_this_month = eke_instant.mean(dim='time')
+        
+        eke_monthly_list.append(eke_this_month)
+        month_coords.append(label)
+    
+    log_message(f"  Processed {len(eke_monthly_list)} months")
+    
+    # Combine into single DataArray
+    eke_monthly = xr.concat(eke_monthly_list, dim='time')
+    eke_monthly = eke_monthly.assign_coords(time=month_coords)
+    eke_monthly.name = 'eke'
+    
+    eke_monthly.to_netcdf(eke_path)
+    ds.close()
+    log_message(">> EKE calculated with correct decomposition")
+else:
+    log_message(">> EKE already exists")
 
-**GLS Interaction Test (Year × Autumn):** - Pan-Arctic: p=0.925 (NS) - Fram Strait: Not significant - Svalbard/Barents: p=0.751 (NS)
+# ------------------------------------------------------------------------
+# 5.4: STORMINESS INDEX (using new eddy components)
+# ------------------------------------------------------------------------
+log_message("\n5.4: Calculating Storminess Index from filter-only eddy components...")
 
-------------------------------------------------------------------------
+if not os.path.exists(storm_path):
+    log_message("  Opening eddy components (filter-only version)...")
+    ds_eddy = xr.open_dataset(eddy_path, engine='netcdf4')
+    
+    log_message(f"  File dimensions: {ds_eddy['u_eddy'].dims}")
+    
+    log_message("  Processing in monthly batches...")
+    
+    storminess_monthly_list = []
+    time_labels = []
+    
+    month_count = 0
+    for time_label, group in ds_eddy.resample(time='ME'):
+        month_count += 1
+        if month_count % 100 == 0:
+            log_message(f"    Processed {month_count} months...")
+        
+        # Get data as numpy arrays
+        u_eddy = group['u_eddy'].values
+        v_eddy = group['v_eddy'].values
+        
+        # Calculate instantaneous EKE from filtered eddies
+        eke_instant = 0.5 * (u_eddy**2 + v_eddy**2)
+        
+        # Storminess = variance of EKE over the month
+        # axis=-1 means last dimension (time)
+        storminess_month = np.var(eke_instant, axis=-1)
+        
+        # Create DataArray for this month
+        storm_da = xr.DataArray(
+            storminess_month,
+            dims=['latitude', 'longitude'],
+            coords={
+                'latitude': group['latitude'].values,
+                'longitude': group['longitude'].values
+            }
+        )
+        
+        storminess_monthly_list.append(storm_da)
+        time_labels.append(time_label)
+    
+    log_message(f"  Combining {len(storminess_monthly_list)} months...")
+    storminess_monthly = xr.concat(storminess_monthly_list, dim='time')
+    storminess_monthly = storminess_monthly.assign_coords(time=time_labels)
+    storminess_monthly.name = 'storminess_index'
+    storminess_monthly.attrs = {
+        'description': 'Storminess index (variance of bandpass-filtered EKE)',
+        'methodology': 'Sensitivity test: no prior deseasonalization',
+        'units': 'm^4/s^4'
+    }
+    
+    log_message("  Saving Storminess Index...")
+    storminess_monthly.to_netcdf(storm_path)
+    
+    ds_eddy.close()
+    
+    size_mb = os.path.getsize(storm_path) / (1024**2)
+    log_message(f">> Storminess Index calculated: {size_mb:.1f} MB")
+else:
+    log_message(">> Storminess Index already exists")
 
-## Table 3: Seasonal Trends - P95 Extreme Frequency (events/decade)
+# ------------------------------------------------------------------------
+# 5.5: VERIFY ENERGY BUDGET CLOSURE
+# ------------------------------------------------------------------------
+log_message("\n" + "=" * 70)
+log_message("VERIFYING ENERGY BUDGET CLOSURE")
+log_message("=" * 70)
 
-| Season | Pan-Arctic (≥60°N) | Fram Strait | Svalbard/Barents |
-|------------------|------------------|------------------|------------------|
-| **DJF (Winter)** | -0.4176<br>p=0.265<br>CI: \[-0.517, 0.507\] | \- | \- |
-| **MAM (Spring)** | +0.5338<br>p=0.135<br>CI: \[-0.540, 0.537\] | \- | \- |
-| **JJA (Summer)** | +0.1508<br>p=0.715<br>CI: \[-0.425, 0.424\] | \- | \- |
-| **SON (Autumn)** | +0.1154<br>p=0.400<br>CI: \[-0.505, 0.467\] | \- | \- |
+try:
+    ds_tke = xr.open_dataset(tke_path, engine='netcdf4')
+    ds_mke = xr.open_dataset(mke_path, engine='netcdf4')
+    ds_eke = xr.open_dataset(eke_path, engine='netcdf4')
+    
+    sample_months = [50, 100, 200, 400, 600, 750, 800]
+    all_errors = []
+    
+    log_message("\nTesting energy budget at sample months:")
+    
+    for month_idx in sample_months:
+        if month_idx >= len(ds_tke.time):
+            continue
+            
+        tke_val = float(ds_tke['tke'].isel(time=month_idx).mean())
+        mke_val = float(ds_mke['mke'].isel(time=month_idx).mean())
+        eke_val = float(ds_eke['eke'].isel(time=month_idx).mean())
+        
+        sum_val = mke_val + eke_val
+        diff = abs(tke_val - sum_val)
+        rel_error = (diff / tke_val) * 100
+        all_errors.append(rel_error)
+        
+        month_date = str(ds_tke.time.values[month_idx])[:7]
+        log_message(f"Month {month_idx} ({month_date}): error = {rel_error:.4f}%")
+    
+    mean_error = np.mean(all_errors)
+    log_message(f"\nMean relative error: {mean_error:.4f}%")
+    
+    if mean_error < 0.01:
+        log_message("SUCCESS - ENERGY BUDGET VERIFIED (< 0.01% error)")
+    else:
+        log_message("WARNING - Budget error > 0.01%")
+    
+    ds_tke.close()
+    ds_mke.close()
+    ds_eke.close()
+    
+except Exception as e:
+    log_message(f"ERROR - Could not verify energy budget: {e}")
+    import traceback
+    traceback.print_exc()
 
-------------------------------------------------------------------------
+# ============================================================================
+# FINAL SUMMARY
+# ============================================================================
 
-## Table 4: Extended Winter Seasons - Testing "Winter Shift" Hypothesis
+log_message("\n" + "=" * 70)
+log_message("*** SENSITIVITY TEST COMPLETE ***")
+log_message("=" * 70)
 
-### A. Mean Storminess Index (m⁴/s⁴/decade)
+log_message("\nOUTPUT FILES (in raw_reynolds_decomposition/):")
+for path, name in [
+    (eddy_path, "Eddy components (filter-only)"),
+    (eke_path, "EKE (monthly)"),
+    (storm_path, "Storminess Index")
+]:
+    if os.path.exists(path):
+        size_mb = os.path.getsize(path) / (1024**2)
+        log_message(f"  ✓ {name}: {size_mb:.1f} MB")
+    else:
+        log_message(f"  ✗ {name}: MISSING!")
 
-| Season | Fram Strait (15°W-15°E, 76-82°N) | Svalbard/Barents (10°W-35°E, 74-81°N) |
-|-----------------|--------------------------|-----------------------------|
-| **DJFM** | +20.79<br>p=0.187<br>CI: \[-22.51, 23.81\] | +7.43<br>p=0.431<br>CI: \[-18.67, 19.25\] |
-| **FMA** | +13.66<br>p=0.219<br>CI: \[-15.85, 16.10\] | +6.80<br>p=0.500<br>CI: \[-13.44, 13.60\] |
+log_message("\nNEXT STEPS:")
+log_message("  1. Compare trend analysis results between methodologies")
+log_message("  2. Check for month-boundary artifacts in original approach")
+log_message("  3. If results are equivalent, adopt simpler filter-only method")
+log_message("  4. Document sensitivity analysis in thesis methodology section")
+```
 
-### B. P95 Extreme Frequency (events/decade)
+```{python truncating-end-2024}
+import xarray as xr
+import numpy as np
 
-| Season | Fram Strait (15°W-15°E, 76-82°N) | Svalbard/Barents (10°W-35°E, 74-81°N) |
-|-----------------|--------------------------|-----------------------------|
-| **DJFM** | +1.03<br>p=0.211<br>CI: \[-1.43, 1.52\] | +0.55<br>p=0.530<br>CI: \[-1.50, 1.55\] |
-| **FMA** | +1.01<br>p=0.250<br>CI: \[-1.13, 1.13\] | +0.64<br>p=0.452<br>CI: \[-1.08, 1.12\] |
+PROCESSED_DATA_DIR = "E:/ERA5_data/processed"
+OUTPUT_DIR = "E:/ERA5_data/processed/raw_reynolds_decomposition"
 
-**Conclusion:** No evidence for shift from autumn (SON) to late winter (DJFM/FMA) periods.
+# ============================================================================
+# 1. Truncate EKE to 1958-2024
+# ============================================================================
+eke_path = f"{OUTPUT_DIR}/ERA5_EKE_monthly_raw.nc"
 
-------------------------------------------------------------------------
+print("Truncating EKE to 1958-2024...")
+ds_eke = xr.open_dataset(eke_path, engine='netcdf4')
+print(f"  Original time steps: {len(ds_eke.time)}")
 
-## Table 5: Spatial Field Significance Tests
+ds_eke_truncated = ds_eke.sel(time=slice('1958-01-01', '2024-12-31'))
+print(f"  After truncation: {len(ds_eke_truncated.time)}")
 
-| Analysis | Grid Cells | Nominal Sig. (p\<0.05) | FDR Sig. (q\<0.05) | MC p-value | Field Significant? |
-|------------|------------|------------|------------|------------|------------|
-| **Mean EKE Trend** | 11,160 | 250 (2.24%) | 0 (0.00%) | 0.258 | NO |
-| **P99 Intensity Trend** | 11,160 | 502 (4.50%) | 0 (0.00%) | 0.398 | NO |
-| **P95 Frequency Trend** | 11,160 | 750 (6.72%) | 0 (0.00%) | 0.208 | NO |
+# Save truncated version (overwrite)
+ds_eke_truncated.to_netcdf(eke_path + ".tmp")
+ds_eke.close()
+ds_eke_truncated.close()
 
-Monte Carlo parameters: 500 iterations, block length = 12 months
+import os
+os.replace(eke_path + ".tmp", eke_path)
+print("  >> EKE truncated and saved")
+```
 
-------------------------------------------------------------------------
+```{python}
+import xarray as xr
+import numpy as np
 
-## Table 6: Change-Point and Period Comparison Tests
+PROCESSED_DATA_DIR = "E:/ERA5_data/processed"
+OUTPUT_DIR = "E:/ERA5_data/processed/raw_reynolds_decomposition"
 
-| Test | Method | Result | p-value | Conclusion |
-|---------------|---------------|---------------|---------------|---------------|
-| **Change-point detection** | Pettitt (1979) | No change-point | 0.949 | No regime shift |
-| **1958-1987 vs 1988-2024** | Block bootstrap | Δ = +4.74 m⁴/s⁴<br>CI: \[-6.62, 6.68\] | \- | No significant difference |
-| **1958-1987 vs 2005-2024** | Block bootstrap | CI includes zero | \- | No significant difference |
+original_storm_path = f"{PROCESSED_DATA_DIR}/ERA5_storminess_index_monthly.nc"
+storm_path = f"{OUTPUT_DIR}/ERA5_storminess_index_monthly_raw.nc"
 
-------------------------------------------------------------------------
+print("Comparing storminess indices...")
 
-## Summary Statistics
+ds_orig = xr.open_dataset(original_storm_path, engine='netcdf4')
+ds_new = xr.open_dataset(storm_path, engine='netcdf4')
 
-### Data Characteristics
+# Align time periods (use only overlapping period)
+ds_orig = ds_orig.sel(time=slice('1958-01-01', '2024-12-31'))
+ds_new = ds_new.sel(time=slice('1958-01-01', '2024-12-31'))
 
--   **Time Period:** 1958-2024 (67 years, 804 months)
--   **Spatial Domain:** Pan-Arctic ≥60°N
--   **Array Dimensions:** \[804 time, 31 lat, 360 lon\]
--   **Pan-Arctic Mean:** 129.90 m⁴/s⁴ (area-weighted)
--   **Lag-1 Autocorrelation:** ρ₁ = 0.540 (monthly), effective n = 655
+print(f"Original time steps: {len(ds_orig.time)}")
+print(f"New time steps: {len(ds_new.time)}")
 
-### Statistical Methods Applied
+# Calculate domain-averaged time series
+orig_ts = ds_orig['storminess_index'].mean(dim=['latitude', 'longitude']).values
+new_ts = ds_new['storminess_index'].mean(dim=['latitude', 'longitude']).values
 
--   **Trend Detection:** Pre-Whitened Mann-Kendall, Modified Mann-Kendall (Hamed-Rao)
--   **Trend Magnitude:** Theil-Sen slope estimator
--   **Uncertainty:** Moving blocks bootstrap (R=5000, l=12 months for monthly data, l=3 years for annual)
--   **Multiple Testing:** False Discovery Rate (Benjamini-Hochberg), Monte Carlo field significance
--   **Seasonal Interaction:** GLS regression with AR(1) correlation structure
--   **Change-point:** Pettitt test
+# Statistics
+orig_mean = float(ds_orig['storminess_index'].mean())
+new_mean = float(ds_new['storminess_index'].mean())
+correlation = np.corrcoef(orig_ts, new_ts)[0, 1]
+relative_diff = (new_mean - orig_mean) / orig_mean * 100
 
-### Key Findings
+print(f"\nResults:")
+print(f"  Original (with deseasonalization) mean: {orig_mean:.4f}")
+print(f"  Filter-only (this test) mean:           {new_mean:.4f}")
+print(f"  Relative difference:                    {relative_diff:.2f}%")
+print(f"  Temporal correlation:                   {correlation:.6f}")
 
-**NO statistically significant trends detected in:**
+if correlation > 0.99:
+    print("\n>> CONCLUSION: Deseasonalization appears REDUNDANT")
+    print("   The two methods produce nearly identical results.")
+elif correlation > 0.95:
+    print("\n>> CONCLUSION: Methods show HIGH agreement")
+else:
+    print("\n>> CONCLUSION: Methods show NOTABLE differences")
 
--   Pan-Arctic mean storminess (1958-2024)
--   Extreme intensity (P99 EKE)
--   Extreme frequency (P95 exceedances)
--   Any individual season (DJF, MAM, JJA, SON)
--   Regional trends (Fram Strait, Svalbard/Barents)
--   Spatial field patterns
--   Preferential autumn intensification
--   "Winter shift" to DJFM or FMA seasons
--   Any regime shifts or change-points
+ds_orig.close()
+ds_new.close()
 
-**All results:**
-
--   p-values \> 0.05
--   95% confidence intervals include zero
--   Field significance tests non-significant (MC p \> 0.20)
--   FDR correction yields 0 significant grid cells
+```
