@@ -48,10 +48,73 @@ library(here)
 # Configure Python Environment
 use_virtualenv("arctic-env", required = TRUE)
 
-# Define the absolute path to the data storage folder
-DATA_DIRECTORY <- "E:/ERA5_data"
-PROCESSED_DATA_DIR <- "E:/ERA5_data/processed"
+# Define paths - UPDATE THESE FOR YOUR SYSTEM
+DATA_DIRECTORY <- here::here("Data", "processed")
+
+# Input file (from corrected Step 3 Python script)
+METRICS_FILE <- file.path(DATA_DIRECTORY, "ERA5_storminess_metrics_monthly.nc")
+
+# Define which metrics to analyze
+METRIC_NAMES <- c(
+ "eke_mean",         # PRIMARY: Monthly mean synoptic-scale EKE
+ "eke_p90",          # 90th percentile of monthly EKE
+ "eke_p95",          # 95th percentile of monthly EKE  
+ "eke_p99",          # 99th percentile of monthly EKE
+ "exceed_p95_freq"   # Fraction exceeding climatological P95
+)
+
+# Analysis parameters
+ARCTIC_LAT_THRESHOLD <- 60  # Core Arctic domain (>= 60°N)
+REFERENCE_PERIOD <- c(1981, 2010)  # WMO climatological baseline
 ```
+
+-   PHASE 1: Data Preparation & Validation
+
+    -   1.1 Data loading and standardization (as before)
+
+    -   1.2 Domain refinement (\>=60°N)
+
+    -   1.3 Area-weighted time series derivation
+
+    -   1.4 Autocorrelation assessment & neff calculation
+
+-   PHASE 2: Energy Budget Diagnostics
+
+    -   2.1 TKE, MKE, EKE_budget calculation and verification
+
+    -   2.2 MKE/EKE ratio trends (mechanistic interpretation) → Answer: "Is the overall atmospheric circulation changing?"
+
+-   PHASE 3: Primary Storminess Analysis (Mean EKE)
+
+    -   3.1 Pan-Arctic trend analysis (eke_mean)
+
+    -   3.2 Spatial trend patterns + field significance
+
+    -   3.3 Seasonal decomposition
+
+    -   3.4 Period comparison (1958-1987 vs 1988-2024) 3.5 Autumn feedback hypothesis test
+
+-   PHASE 4: Extreme Storm Analysis (Percentiles)
+
+    -   4.1 Extreme intensity trends (eke_p95, eke_p99)
+
+    -   4.2 Extreme frequency trends (exceed_p95_freq) 4.3 Spatial patterns of extreme changes
+
+-   PHASE 5: Regional Sub-Analysis
+
+    -   5.1 Svalbard/Barents Sea hotspot
+
+    -   5.2 Fram Strait
+
+    -   5.3 Other regional domains → Apply full Phase 3-4 workflow to each region
+
+-   PHASE 6: Synthesis & Hypothesis Testing
+
+    -   6.1 Summary of all trend results
+
+    -   6.2 Autumn feedback loop hypothesis evaluation
+
+    -   6.3 Comparison with sea-ice loss timelines
 
 # Phase 1: Foundational Analysis
 
@@ -59,258 +122,810 @@ This chapter details the foundational data processing and diagnostic procedures 
 
 ## 1.1 Data Loading and Standardization
 
-The analysis commenced with the `ERA5_storminess_index_monthly_1958-2024.nc` file, a NetCDF dataset containing the primary storminess metric. Initial inspection revealed the data array was structured with dimensions of `[longitude, latitude, time]` (360 x 35 x 804), an unconventional ordering for climatological time series analysis.
+The analysis commenced with the `ERA5_storminess_metrics_monthly.nc` file, a NetCDF dataset containing five complementary storminess metrics derived from the bandpass-filtered synoptic-scale Eddy Kinetic Energy (EKE) calculated in Section 3.4 of the Methodology. Initial inspection revealed the data arrays were structured with dimensions of `[longitude, latitude, time]` (360 × 35 × 804), an unconventional ordering for climatological time series analysis.
 
-To align with standard conventions and optimize computational efficiency for temporal operations, the array dimensions were permuted to a `[time, latitude, longitude]` structure, resulting in a final array of 804 x 35 x 360. The time coordinate was decoded from its "days since origin" format and verified to correctly span the full analysis period from January 1958 through December 2024.
+The dataset contains the following variables:
+
+```         
+Variables:
+  eke_mean [m²/s²]              - Monthly mean synoptic-scale EKE (PRIMARY)
+  eke_p90 [m²/s²]               - Monthly 90th percentile EKE
+  eke_p95 [m²/s²]               - Monthly 95th percentile EKE
+  eke_p99 [m²/s²]               - Monthly 99th percentile EKE
+  exceed_p95_freq [fraction]    - Fraction exceeding climatological P95
+  eke_p95_climatology [m²/s²]   - Reference P95 threshold (1981-2010)
+```
+
+To align with standard conventions and optimize computational efficiency for temporal operations, the array dimensions were permuted to a `[time, latitude, longitude]` structure, resulting in final arrays of 804 × 35 × 360. The time coordinate was decoded from its "days since origin" format and verified to correctly span the full analysis period from January 1958 through December 2024.
+
+### 1.1.1 Rationale for Multi-Metric Approach
+
+Following the methodological framework established by @yau2020 and the IPCC AR6 WG1 Chapter 11 recommendations for extreme event analysis [@ipcc2021], a suite of complementary metrics was calculated to capture different aspects of storminess variability:
+
+1. **Mean EKE** ($\overline{EKE}$): The primary metric, validated by @yau2020 as achieving the highest correlation with surface weather impacts among Eulerian storm track metrics. This represents the average synoptic-scale storm activity within each month.
+
+2. **Percentile Metrics** (P90, P95, P99): These capture within-month extreme storm intensity at different severity levels. A month characterized by several intense storms interspersed with calm periods will exhibit elevated percentile values even if mean EKE is moderate, providing sensitivity to episodic high-intensity events most relevant to coastal erosion.
+
+3. **Exceedance Frequency**: This metric detects changes in extreme storm frequency over time, independent of changes in mean storminess. By comparing each timestep against a fixed climatological threshold (P95 from 1981–2010), it reveals whether extreme events are becoming more or less common relative to the historical baseline.
+
+This multi-metric approach allows detection of changes in the storm intensity distribution that would be obscured by analyzing mean values alone. As demonstrated by @lehmann2015 through quantile regression analysis, extreme EKE percentiles often show different trend magnitudes than mean values.
 
 ```{r}
 # ============================================================================
 # PHASE 1: DATA LOADING AND EXPLORATORY ANALYSIS
 # Arctic Storminess Climatology (1958-2024)
 # ============================================================================
-storm_path <- here("Data", "processed", "ERA5_storminess_index_monthly_1958-2024.nc")
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 1: FOUNDATIONAL ANALYSIS (Corrected Metrics)\n")
+cat(rep("=", 70), "\n\n")
 
-cat("Loading truncated storminess index file:\n")
-cat(storm_path, "\n")
-
-nc <- nc_open(storm_path)
-
-cat("\nNetCDF File Information:\n")
-cat("========================\n")
-
-# Check dimensions
-cat("\nDimensions:\n")
-for (dim_name in names(nc$dim)) {
-  cat(sprintf("  %s: %d\n", dim_name, nc$dim[[dim_name]]$len))
+# --- Check if file exists ---
+if (!file.exists(METRICS_FILE)) {
+ stop(glue("
+   ERROR: Metrics file not found!
+   Expected: {METRICS_FILE}
+   
+   Please run the corrected Step 3 Python script first:
+   Step3_Storminess_Metrics_Corrected.py
+ "))
 }
 
-# Extract variables
-storminess <- ncvar_get(nc, "storminess_index")
-time <- ncvar_get(nc, "time")
+cat("Loading storminess metrics file:\n")
+cat(glue("  {METRICS_FILE}\n\n"))
+
+# --- Open NetCDF and inspect structure ---
+nc <- nc_open(METRICS_FILE)
+
+cat("NetCDF File Information:\n")
+cat(rep("-", 40), "\n")
+
+# Print dimensions
+cat("\nDimensions:\n")
+for (dim_name in names(nc$dim)) {
+ cat(sprintf("  %s: %d\n", dim_name, nc$dim[[dim_name]]$len))
+}
+
+# Print variables
+cat("\nVariables:\n")
+for (var_name in names(nc$var)) {
+ var_units <- ncatt_get(nc, var_name, "units")$value
+ if (is.null(var_units) || var_units == "") var_units <- "dimensionless"
+ cat(sprintf("  %s [%s]\n", var_name, var_units))
+}
+
+# --- Extract coordinate variables ---
+time_raw <- ncvar_get(nc, "time")
 lat <- ncvar_get(nc, "latitude")
 lon <- ncvar_get(nc, "longitude")
 
-# Get units and attributes
+# Get time units for decoding
 time_units <- ncatt_get(nc, "time", "units")$value
-lat_units <- ncatt_get(nc, "latitude", "units")$value
-lon_units <- ncatt_get(nc, "longitude", "units")$value
+cat(sprintf("\nTime units: %s\n", time_units))
+
+# --- Extract all metric arrays ---
+cat("\nLoading metric arrays...\n")
+
+metrics_list <- list()
+for (metric in METRIC_NAMES) {
+ if (metric %in% names(nc$var)) {
+   metrics_list[[metric]] <- ncvar_get(nc, metric)
+   cat(sprintf("  ✓ %s: dim = [%s]\n", 
+               metric, 
+               paste(dim(metrics_list[[metric]]), collapse = " x ")))
+ } else {
+   cat(sprintf("  ✗ %s: NOT FOUND in file\n", metric))
+ }
+}
+
+# Also load climatological threshold if present
+if ("eke_p95_climatology" %in% names(nc$var)) {
+ eke_p95_clim <- ncvar_get(nc, "eke_p95_climatology")
+ cat(sprintf("  ✓ eke_p95_climatology: dim = [%s]\n",
+             paste(dim(eke_p95_clim), collapse = " x ")))
+}
 
 nc_close(nc)
-
-cat("\nArray dimensions:", dim(storminess), "\n")
-cat("Order: [longitude, latitude, time]\n")
 ```
 
 ## 1.2 Domain Refinement to the Core Arctic
 
-The original dataset extended south to approximately 56°N. To focus the analysis specifically on the high-Arctic and minimize the influence of mid-latitude dynamics, the spatial domain was refined. The data arrays were subsetted to include only latitudes greater than or equal to 60°N. This resulted in a refined storminess array with dimensions of `[804, 31, 360]`, covering a new latitude range from 60.38°N to 90.38°N. All subsequent analyses were performed on this core Arctic domain.
+The original dataset extended south to approximately 56°N. To focus the analysis specifically on the high-Arctic and minimize the influence of mid-latitude dynamics, the spatial domain was refined. The data arrays were subsetted to include only latitudes greater than or equal to 60°N. This resulted in refined metric arrays with dimensions of `[804, 31, 360]`, covering a new latitude range from 60.38°N to 90.38°N. All subsequent analyses were performed on this core Arctic domain.
+
+The 60°N threshold was selected to:
+
+1. Exclude the primary mid-latitude storm track (typically centered at 45–55°N)
+2. Focus on the region where Arctic-specific feedback mechanisms (e.g., sea-ice loss amplification) are expected to be most pronounced
+3. Maintain consistency with standard Arctic climate assessment domains used in @serreze2009 and subsequent Arctic monitoring reports
 
 ```{r}
 # ----------------------------------------------------------------------------
-# Step 1.2: Correct Dimension Ordering
+# SECTIONz 1.2: DIMENSION ORDERING AND TIME DECODING
 # ----------------------------------------------------------------------------
 # dim(storminess) = [360, 35, 804] so, [lon, lat, time] instead of the correct [lat, lon, time]
                   #  ↓    ↓    ↓
                   # lon  lat  time
 
-cat("\nDetected dimension order: [lon, lat, time]\n")
-cat("  Transposing to [time, lat, lon]...\n")
+cat("\n", rep("-", 40), "\n")
+cat("Checking dimension ordering...\n")
 
-# Transpose: (lon, lat, time) → (time, lat, lon)
-storminess <- aperm(storminess, c(3, 2, 1))
+# Determine current dimension order
+# Expected from Python script: [time, latitude, longitude]
+# But R/NetCDF may read as [lon, lat, time] depending on how it was written
 
-cat("  New dimensions:", dim(storminess), "\n")
-cat("  Order: [time, lat, lon] = [804, 35, 360]\n")
-```
+sample_metric <- metrics_list[[1]]
+n_dims <- length(dim(sample_metric))
 
-```{r}
-# ----------------------------------------------------------------------------
-# Step 1.3: Decode Time Coordinates (European Format)
-# ----------------------------------------------------------------------------
-cat("\nDecoding time coordinate (European date format)...\n")
+if (n_dims != 3) {
+ stop("ERROR: Expected 3D array [time, lat, lon]")
+}
 
+# Infer dimension order from sizes
+dim_sizes <- dim(sample_metric)
+n_time_expected <- length(time_raw)
+n_lat_expected <- length(lat)
+n_lon_expected <- length(lon)
+
+cat(sprintf("  Array dimensions: [%s]\n", paste(dim_sizes, collapse = ", ")))
+cat(sprintf("  Expected: time=%d, lat=%d, lon=%d\n", 
+           n_time_expected, n_lat_expected, n_lon_expected))
+
+# Check if transposition is needed
+if (dim_sizes[1] == n_lon_expected && dim_sizes[3] == n_time_expected) {
+ cat("  Detected order: [lon, lat, time] → Transposing to [time, lat, lon]\n")
+ 
+ for (metric in names(metrics_list)) {
+   metrics_list[[metric]] <- aperm(metrics_list[[metric]], c(3, 2, 1))
+ }
+ cat("  ✓ All metrics transposed\n")
+ 
+} else if (dim_sizes[1] == n_time_expected) {
+ cat("  ✓ Correct order: [time, lat, lon]\n")
+ 
+} else {
+ warning("Unexpected dimension ordering - please verify manually")
+}
+
+# Verify final dimensions
+cat(sprintf("\nFinal array dimensions: [%s]\n", 
+           paste(dim(metrics_list[[1]]), collapse = " x ")))
+
+# --- Decode time coordinate ---
+cat("\nDecoding time coordinate...\n")
+
+# Parse time units string (e.g., "days since 1958-01-01")
 origin_str <- sub(".*since ", "", time_units)
 origin_date <- as.Date(origin_str)
 
 if (grepl("hours since", time_units)) {
-  time_dates <- origin_date + hours(time)
+ time_dates <- origin_date + hours(time_raw)
 } else if (grepl("days since", time_units)) {
-  time_dates <- origin_date + days(time)
+ time_dates <- origin_date + days(time_raw)
 } else {
-  stop("Unrecognized time unit format: ", time_units)
+ # Assume days
+ time_dates <- origin_date + days(time_raw)
 }
 
-# Format as European-style strings
-time_dates_fmt <- format(time_dates, "%d-%m-%Y")
+time_dates <- as.Date(time_dates)
 
-cat("  First date:", time_dates_fmt[1], "\n")
-cat("  Last date: ", time_dates_fmt[length(time_dates_fmt)], "\n")
-cat("  Expected range: 31-01-1958 → 31-12-2024\n")
+cat(sprintf("  First date: %s\n", format(time_dates[1], "%Y-%m-%d")))
+cat(sprintf("  Last date:  %s\n", format(time_dates[length(time_dates)], "%Y-%m-%d")))
+cat(sprintf("  Total months: %d\n", length(time_dates)))
+
+# Verify expected range
+expected_months <- 12 * (2024 - 1958 + 1)  # 804 months
+if (length(time_dates) != expected_months) {
+ warning(sprintf("Expected %d months, found %d", expected_months, length(time_dates)))
+}
 ```
 
 ```{r}
 # ============================================================================
-# Step 1.4: REFINING THE PAN-ARCTIC DOMAIN to >= 60°N
+# SECTION 1.3: REFINING THE PAN-ARCTIC DOMAIN to >= 60°N
 # ============================================================================
 
-# --- 1. Define the New Pan-Arctic Domain ---
-# Select the indices of the 'lat' vector that correspond to latitudes >= 60°N
-arctic_lat_indices <- which(lat >= 60)
+cat("\n", rep("-", 40), "\n")
+cat(sprintf("Refining domain to Core Arctic (>= %d°N)...\n", ARCTIC_LAT_THRESHOLD))
 
-cat("--- Refining the Pan-Arctic domain to >= 60°N ---\n")
-cat(sprintf("Original latitude range: %.2f to %.2f\n", min(lat), max(lat)))
+# Original domain
+cat(sprintf("  Original latitude range: %.2f°N to %.2f°N\n", min(lat), max(lat)))
 
-# --- 2. Subset the Data Arrays ---
-# Use the selected indices to create new, smaller data arrays.
+# Find indices for Arctic subset
+arctic_lat_indices <- which(lat >= ARCTIC_LAT_THRESHOLD)
 lat_arctic <- lat[arctic_lat_indices]
-storminess_arctic <- storminess[, arctic_lat_indices, ] # Note the empty lon slot to keep all longitudes
 
-cat(sprintf("New latitude range: %.2f to %.2f\n", min(lat_arctic), max(lat_arctic)))
-cat(sprintf("New storminess array dimensions [time, lat, lon]: [%d, %d, %d]\n",
-            dim(storminess_arctic)[1],
-            dim(storminess_arctic)[2],
-            dim(storminess_arctic)[3]))
+cat(sprintf("  New latitude range: %.2f°N to %.2f°N\n", 
+           min(lat_arctic), max(lat_arctic)))
+cat(sprintf("  Latitude points: %d → %d\n", 
+           length(lat), length(arctic_lat_indices)))
+
+# Subset all metrics to Arctic domain
+metrics_arctic <- list()
+for (metric in names(metrics_list)) {
+ # Subset: keep all time, selected latitudes, all longitudes
+ metrics_arctic[[metric]] <- metrics_list[[metric]][, arctic_lat_indices, ]
+}
+
+cat(sprintf("  ✓ All metrics subsetted to Arctic domain\n"))
+cat(sprintf("  New array dimensions: [%s]\n", 
+           paste(dim(metrics_arctic[[1]]), collapse = " x ")))z
 ```
 
 ## 1.3 Derivation of the Area-Weighted Pan-Arctic Time Series
 
-To analyze the overall storminess of the core Arctic, the spatial data were aggregated into a single representative time series. A simple arithmetic mean across all grid cells is statistically invalid for geophysical data on a regular latitude-longitude grid, as it fails to account for the convergence of meridians toward the pole. This would grant disproportionate weight to the physically smaller high-latitude grid cells, introducing a significant bias into the domain average.
+To analyze the overall storminess of the core Arctic, the spatial data were aggregated into single representative time series for each metric. A simple arithmetic mean across all grid cells is statistically invalid for geophysical data on a regular latitude-longitude grid, as it fails to account for the convergence of meridians toward the pole. This would grant disproportionate weight to the physically smaller high-latitude grid cells, introducing a significant bias into the domain average.
 
-To correct for this distortion, an **area-weighted average** was calculated for each of the 804 monthly time steps. The weight for each grid cell, $w_j$, is proportional to the cosine of its latitude, $\phi_j$:
+To correct for this distortion, an area-weighted average was calculated for each of the 804 monthly time steps. The weight for each grid cell, $w_j$, is proportional to the cosine of its latitude, $\phi_j$:
 
-$$
-w_j = \cos(\phi_j)
-$$
+$$w_j = \cos(\phi_j)$$
 
-The area-weighted storminess index, $\overline{S_t}$, at each time step $t$ was then calculated as:
+The area-weighted metric value, $\overline{X_t}$, at each time step $t$ was then calculated as:
 
-$$
-\overline{S_t} = \frac{\sum_{i=1}^{N_{lon}} \sum_{j=1}^{N_{lat}} S_{i,j,t} \cdot w_j}{\sum_{i=1}^{N_{lon}} \sum_{j=1}^{N_{lat}} w_j}
-$$
+$$\overline{X_t} = \frac{\sum_{i=1}^{N_{lon}} \sum_{j=1}^{N_{lat}} X_{i,j,t} \cdot w_j}{\sum_{i=1}^{N_{lon}} \sum_{j=1}^{N_{lat}} w_j}$$
 
-where $S_{i,j,t}$ is the storminess value at longitude $i$, latitude $j$, and time $t$. A diagnostic check confirmed the necessity of this procedure. The mean of the area-weighted time series was found to be 129.90, whereas the unweighted series yielded a mean of 160.46. This substantial bias of -30.57 validates area-weighting as an essential step for deriving a physically meaningful climatological index. The final output of this step is a monthly `ts` object in R, which serves as the basis for all subsequent temporal analyses.
+where $X_{i,j,t}$ is the metric value at longitude $i$, latitude $j$, and time $t$.
+
+A diagnostic check confirmed the necessity of this procedure by comparing weighted and unweighted spatial means:
+
+| Metric | Weighted Mean | Bias (Weighted − Unweighted) |
+|--------|---------------|------------------------------|
+| eke_mean | 8.998 m²/s² | −0.905 m²/s² |
+| eke_p90 | 21.491 m²/s² | −2.134 m²/s² |
+| eke_p95 | 29.057 m²/s² | −2.747 m²/s² |
+| eke_p99 | 43.644 m²/s² | −3.901 m²/s² |
+| exceed_p95_freq | 0.0506 | +0.0003 |
+
+: Comparison of area-weighted versus unweighted spatial means {#tbl-weighting}
+
+The consistent negative bias for EKE metrics (indicating that unweighted means systematically overestimate the domain-average storminess) validates area-weighting as an essential step for deriving physically meaningful climatological indices. The bias magnitude increases with percentile level because extreme values are more spatially heterogeneous. The final output of this step is a set of monthly `ts` objects in R, which serve as the basis for all subsequent temporal analyses.
 
 ```{r}
 # ============================================================================
-# Step 1.5 Create Area-Weighted Time Series
+# SECTION 1.4 Create Area-Weighted Time Series
 # ============================================================================
 
-# 1. Create the area weights
-# Weights are proportional to the cosine of the latitude.
-# We must convert latitude from degrees to radians for the cos() function.
+cat("\n", rep("-", 40), "\n")
+cat("Creating area-weighted Pan-Arctic time series...\n")
+
+# --- Calculate cosine-latitude weights ---
+# Weight = cos(latitude in radians)
 weights_arctic <- cos(lat_arctic * pi / 180)
 
-# 2. Reshape weights for broadcasting
-# The storminess array is [time, lat, lon]. We need to apply weights along
-# the latitude dimension. We create a matrix of weights that matches the
-# spatial dimensions [lat, lon].
-weights_matrix_arctic <- matrix(weights_arctic,
-                                nrow = length(lat_arctic),
-                                ncol = dim(storminess_arctic)[3], # Use the correct lon dimension
-                                byrow = FALSE)
+# Create weight matrix matching spatial dimensions [lat, lon]
+n_lat_arctic <- length(lat_arctic)
+n_lon <- length(lon)
 
-# 3. Calculate the area-weighted domain average for each time step
-# We use apply() to iterate over the time dimension (margin = 1)
-cat("\nCalculating AREA-WEIGHTED domain-averaged storminess...\n")
-storminess_ts_weighted <- apply(storminess_arctic, 1, function(slice) {
-  # For each time slice [lat, lon], calculate the weighted mean
-  weighted.mean(slice, weights_matrix_arctic, na.rm = TRUE)
-})
+weights_matrix <- matrix(weights_arctic,
+                        nrow = n_lat_arctic,
+                        ncol = n_lon,
+                        byrow = FALSE)
 
-cat(" Area-weighted time series created. Length:", length(storminess_ts_weighted), "\n")
+# --- Calculate area-weighted mean for each metric ---
+ts_weighted <- list()
+ts_unweighted <- list()  # For diagnostic comparison
 
-# 4. Create a time series object for analysis
-# Use the decoded time coordinates instead of generating them manually
-dates <- as.Date(time_dates)  # This already contains the correct month-end dates
+for (metric in names(metrics_arctic)) {
+ data_array <- metrics_arctic[[metric]]
+ 
+ # Apply weighted mean across spatial dimensions for each timestep
+ ts_weighted[[metric]] <- apply(data_array, 1, function(slice) {
+   weighted.mean(slice, weights_matrix, na.rm = TRUE)
+ })
+ 
+ # Also calculate unweighted for comparison
+ ts_unweighted[[metric]] <- apply(data_array, 1, mean, na.rm = TRUE)
+ 
+ # Report bias
+ bias <- mean(ts_weighted[[metric]]) - mean(ts_unweighted[[metric]])
+ cat(sprintf("  %s: weighted mean = %.4f, bias = %.4f\n", 
+             metric, mean(ts_weighted[[metric]]), bias))
+}
 
-# Create a time series object with the correct time length and frequency
-storm_ts_obj <- ts(storminess_ts_weighted, start = c(1958, 1), frequency = 12)
+cat("\n  ✓ Area-weighting applied to all metrics\n")
+cat("  (Non-zero bias confirms area-weighting is necessary)\n")
+```
 
-# --- Create a date-aware data frame for plotting ---
+```{r}
+# ============================================================================
+# SECTION 1.5: CREATE TIME SERIES OBJECTS AND DATA FRAMES
+# ============================================================================
+
+cat("\n", rep("-", 40), "\n")
+cat("Creating time series objects...\n")
+
+# --- Create R ts objects (for trend package functions) ---
+ts_objects <- list()
+for (metric in names(ts_weighted)) {
+ ts_objects[[metric]] <- ts(ts_weighted[[metric]], 
+                            start = c(year(time_dates[1]), month(time_dates[1])),
+                            frequency = 12)
+}
+
+# --- Create master data frame for ggplot and analysis ---
 storm_df <- data.frame(
-  date = as.Date(time_dates),                # Month-end dates from decoded vector
-  storminess = storminess_ts_weighted
+ date = time_dates,
+ year = year(time_dates),
+ month = month(time_dates),
+ season = case_when(
+   month(time_dates) %in% c(12, 1, 2) ~ "DJF",
+   month(time_dates) %in% c(3, 4, 5) ~ "MAM",
+   month(time_dates) %in% c(6, 7, 8) ~ "JJA",
+   month(time_dates) %in% c(9, 10, 11) ~ "SON"
+ )
 )
 
-# --- DIAGNOSTIC COMPARISON ---
-# Calculate the unweighted mean for comparison to see the bias
-storminess_ts_unweighted <- apply(storminess_arctic, 1, mean, na.rm = TRUE)
-mean_diff <- mean(storminess_ts_weighted) - mean(storminess_ts_unweighted)
+# Add all metrics as columns
+for (metric in names(ts_weighted)) {
+ storm_df[[metric]] <- ts_weighted[[metric]]
+}
 
-cat("\n--- Diagnostic Check ---\n")
-cat(sprintf("Mean of WEIGHTED time series: %.4f\n", mean(storminess_ts_weighted)))
-cat(sprintf("Mean of UNWEIGHTED time series: %.4f\n", mean(storminess_ts_unweighted)))
-cat(sprintf("Difference (Bias): %.4f\n", mean_diff))
-cat("A non-zero difference confirms that area-weighting is essential.\n")
+# Create season_year for proper DJF grouping
+# (December of year N belongs to DJF of year N+1)
+storm_df$season_year <- storm_df$year
+storm_df$season_year[storm_df$month == 12] <- storm_df$season_year[storm_df$month == 12] + 1
+
+cat(sprintf("  ✓ Created data frame with %d rows and %d columns\n", 
+           nrow(storm_df), ncol(storm_df)))
 ```
 
 ## 1.4 Assessment of Temporal Autocorrelation
 
-This diagnostic is the single most important prerequisite for the entire statistical framework. Standard statistical tests, including Ordinary Least Squares (OLS) regression, operate on the strict assumption that the data points (or model residuals) are independent. Climate time series are known to violate this assumption due to strong persistence, or "memory."
+This diagnostic is the single most important prerequisite for the entire statistical framework. Standard statistical tests, including Ordinary Least Squares (OLS) regression, operate on the strict assumption that the data points (or model residuals) are independent. Climate time series are known to violate this assumption due to strong persistence, or "memory," arising from the inertia of the climate system.
 
 ### 1.4.1 The Autocorrelation Function (ACF)
 
-To quantify the degree of persistence in the area-weighted Pan-Arctic storminess index, the Autocorrelation Function (ACF) was computed and plotted for lags up to 24 months.
+To quantify the degree of persistence in the area-weighted Pan-Arctic storminess metrics, the Autocorrelation Function (ACF) was computed and plotted for lags up to 24 months. The ACF measures the correlation between observations separated by $k$ time steps:
 
-![ACF of Pan-Arctic monthly storminess index (1958-2024)](path/to/your/acf_plot.png)
+$$\rho_k = \frac{\text{Cov}(X_t, X_{t-k})}{\text{Var}(X_t)}$$
 
-The analysis yielded a **lag-1 autocorrelation coefficient of** $ρ_1 = 0.540$. This value is substantially greater than the threshold of $ρ_1 > 0.1$ that indicates a violation of the independence assumption for monthly atmospheric data.
+The analysis yielded the following lag-1 autocorrelation coefficients:
 
-### 1.4.2 Implications for Statistical Inference
+| Metric | Lag-1 ACF ($\rho_1$) | Interpretation |
+|--------|---------------------|----------------|
+| eke_mean | 0.548 | Strong persistence |
+| eke_p90 | 0.545 | Strong persistence |
+| eke_p95 | 0.548 | Strong persistence |
+| eke_p99 | 0.555 | Strong persistence |
+| exceed_p95_freq | 0.492 | Moderate-strong persistence |
 
-This strong positive autocorrelation confirms that the value of the storminess index in any given month is significantly dependent on the value in the preceding month. Consequently, the 804 observations in the time series do not constitute 804 independent pieces of information. Ignoring this property leads to a systematic underestimation of the true variance, which inflates the significance of standard statistical tests and results in a high rate of **Type I errors** (false positives).
+: Lag-1 autocorrelation coefficients for Pan-Arctic storminess metrics {#tbl-acf}
 
-To quantify the impact of this persistence, the **effective sample size (**$n_{eff}$) was calculated using the comprehensive formula from Zwiers and von Storch (1995). The analysis revealed that the original sample size of $N=804$ is reduced to an effective sample size of $n_{eff} \approx 655$, a reduction of 18.5% in the degrees of freedom.
-
-This formal finding of significant serial correlation invalidates the use of standard statistical tests for trend detection and mandates the use of specialized, autocorrelation-aware techniques, such as the **modified Mann-Kendall test**, for all subsequent trend analyses performed in this study.
+All values substantially exceed the threshold of $\rho_1 > 0.1$ that indicates a violation of the independence assumption for monthly atmospheric data [@santer2000]. The consistency of autocorrelation structure across metrics (all $\rho_1 \approx 0.5$) confirms that this persistence reflects genuine atmospheric dynamics rather than metric-specific artifacts.
 
 ```{r}
 # ============================================================================
 # Section 1.6: Assessment of Temporal Autocorrelation
 # ============================================================================
 
-cat("\n--- Section 1.6: Assessing Temporal Autocorrelation ---\n")
+cat("\n", rep("-", 40), "\n")
+cat("Assessing temporal autocorrelation...\n\n")
 
-# Use the 'storm_ts_obj' created in the previous step
+# Store ACF results
+acf_results <- list()
 
-# 1. Plot the Autocorrelation Function (ACF)
-# This visually shows the 'memory' in the time series.
-acf_result <- acf(storm_df$storminess, 
-                  lag.max = 24, # Up to 2 years
-                  main = "ACF of Pan-Arctic Monthly Storminess Index (1958–2024)",
-                  ylab = "Autocorrelation",
-                  xlab = "Lag (months)")
+for (metric in names(ts_objects)) {
+ ts_data <- ts_objects[[metric]]
+ 
+ # Calculate ACF
+ acf_result <- acf(ts_data, lag.max = 24, plot = FALSE)
+ acf_results[[metric]] <- acf_result
+ 
+ # Extract lag-1 autocorrelation
+ rho1 <- acf_result$acf[2]
+ 
+ # Calculate effective sample size (Zwiers & von Storch, 1995)
+ N <- length(ts_data)
+ rho_k <- acf_result$acf[-1]  # All lags from 1 to 24
+ k <- 1:length(rho_k)
+ neff <- N / (1 + 2 * sum((1 - k/N) * rho_k))
+ 
+ # Report
+ cat(sprintf("--- %s ---\n", metric))
+ cat(sprintf("  Lag-1 autocorrelation (ρ₁): %.3f\n", rho1))
+ cat(sprintf("  Original sample size (N): %d\n", N))
+ cat(sprintf("  Effective sample size (neff): %.1f\n", neff))
+ cat(sprintf("  Reduction in degrees of freedom: %.1f%%\n", (1 - neff/N) * 100))
+ 
+ if (abs(rho1) > 0.1) {
+   cat("  → Significant autocorrelation detected\n")
+   cat("  → Use autocorrelation-corrected tests (Modified MK, GLS)\n\n")
+ } else {
+   cat("  → Weak autocorrelation\n")
+   cat("  → Standard tests may be acceptable\n\n")
+ }
+}
+```
 
-# 2. Extract the critical lag-1 autocorrelation coefficient (rho_1)
-lag1_rho <- acf_result$acf[2] # The ACF object stores lag 0 at index 1
-cat(sprintf("\nLag-1 Autocorrelation (ρ₁): %.3f\n", lag1_rho))
+### 1.4.2 Implications for Statistical Inference
 
-if (abs(lag1_rho) > 0.1) {
-  cat("✓ Result: ρ₁ > 0.1, confirming significant serial correlation.\n")
-  cat("  This justifies the use of autocorrelation-corrected trend tests (e.g., modified Mann-Kendall).\n")
-} else {
-  cat("Result: ρ₁ is low. The data shows weak serial correlation.\n")
+The strong positive autocorrelation confirms that the value of any storminess metric in a given month is significantly dependent on the value in the preceding month. Consequently, the 804 observations in each time series do not constitute 804 independent pieces of information. Ignoring this property leads to a systematic underestimation of the true variance, which inflates the significance of standard statistical tests and results in a high rate of Type I errors (false positives).
+
+To quantify the impact of this persistence, the effective sample size ($n_{eff}$) was calculated using the comprehensive formula from @zwiers1995:
+
+$$n_{eff} = \frac{N}{1 + 2\sum_{k=1}^{K}\left(1 - \frac{k}{N}\right)\rho_k}$$
+
+where $N$ is the original sample size and $\rho_k$ is the autocorrelation at lag $k$. The analysis revealed the following:
+
+| Metric | Original N | Effective $n_{eff}$ | Reduction (%) |
+|--------|------------|---------------------|---------------|
+| eke_mean | 804 | 665.4 | 17.2% |
+| eke_p90 | 804 | 676.0 | 15.9% |
+| eke_p95 | 804 | 680.8 | 15.3% |
+| eke_p99 | 804 | 702.7 | 12.6% |
+| exceed_p95_freq | 804 | 696.9 | 13.3% |
+
+: Effective sample sizes accounting for autocorrelation {#tbl-neff}
+
+This formal finding of significant serial correlation invalidates the use of standard statistical tests for trend detection and mandates the use of specialized, autocorrelation-aware techniques for all subsequent trend analyses performed in this study. Specifically:
+
+1. **For trend significance testing**: The pre-whitened Mann-Kendall test [@yue2002] or modified Mann-Kendall test with variance correction [@hamed1998]
+2. **For regression analysis**: Generalized Least Squares (GLS) with AR(1) error structure
+3. **For confidence intervals**: Moving Blocks Bootstrap preserving temporal dependence [@kunsch1989]
+
+```{r}
+# ============================================================================
+# SECTION 1.7: DESCRIPTIVE STATISTICS
+# ============================================================================
+
+cat(rep("-", 40), "\n")
+cat("Descriptive Statistics (Pan-Arctic >= 60°N):\n")
+cat(rep("-", 40), "\n\n")
+
+# Create summary table
+summary_stats <- data.frame(
+ Metric = character(),
+ Units = character(),
+ Mean = numeric(),
+ SD = numeric(),
+ Min = numeric(),
+ Max = numeric(),
+ Lag1_ACF = numeric(),
+ stringsAsFactors = FALSE
+)
+
+for (metric in names(ts_weighted)) {
+ ts_data <- ts_weighted[[metric]]
+ rho1 <- acf_results[[metric]]$acf[2]
+ 
+ # Determine units
+ if (metric == "exceed_p95_freq") {
+   units <- "fraction (0-1)"
+ } else {
+   units <- "m²/s²"
+ }
+ 
+ summary_stats <- rbind(summary_stats, data.frame(
+   Metric = metric,
+   Units = units,
+   Mean = mean(ts_data, na.rm = TRUE),
+   SD = sd(ts_data, na.rm = TRUE),
+   Min = min(ts_data, na.rm = TRUE),
+   Max = max(ts_data, na.rm = TRUE),
+   Lag1_ACF = rho1
+ ))
 }
 
-# 3. Calculate the Effective Sample Size (neff)
-# This quantifies how much the sample size is reduced due to autocorrelation.
-# Using the comprehensive formula from Zwiers and von Storch (1995)
-N <- length(storm_ts_obj)
-rho_k <- acf_result$acf[-1] # All lags from 1 to 24
-k <- 1:length(rho_k)
-neff <- N / (1 + 2 * sum((1 - k/N) * rho_k))
-
-cat(sprintf("\nOriginal Sample Size (N): %d\n", N))
-cat(sprintf("Effective Sample Size (neff): %.1f\n", neff))
-cat(sprintf("Reduction in degrees of freedom: %.1f%%\n", (1 - neff/N) * 100))
-cat("✓ This confirms that standard statistical tests assuming independence would be invalid.\n")
+print(knitr::kable(summary_stats, digits = 4, format = "simple"))
 ```
+
+## 1.5 Verification of Exceedance Frequency Calculation
+
+As an internal consistency check, the exceedance frequency metric was validated against its theoretical expectation. By definition, the 95th percentile threshold was calculated from the 1981–2010 reference period; therefore, approximately 5% of timesteps during this period should exceed the threshold.
+
+The verification yielded:
+
+```
+Reference period: 1981-2010
+Mean exceedance frequency: 0.0501 (5.01%)
+Expected (by definition of P95): ~0.05 (5%)
+✓ VERIFICATION PASSED
+```
+
+The close agreement (5.01% observed vs. 5.00% expected) confirms correct implementation of the percentile threshold calculation and validates the exceedance frequency metric for subsequent trend analysis. Deviations from 5% in other time periods will indicate genuine changes in extreme storm frequency relative to the climatological baseline.
+
+## 1.6 Summary of Phase 1 Outputs
+
+The foundational analysis produced the following validated datasets for subsequent phases:
+
+| Output | Description | Dimensions |
+|--------|-------------|------------|
+| `metrics_arctic` | Gridded monthly metrics (Arctic subset) | [804 × 31 × 360] per metric |
+| `ts_objects` | Area-weighted monthly time series | 804 values per metric |
+| `storm_df` | Master data frame with date/season columns | 804 rows × 10+ columns |
+| `acf_results` | ACF diagnostics for each metric | Lags 0–24 |
+
+: Summary of Phase 1 output objects {#tbl-outputs}
+
+**Key Statistical Properties:**
+
+- **Primary metric** (eke_mean): Mean = 8.998 m²/s², SD = 4.42 m²/s², $\rho_1$ = 0.548
+- **Temporal coverage**: 804 months (January 1958 – December 2024)
+- **Spatial domain**: 60.38°N – 90.38°N (Core Arctic)
+- **Autocorrelation**: All metrics exhibit $\rho_1 \approx 0.5$, requiring autocorrelation-corrected methods
+
+The formal characterization of the data's autocorrelation structure establishes the statistical foundation for all subsequent trend, change-point, and hypothesis testing analyses. The multi-metric approach enables independent assessment of changes in average storminess (mean EKE), extreme storm intensity (percentiles), and extreme storm frequency (exceedance rate).
+
+```{r}
+# ============================================================================
+# SECTION 1.8: VERIFICATION - EXCEEDANCE FREQUENCY CHECK
+# ============================================================================
+
+cat("\n", rep("-", 40), "\n")
+cat("Verification: Exceedance Frequency During Reference Period\n")
+cat(rep("-", 40), "\n\n")
+
+if ("exceed_p95_freq" %in% names(storm_df)) {
+ # Filter to reference period (1981-2010)
+ ref_period_idx <- storm_df$year >= REFERENCE_PERIOD[1] & 
+                   storm_df$year <= REFERENCE_PERIOD[2]
+ 
+ ref_exceed_freq <- mean(storm_df$exceed_p95_freq[ref_period_idx], na.rm = TRUE)
+ 
+ cat(sprintf("Reference period: %d-%d\n", REFERENCE_PERIOD[1], REFERENCE_PERIOD[2]))
+ cat(sprintf("Mean exceedance frequency: %.4f (%.2f%%)\n", 
+             ref_exceed_freq, ref_exceed_freq * 100))
+ cat(sprintf("Expected (by definition of P95): ~0.05 (5%%)\n"))
+ 
+ if (abs(ref_exceed_freq - 0.05) < 0.01) {
+   cat("✓ VERIFICATION PASSED: Exceedance frequency is approximately 5%%\n")
+ } else {
+   cat("⚠ WARNING: Exceedance frequency deviates from expected 5%%\n")
+   cat("  This may indicate an issue with the P95 climatology calculation\n")
+ }
+} else {
+ cat("  (exceed_p95_freq not available for verification)\n")
+}
+```
+
+```{r}
+# ============================================================================
+# SECTION 1.9: SAVE PREPARED DATA
+# ============================================================================
+
+cat("\n", rep("-", 40), "\n")
+cat("Saving prepared data objects...\n")
+
+# Create output directory if needed
+output_dir <- file.path(DATA_DIRECTORY, "analysis_ready")
+if (!dir.exists(output_dir)) {
+ dir.create(output_dir, recursive = TRUE)
+}
+
+# Save R objects for use in subsequent phases
+save(
+ # Coordinate data
+ lat, lon, lat_arctic, time_dates,
+ 
+ # Gridded data (Arctic subset)
+ metrics_arctic,
+ 
+ # Area-weighted time series
+ ts_weighted, ts_objects,
+ 
+ # Master data frame
+ storm_df,
+ 
+ # ACF results
+ acf_results,
+ 
+ # Summary statistics
+ summary_stats,
+ 
+ # Climatological threshold (if available)
+ eke_p95_clim,
+ 
+ # Configuration
+ ARCTIC_LAT_THRESHOLD, REFERENCE_PERIOD,
+ 
+ file = file.path(output_dir, "Phase1_Prepared_Data.RData")
+)
+
+cat(sprintf("  ✓ Saved to: %s\n", file.path(output_dir, "Phase1_Prepared_Data.RData")))
+
+# Also save storm_df as CSV for inspection
+write_csv(storm_df, file.path(output_dir, "storm_metrics_panarctic_monthly.csv"))
+cat(sprintf("  ✓ Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_monthly.csv")))
+```
+
+```{r}
+# ============================================================================
+# SECTION 1.10: DIAGNOSTIC PLOTS
+# ============================================================================
+
+cat("\n", rep("-", 40), "\n")
+cat("Generating diagnostic plots...\n")
+
+# Create figures directory
+fig_dir <- here::here("Figures", "Phase1_Diagnostics")
+if (!dir.exists(fig_dir)) {
+ dir.create(fig_dir, recursive = TRUE)
+}
+
+# --- Plot 1: Time Series Overview (All Metrics) ---
+p1 <- storm_df %>%
+ pivot_longer(cols = all_of(names(ts_weighted)),
+              names_to = "metric",
+              values_to = "value") %>%
+ mutate(metric = factor(metric, levels = c("eke_mean", "eke_p90", "eke_p95", 
+                                           "eke_p99", "exceed_p95_freq"))) %>%
+ ggplot(aes(x = date, y = value)) +
+ geom_line(color = "#0072B2", alpha = 0.7, linewidth = 0.3) +
+ geom_smooth(method = "loess", span = 0.1, color = "#D55E00", 
+             se = FALSE, linewidth = 0.8) +
+ facet_wrap(~ metric, scales = "free_y", ncol = 1) +
+ labs(
+   title = "Pan-Arctic (≥60°N) Storminess Metrics (1958-2024)",
+   subtitle = "Monthly values with LOESS smoother",
+   x = "Date",
+   y = "Value"
+ ) +
+ theme_bw(base_size = 12) +
+ theme(
+   plot.title = element_text(face = "bold"),
+   strip.text = element_text(face = "bold")
+ )
+
+ggsave(file.path(fig_dir, "Fig1_All_Metrics_TimeSeries.png"),
+      p1, width = 12, height = 14, dpi = 300)
+cat("  ✓ Saved: Fig1_All_Metrics_TimeSeries.png\n")
+
+# --- Plot 2: ACF for Primary Metric (eke_mean) ---
+png(file.path(fig_dir, "Fig2_ACF_eke_mean.png"), 
+   width = 10, height = 6, units = "in", res = 300)
+acf(ts_objects$eke_mean, lag.max = 36,
+   main = "Autocorrelation Function: Pan-Arctic Mean EKE (1958-2024)",
+   xlab = "Lag (months)",
+   ylab = "ACF")
+dev.off()
+cat("  ✓ Saved: Fig2_ACF_eke_mean.png\n")
+
+# --- Plot 3: Seasonal Boxplots ---
+p3 <- storm_df %>%
+ mutate(season = factor(season, levels = c("DJF", "MAM", "JJA", "SON"))) %>%
+ ggplot(aes(x = season, y = eke_mean, fill = season)) +
+ geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+ scale_fill_manual(values = c("DJF" = "#4575B4", "MAM" = "#91CF60",
+                              "JJA" = "#FC8D59", "SON" = "#D73027")) +
+ labs(
+   title = "Seasonal Distribution of Mean EKE (1958-2024)",
+   subtitle = "Pan-Arctic (≥60°N)",
+   x = "Season",
+   y = expression("Mean EKE [m"^2*"/s"^2*"]")
+ ) +
+ theme_bw(base_size = 14) +
+ theme(legend.position = "none",
+       plot.title = element_text(face = "bold"))
+
+ggsave(file.path(fig_dir, "Fig3_Seasonal_Boxplot.png"),
+      p3, width = 8, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig3_Seasonal_Boxplot.png\n")
+
+# --- Plot 4: Annual Means ---
+annual_means <- storm_df %>%
+ group_by(year) %>%
+ summarise(
+   eke_mean = mean(eke_mean, na.rm = TRUE),
+   eke_p95 = mean(eke_p95, na.rm = TRUE),
+   exceed_p95_freq = mean(exceed_p95_freq, na.rm = TRUE),
+   .groups = "drop"
+ )
+
+p4 <- ggplot(annual_means, aes(x = year, y = eke_mean)) +
+ geom_point(color = "#0072B2", alpha = 0.6, size = 2) +
+ geom_line(color = "#0072B2", alpha = 0.8, linewidth = 0.6) +
+ geom_smooth(method = "lm", color = "#D55E00", se = TRUE, 
+             fill = "#D55E00", alpha = 0.2) +
+ labs(
+   title = "Annual Mean EKE (1958-2024)",
+   subtitle = "Pan-Arctic (≥60°N) | Linear trend shown for reference",
+   x = "Year",
+   y = expression("Annual Mean EKE [m"^2*"/s"^2*"]")
+ ) +
+ scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+ theme_bw(base_size = 14) +
+ theme(plot.title = element_text(face = "bold"))
+
+ggsave(file.path(fig_dir, "Fig4_Annual_Mean_EKE.png"),
+      p4, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig4_Annual_Mean_EKE.png\n")
+
+# ============================================================================
+# FINAL SUMMARY
+# ============================================================================
+
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 1 COMPLETE: FOUNDATIONAL ANALYSIS\n")
+cat(rep("=", 70), "\n\n")
+
+cat("Data Summary:\n")
+cat(sprintf("  Time period: %s to %s\n", 
+           format(min(time_dates), "%Y-%m"), 
+           format(max(time_dates), "%Y-%m")))
+cat(sprintf("  Spatial domain: %.1f°N to %.1f°N (Core Arctic)\n",
+           min(lat_arctic), max(lat_arctic)))
+cat(sprintf("  Total months: %d\n", nrow(storm_df)))
+cat(sprintf("  Metrics analyzed: %d\n", length(ts_weighted)))
+
+cat("\nKey Findings:\n")
+for (metric in c("eke_mean", "eke_p95", "exceed_p95_freq")) {
+ if (metric %in% names(acf_results)) {
+   rho1 <- acf_results[[metric]]$acf[2]
+   cat(sprintf("  %s: ρ₁ = %.3f %s\n", 
+               metric, rho1,
+               ifelse(abs(rho1) > 0.1, "(significant autocorrelation)", "")))
+ }
+}
+
+cat("\nNext Steps:\n")
+cat("  1. Load Phase1_Prepared_Data.RData in subsequent phases\n")
+cat("  2. Run Phase 2: Trend Analysis using ts_objects$eke_mean as PRIMARY metric\n")
+cat("  3. Repeat Phase 2 for percentile metrics (eke_p95, eke_p99, exceed_p95_freq)\n")
+cat("  4. Apply spatial analysis to metrics_arctic arrays\n")
+
+cat("\n", rep("=", 70), "\n")
+cat("READY FOR PHASE 2 ANALYSIS\n")
+cat(rep("=", 70), "\n\n")
+
+
+```
+
 
 # Phase 2: Core Trend and Change-Point Analysis
 
-Following the foundational analysis and the critical confirmation of significant temporal autocorrelation, this phase details the primary quantitative analysis of long-term change in the Pan-Arctic storminess index. \[cite_start\]The methodological framework explicitly rejects the use of Ordinary Least Squares (OLS) regression for significance testing, as the presence of strong serial correlation ($\rho_1 = 0.540$) violates its core assumption of independent residuals, which would lead to artificially inflated significance levels\[cite: 6086\].
+Following the foundational analysis and the critical confirmation of significant temporal autocorrelation, this phase details the primary quantitative analysis of long-term change in the Pan-Arctic storminess index. The methodological framework explicitly rejects the use of Ordinary Least Squares (OLS) regression for significance testing, as the presence of strong serial correlation ($\rho_1 = 0.540$) violates its core assumption of independent residuals, which would lead to artificially inflated significance levels.
 
-\[cite_start\]Instead, this analysis employs a robust, non-parametric framework that separates the assessment of trend **significance** from the estimation of trend **magnitude**, ensuring the results are statistically defensible and meet modern standards of rigor in climate science\[cite: 6082, 6084\].
+Instead, this analysis employs a robust, non-parametric framework that separates the assessment of trend **significance** from the estimation of trend **magnitude**, ensuring the results are statistically defensible and meet modern standards of rigor in climate science.
+
+```{r}
+# Load prepared data from Phase 1
+data_file <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
+# This loads:
+#   - storm_df          : Master data frame with all metrics
+#   - ts_objects        : List of ts objects for each metric
+#   - metrics_arctic    : List of 3D arrays [time, lat, lon] for spatial analysis
+#   - acf_results       : ACF results for autocorrelation reference
+#   - lat_arctic, lon   : Coordinate vectors
+#   - time_dates        : Date vector
+#   - summary_stats     : Descriptive statistics table
+
+if (!file.exists(data_file)) {
+  stop(glue("
+    ERROR: Phase 1 data not found!
+    Expected: {data_file}
+    
+    Please run Phase 1 script first.
+  "))
+}
+
+load(data_file)
+cat("✓ Loaded Phase 1 prepared data\n\n")
+
+# Define output directories
+results_dir <- here::here("Data", "processed", "trend_results")
+fig_dir <- here::here("Figures", "Phase2_Trends")
+if (!dir.exists(results_dir)) dir.create(results_dir, recursive = TRUE)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+# Metrics to analyze (in order of priority)
+METRICS_TO_ANALYZE <- c(
+  "eke_mean",         # PRIMARY
+  "eke_p95",          # Extreme intensity
+  "eke_p99",          # Extreme intensity (more extreme)
+  "exceed_p95_freq"   # Extreme frequency
+)
+
+# Bootstrap parameters
+N_BOOTSTRAP <- 5000
+BLOCK_LENGTH_MONTHLY <- 12  # For monthly data
+BLOCK_LENGTH_ANNUAL <- 3    # For annual data
+
+# Significance level
+ALPHA <- 0.05
+```
+
 
 ## 2.1 Pan-Arctic Trend Analysis
 
@@ -787,397 +1402,397 @@ To determine if the overall spatial pattern of trends was distinguishable from r
     -   Crucially, the **same sequence** of resampled blocks was applied to every grid cell. This procedure breaks the long-term temporal trend while preserving the data's natural seasonality and, most importantly, its inherent **spatial covariance structure**.
     -   The full grid-point trend analysis (pre-whitening + MK test) was run on each of the 500 surrogate fields.
     -   For each run, the total number of grid cells with a p-value \< 0.05 was counted. This created a null distribution of how many significant cells are expected purely by random chance.
-    -   The number of significant cells found in the *actual* data (250) was then compared to this null distribution to calculate the final field significance p-value.
-zz
-```{r}
-# ============================================================================
-# PHASE 2.2: SPATIAL TREND ANALYSIS - FULL DOMAIN (56-90°N)
-# ============================================================================
-################################################################################
-# Spatial trend analysis with robust pre-whitening + FDR + Monte-Carlo field
-# significance (block-resampling preserving spatial covariance).
-#
-# Inputs expected in workspace:
-#    - storminess : array [time, lat, lon] (monthly storminess, truncated to 1958-2024)
-#    - lat        : numeric vector (length = n_lat)
-#    - lon        : numeric vector (length = n_lon)
-#    - time_dates : Date vector (length = n_time) (optional)
-#
-# Outputs :
-#    - E:/ERA5_data/processed/storminess_trend_slope_full_1958-2024.nc
-#    - E:/ERA5_data/processed/storminess_trend_pvalue_full_1958-2024.nc
-#    - E:/ERA5_data/processed/storminess_lag1autocorr_full_1958-2024.nc
-#    - E:/ERA5_data/processed/storminess_trend_counts_mc.RDS    (Monte-Carlo summary)
-################################################################################
+    -   The number of significant cells found in the *actual* data (250) was then compared to this null distribution to calculate the final field significance p-value. zz
 
-# -------------------------
-# Config / user options
-# -------------------------
-processed_dir <- "E:/ERA5_data/processed"
-slope_path <- file.path(processed_dir, "storminess_trend_slope_full_1958-2024.nc")
-pval_path  <- file.path(processed_dir, "storminess_trend_pvalue_full_1958-2024.nc")
-rho1_path  <- file.path(processed_dir, "storminess_lag1autocorr_full_1958-2024.nc")
-mc_summary_path <- file.path(processed_dir, "storminess_trend_counts_mc.RDS")
+    ```{r}
+    # ============================================================================
+    # PHASE 2.2: SPATIAL TREND ANALYSIS - FULL DOMAIN (56-90°N)
+    # ============================================================================
+    ################################################################################
+    # Spatial trend analysis with robust pre-whitening + FDR + Monte-Carlo field
+    # significance (block-resampling preserving spatial covariance).
+    #
+    # Inputs expected in workspace:
+    #    - storminess : array [time, lat, lon] (monthly storminess, truncated to 1958-2024)
+    #    - lat        : numeric vector (length = n_lat)
+    #    - lon        : numeric vector (length = n_lon)
+    #    - time_dates : Date vector (length = n_time) (optional)
+    #
+    # Outputs :
+    #    - E:/ERA5_data/processed/storminess_trend_slope_full_1958-2024.nc
+    #    - E:/ERA5_data/processed/storminess_trend_pvalue_full_1958-2024.nc
+    #    - E:/ERA5_data/processed/storminess_lag1autocorr_full_1958-2024.nc
+    #    - E:/ERA5_data/processed/storminess_trend_counts_mc.RDS    (Monte-Carlo summary)
+    ################################################################################
 
-min_coverage_frac <- 0.80    # require at least 80% valid months to analyze a grid cell
-min_length_for_mk  <- 8      # minimal length to run Mann-Kendall
-min_length_for_acf <- 12     # minimal length to estimate AR(1)
-fdr_alpha <- 0.05
+    # -------------------------
+    # Config / user options
+    # -------------------------
+    processed_dir <- "E:/ERA5_data/processed"
+    slope_path <- file.path(processed_dir, "storminess_trend_slope_full_1958-2024.nc")
+    pval_path  <- file.path(processed_dir, "storminess_trend_pvalue_full_1958-2024.nc")
+    rho1_path  <- file.path(processed_dir, "storminess_lag1autocorr_full_1958-2024.nc")
+    mc_summary_path <- file.path(processed_dir, "storminess_trend_counts_mc.RDS")
 
-# Monte Carlo options
-do_montecarlo <- TRUE
-n_mc <- 500              # number of Monte Carlo resamples (500-1000 typical)
-block_length <- 12       # block length in months (preserves seasonal-like blocks). adjust if desired
-n_cores <- max(1, parallel::detectCores() - 1)  # cores for parallel MC
+    min_coverage_frac <- 0.80    # require at least 80% valid months to analyze a grid cell
+    min_length_for_mk  <- 8      # minimal length to run Mann-Kendall
+    min_length_for_acf <- 12     # minimal length to estimate AR(1)
+    fdr_alpha <- 0.05
 
-# Packages (load here)
-required_pkgs <- c("trend", "ncdf4", "zoo", "foreach", "doParallel", "pbapply")
-missing_pkgs <- required_pkgs[!(required_pkgs %in% installed.packages()[, "Package"])]
-if (length(missing_pkgs)) stop("Install required packages first: ", paste(missing_pkgs, collapse = ", "))
+    # Monte Carlo options
+    do_montecarlo <- TRUE
+    n_mc <- 500              # number of Monte Carlo resamples (500-1000 typical)
+    block_length <- 12       # block length in months (preserves seasonal-like blocks). adjust if desired
+    n_cores <- max(1, parallel::detectCores() - 1)  # cores for parallel MC
 
-library(trend); library(ncdf4); library(zoo)
-library(foreach); library(doParallel); library(pbapply)
+    # Packages (load here)
+    required_pkgs <- c("trend", "ncdf4", "zoo", "foreach", "doParallel", "pbapply")
+    missing_pkgs <- required_pkgs[!(required_pkgs %in% installed.packages()[, "Package"])]
+    if (length(missing_pkgs)) stop("Install required packages first: ", paste(missing_pkgs, collapse = ", "))
 
-# Create processed dir (if not exists)
-if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
+    library(trend); library(ncdf4); library(zoo)
+    library(foreach); library(doParallel); library(pbapply)
 
-# -------------------------
-# Helper: load data if not present
-# -------------------------
-if (!exists("storminess") || !exists("lat") || !exists("lon")) {
-  cat("storminess/lat/lon not found in workspace. Attempting to load from NetCDF (storminess file)...\n")
-  storm_path <- file.path(processed_dir, "ERA5_storminess_index_monthly_1958-2024.nc")
-  if (!file.exists(storm_path)) stop("Cannot find storminess file: ", storm_path)
-  nc <- nc_open(storm_path)
-  storminess <- ncvar_get(nc, "storminess_index")
-  # storminess may be [lon, lat, time] as you described earlier - detect and transpose if needed
-  dims_nc <- names(nc$dim)
-  nc_close(nc)
-  # If storminess dim order is [lon, lat, time], transform to [time, lat, lon]
-  if (length(dim(storminess)) == 3 && dim(storminess)[1] == length(lon) && dim(storminess)[2] == length(lat)) {
-    # assume current order is [lon, lat, time] -> permute to [time, lat, lon]
-    storminess <- aperm(storminess, c(3, 2, 1))
-  }
-  # If time vector available in file, user should have set time_dates; otherwise we skip time-dependent checks
-}
+    # Create processed dir (if not exists)
+    if (!dir.exists(processed_dir)) dir.create(processed_dir, recursive = TRUE)
 
-# Validate dims
-if (length(dim(storminess)) != 3) stop("storminess must be a 3D array [time, lat, lon]")
-n_time <- dim(storminess)[1]; n_lat <- dim(storminess)[2]; n_lon <- dim(storminess)[3]
-cat(sprintf("Data loaded: time=%d, lat=%d, lon=%d\n", n_time, n_lat, n_lon))
-
-# -------------------------
-# Skip major processing if outputs exist
-# -------------------------
-outputs_exist <- file.exists(slope_path) && file.exists(pval_path) && file.exists(rho1_path)
-if (outputs_exist && (!do_montecarlo || file.exists(mc_summary_path))) {
-  
-  cat("All output files already exist. Skipping computation.\n")
-  cat("If you want to force re-run, delete the output files and run again.\n")
-  
-  # Load existing results instead of quitting
-  nc <- nc_open(slope_path)
-  slope_grid <- ncvar_get(nc, "trend_slope"); lat <- ncvar_get(nc, "latitude"); lon <- ncvar_get(nc, "longitude")
-  nc_close(nc)
-  
-  pval_grid <- ncvar_get(nc_open(pval_path), "p_value")
-  rho1_grid <- ncvar_get(nc_open(rho1_path), "lag1_autocorr")
-  
-  if (file.exists(mc_summary_path)) {
-    mc_results <- readRDS(mc_summary_path)
-  } else {
-    mc_results <- NULL
-  }
-  
-  cat("Existing results loaded into workspace.\n")
-  # Make sure results stay in the global environment
-  assign("slope_grid", slope_grid, envir = .GlobalEnv)
-  assign("pval_grid",  pval_grid,  envir = .GlobalEnv)
-  assign("rho1_grid",  rho1_grid,  envir = .GlobalEnv)
-  assign("mc_results", mc_results, envir = .GlobalEnv)
-
-  # *** MODIFICATION: Removed the stop() command. ***
-  # The script will now jump to the end of the 'else' block.
-
-} else {
-  
-  # *** MODIFICATION: All calculations are now inside this 'else' block ***
-
-  # -------------------------
-  # Pre-alloc output grids
-  # -------------------------
-  slope_grid <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)   # lat x lon
-  pval_grid  <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)
-  rho1_grid  <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)
-  
-  # -------------------------
-  # Main grid loop (serial, robust)
-  # -------------------------
-  cat("Starting grid-cell trend analysis (serial loop) ...\n")
-  start_time <- Sys.time()
-  cells_processed <- 0
-  cells_with_data <- 0
-  
-  for (i in seq_len(n_lat)) {
-    for (j in seq_len(n_lon)) {
-      ts_cell <- storminess[, i, j]     # time, scalar
-      
-      # Skip fully NA cells (likely land/outside mask)
-      if (all(is.na(ts_cell))) next
-      
-      # Require minimal coverage
-      valid_frac <- sum(!is.na(ts_cell)) / length(ts_cell)
-      if (valid_frac < min_coverage_frac) next
-      
-      # Fill small gaps (linear interp), then locf to fill ends
-      if (any(is.na(ts_cell))) {
-        ts_cell <- tryCatch({
-          tmp <- na.approx(ts_cell, na.rm = FALSE)
-          tmp <- na.locf(tmp, na.rm = FALSE)
-          tmp <- na.locf(tmp, fromLast = TRUE, na.rm = FALSE)
-          tmp
-        }, error = function(e) NA)
-        if (any(is.na(ts_cell))) next
+    # -------------------------
+    # Helper: load data if not present
+    # -------------------------
+    if (!exists("storminess") || !exists("lat") || !exists("lon")) {
+      cat("storminess/lat/lon not found in workspace. Attempting to load from NetCDF (storminess file)...\n")
+      storm_path <- file.path(processed_dir, "ERA5_storminess_index_monthly_1958-2024.nc")
+      if (!file.exists(storm_path)) stop("Cannot find storminess file: ", storm_path)
+      nc <- nc_open(storm_path)
+      storminess <- ncvar_get(nc, "storminess_index")
+      # storminess may be [lon, lat, time] as you described earlier - detect and transpose if needed
+      dims_nc <- names(nc$dim)
+      nc_close(nc)
+      # If storminess dim order is [lon, lat, time], transform to [time, lat, lon]
+      if (length(dim(storminess)) == 3 && dim(storminess)[1] == length(lon) && dim(storminess)[2] == length(lat)) {
+        # assume current order is [lon, lat, time] -> permute to [time, lat, lon]
+        storminess <- aperm(storminess, c(3, 2, 1))
       }
-      
-      cells_with_data <- cells_with_data + 1
-      
-      # Robust lag-1 ACF
-      rho1 <- NA_real_
-      if (length(ts_cell) >= min_length_for_acf && var(ts_cell, na.rm = TRUE) > 0) {
-        acf_res <- tryCatch(acf(ts_cell, lag.max = 1, plot = FALSE, na.action = na.pass), error = function(e) NULL)
-        if (!is.null(acf_res) && length(acf_res$acf) >= 2) rho1 <- as.numeric(acf_res$acf[2])
-      }
-      rho1_grid[i, j] <- rho1
-      
-      # Pre-whitening if meaningful
-      n <- length(ts_cell)
-      if (is.na(rho1) || n < min_length_for_acf) {
-        pw_ts <- ts_cell
-      } else {
-        pw_ts <- ts_cell[2:n] - rho1 * ts_cell[1:(n-1)]
-      }
-      
-      # Mann-Kendall on pw series (if long enough)
-      if (length(pw_ts) >= min_length_for_mk) {
-        mk_res <- tryCatch(mk.test(pw_ts), error = function(e) NULL)
-        if (!is.null(mk_res)) pval_grid[i, j] <- mk_res$p.value
-      } else {
-        pval_grid[i, j] <- NA_real_
-      }
-      
-      # Sen's slope on original (robust magnitude), convert to per-decade
-      sens <- tryCatch(sens.slope(ts_cell), error = function(e) NULL)
-      if (!is.null(sens) && !is.na(sens$estimates)) {
-        slope_grid[i, j] <- as.numeric(sens$estimates) * 12 * 10
-      } else {
-        slope_grid[i, j] <- NA_real_
-      }
-      
-      cells_processed <- cells_processed + 1
+      # If time vector available in file, user should have set time_dates; otherwise we skip time-dependent checks
     }
-    if (i %% 3 == 0) {
-      elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "mins"))
-      cat(sprintf("  Row %3d/%3d | processed-cells: %4d | rows elapsed: %.1f min\n", i, n_lat, cells_with_data, elapsed))
-    }
-  }
-  
-  end_time <- Sys.time()
-  cat(sprintf("Grid loop complete. Runtime: %.1f minutes\n", difftime(end_time, start_time, units = "mins")))
-  
-  # -------------------------
-  # Summary & FDR correction
-  # -------------------------
-  # How many p-values are below nominal alpha?
-  valid_pvals <- !is.na(pval_grid)
-  n_total_pvals <- sum(valid_pvals)
-  n_nominal_sig <- sum(pval_grid[valid_pvals] < 0.05, na.rm = TRUE)
-  cat(sprintf("Nominal significant cells (p<0.05): %d / %d (%.2f%%)\n",
-              n_nominal_sig, n_total_pvals, 100 * n_nominal_sig / n_total_pvals))
-  
-  # FDR (Benjamini-Hochberg)
-  pvec <- as.vector(pval_grid)
-  valid_idx <- which(!is.na(pvec))
-  adj_pvec <- rep(NA_real_, length(pvec))
-  if (length(valid_idx) > 0) {
-    adj_pvec[valid_idx] <- p.adjust(pvec[valid_idx], method = "BH")
-  }
-  adj_pval_grid <- matrix(adj_pvec, nrow = n_lat, ncol = n_lon)
-  n_fdr_sig <- sum(adj_pval_grid < fdr_alpha, na.rm = TRUE)
-  cat(sprintf("FDR-significant cells (q<%.2f): %d / %d (%.2f%%)\n",
-              fdr_alpha, n_fdr_sig, n_total_pvals, 100 * n_fdr_sig / n_total_pvals))
-  
-  # -------------------------
-  # Monte Carlo field-significance via block resampling (preserves spatial covariance)
-  # -------------------------
-  mc_results <- list()
-  if (do_montecarlo) {
-    cat("Starting Monte Carlo field-significance test (block-resampling)...\n")
-    cat(sprintf(" n_mc = %d, block_length = %d months, n_cores = %d\n", n_mc, block_length, n_cores))
-    
-    # Observed count to compare to MC:
-    observed_count <- n_nominal_sig
-    
-    # Build list of block start indices (non-overlapping block positions)
-    # We'll create surrogate time series by sampling blocks with replacement,
-    # using the same block sequence for every grid cell (keeps spatial covariance).
-    n_blocks <- ceiling(n_time / block_length)
-    block_starts <- seq(1, n_time, by = block_length)
-    
-    # Create vector of block indices (start positions) used to slice original times
-    all_block_idx <- lapply(block_starts, function(s) {
-      end_idx <- min(n_time, s + block_length - 1)
-      seq(s, end_idx)
-    })
-    # To allow uniform sampling, ensure each block has exactly block_length by wrapping (circular)
-    block_series <- lapply(block_starts, function(s) {
-      idx <- seq(s, s + block_length - 1)
-      ((idx - 1) %% n_time) + 1
-    })
-    
-    # Parallel cluster for MC
-    cl <- makeCluster(min(n_cores, parallel::detectCores()))
-    registerDoParallel(cl)
-    on.exit({
-      stopCluster(cl)
-      registerDoSEQ()
-    }, add = TRUE)
-    
-    # Function to build surrogate by sampling blocks (same block sequence applied to all grid cells)
-    build_surrogate_indices <- function() {
-      chosen_blocks <- sample(seq_along(block_series), size = n_blocks, replace = TRUE)
-      idx_concat <- unlist(block_series[chosen_blocks])
-      # keep first n_time elements
-      idx_concat[1:n_time]
-    }
-    
-    # MC loop (parallel)
-    mc_counts <- foreach(iter = seq_len(n_mc), .packages = c("trend", "zoo"), .combine = c) %dopar% {
-      # build time index for surrogate
-      idx_surr <- build_surrogate_indices()
+
+    # Validate dims
+    if (length(dim(storminess)) != 3) stop("storminess must be a 3D array [time, lat, lon]")
+    n_time <- dim(storminess)[1]; n_lat <- dim(storminess)[2]; n_lon <- dim(storminess)[3]
+    cat(sprintf("Data loaded: time=%d, lat=%d, lon=%d\n", n_time, n_lat, n_lon))
+
+    # -------------------------
+    # Skip major processing if outputs exist
+    # -------------------------
+    outputs_exist <- file.exists(slope_path) && file.exists(pval_path) && file.exists(rho1_path)
+    if (outputs_exist && (!do_montecarlo || file.exists(mc_summary_path))) {
       
-      # Build surrogate field by reindexing time dimension
-      # This reorders the time slices identically for all grid cells (preserves spatial covariance)
-      surr_field <- storminess[idx_surr, , , drop = FALSE]
+      cat("All output files already exist. Skipping computation.\n")
+      cat("If you want to force re-run, delete the output files and run again.\n")
       
-      # For performance, compute trends only for valid cells (same mask from original)
-      # We'll reproduce the same analysis: gap-fill small holes using same routine,
-      # then compute MK on pre-whitened series (if length >= min) and Sen's slope for magnitude,
-      # and count how many have p < 0.05.
-      surr_pvals <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)
+      # Load existing results instead of quitting
+      nc <- nc_open(slope_path)
+      slope_grid <- ncvar_get(nc, "trend_slope"); lat <- ncvar_get(nc, "latitude"); lon <- ncvar_get(nc, "longitude")
+      nc_close(nc)
       
-      for (ii in seq_len(n_lat)) {
-        for (jj in seq_len(n_lon)) {
-          ts_s <- surr_field[, ii, jj]
-          if (all(is.na(ts_s))) next
-          valid_frac_s <- sum(!is.na(ts_s)) / length(ts_s)
-          if (valid_frac_s < min_coverage_frac) next
-          if (any(is.na(ts_s))) {
-            ts_s <- tryCatch({
-              tmp <- na.approx(ts_s, na.rm = FALSE)
+      pval_grid <- ncvar_get(nc_open(pval_path), "p_value")
+      rho1_grid <- ncvar_get(nc_open(rho1_path), "lag1_autocorr")
+      
+      if (file.exists(mc_summary_path)) {
+        mc_results <- readRDS(mc_summary_path)
+      } else {
+        mc_results <- NULL
+      }
+      
+      cat("Existing results loaded into workspace.\n")
+      # Make sure results stay in the global environment
+      assign("slope_grid", slope_grid, envir = .GlobalEnv)
+      assign("pval_grid",  pval_grid,  envir = .GlobalEnv)
+      assign("rho1_grid",  rho1_grid,  envir = .GlobalEnv)
+      assign("mc_results", mc_results, envir = .GlobalEnv)
+
+      # *** MODIFICATION: Removed the stop() command. ***
+      # The script will now jump to the end of the 'else' block.
+
+    } else {
+      
+      # *** MODIFICATION: All calculations are now inside this 'else' block ***
+
+      # -------------------------
+      # Pre-alloc output grids
+      # -------------------------
+      slope_grid <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)   # lat x lon
+      pval_grid  <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)
+      rho1_grid  <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)
+      
+      # -------------------------
+      # Main grid loop (serial, robust)
+      # -------------------------
+      cat("Starting grid-cell trend analysis (serial loop) ...\n")
+      start_time <- Sys.time()
+      cells_processed <- 0
+      cells_with_data <- 0
+      
+      for (i in seq_len(n_lat)) {
+        for (j in seq_len(n_lon)) {
+          ts_cell <- storminess[, i, j]     # time, scalar
+          
+          # Skip fully NA cells (likely land/outside mask)
+          if (all(is.na(ts_cell))) next
+          
+          # Require minimal coverage
+          valid_frac <- sum(!is.na(ts_cell)) / length(ts_cell)
+          if (valid_frac < min_coverage_frac) next
+          
+          # Fill small gaps (linear interp), then locf to fill ends
+          if (any(is.na(ts_cell))) {
+            ts_cell <- tryCatch({
+              tmp <- na.approx(ts_cell, na.rm = FALSE)
               tmp <- na.locf(tmp, na.rm = FALSE)
               tmp <- na.locf(tmp, fromLast = TRUE, na.rm = FALSE)
               tmp
             }, error = function(e) NA)
-            if (any(is.na(ts_s))) next
+            if (any(is.na(ts_cell))) next
           }
-          # acf/rho1
-          rho1_s <- NA_real_
-          if (length(ts_s) >= min_length_for_acf && var(ts_s, na.rm = TRUE) > 0) {
-            acf_res_s <- tryCatch(acf(ts_s, lag.max = 1, plot = FALSE, na.action = na.pass), error = function(e) NULL)
-            if (!is.null(acf_res_s) && length(acf_res_s$acf) >= 2) rho1_s <- as.numeric(acf_res_s$acf[2])
+          
+          cells_with_data <- cells_with_data + 1
+          
+          # Robust lag-1 ACF
+          rho1 <- NA_real_
+          if (length(ts_cell) >= min_length_for_acf && var(ts_cell, na.rm = TRUE) > 0) {
+            acf_res <- tryCatch(acf(ts_cell, lag.max = 1, plot = FALSE, na.action = na.pass), error = function(e) NULL)
+            if (!is.null(acf_res) && length(acf_res$acf) >= 2) rho1 <- as.numeric(acf_res$acf[2])
           }
-          n_s <- length(ts_s)
-          if (is.na(rho1_s) || n_s < min_length_for_acf) {
-            pw_s <- ts_s
+          rho1_grid[i, j] <- rho1
+          
+          # Pre-whitening if meaningful
+          n <- length(ts_cell)
+          if (is.na(rho1) || n < min_length_for_acf) {
+            pw_ts <- ts_cell
           } else {
-            pw_s <- ts_s[2:n_s] - rho1_s * ts_s[1:(n_s-1)]
+            pw_ts <- ts_cell[2:n] - rho1 * ts_cell[1:(n-1)]
           }
-          if (length(pw_s) >= min_length_for_mk) {
-            mk_r <- tryCatch(mk.test(pw_s), error = function(e) NULL)
-            if (!is.null(mk_r)) surr_pvals[ii, jj] <- mk_r$p.value
+          
+          # Mann-Kendall on pw series (if long enough)
+          if (length(pw_ts) >= min_length_for_mk) {
+            mk_res <- tryCatch(mk.test(pw_ts), error = function(e) NULL)
+            if (!is.null(mk_res)) pval_grid[i, j] <- mk_res$p.value
+          } else {
+            pval_grid[i, j] <- NA_real_
           }
+          
+          # Sen's slope on original (robust magnitude), convert to per-decade
+          sens <- tryCatch(sens.slope(ts_cell), error = function(e) NULL)
+          if (!is.null(sens) && !is.na(sens$estimates)) {
+            slope_grid[i, j] <- as.numeric(sens$estimates) * 12 * 10
+          } else {
+            slope_grid[i, j] <- NA_real_
+          }
+          
+          cells_processed <- cells_processed + 1
+        }
+        if (i %% 3 == 0) {
+          elapsed <- as.numeric(difftime(Sys.time(), start_time, units = "mins"))
+          cat(sprintf("  Row %3d/%3d | processed-cells: %4d | rows elapsed: %.1f min\n", i, n_lat, cells_with_data, elapsed))
         }
       }
-      # count nominal p<0.05 (same as observed numerator)
-      sum(surr_pvals < 0.05, na.rm = TRUE)
-    } # end foreach
-    
-    # collect results
-    stopCluster(cl)
-    registerDoSEQ()
-    mc_counts <- unlist(mc_counts)
-    mc_results$counts <- mc_counts
-    mc_results$observed_count <- observed_count
-    mc_results$alpha <- 0.05
-    
-    # compute MC p-value: proportion of MC iterations with count >= observed (two-sided rarely used here)
-    p_mc <- mean(mc_counts >= observed_count)
-    mc_results$p_value <- p_mc
-    mc_results$summary <- list(mean = mean(mc_counts), sd = sd(mc_counts),
-                               quantiles = quantile(mc_counts, probs = c(0.025, 0.5, 0.975)))
-    
-    # Save MC summary to disk
-    saveRDS(mc_results, mc_summary_path)
-    cat(sprintf("Monte Carlo done. Observed significant cells = %d; MC p-value = %.4f\n", observed_count, p_mc))
-  } else {
-    cat("Skipping Monte-Carlo as requested.\n")
-  }
-  
-  # -------------------------
-  # Save NetCDF outputs (latitude x longitude ordering)
-  # -------------------------
-  cat("Saving NetCDF outputs (latitude x longitude ordering)...\n")
-  
-  # Define dims
-  lat_dim <- ncdim_def("latitude", "degrees_north", lat)
-  lon_dim <- ncdim_def("longitude", "degrees_east", lon)
-  
-  # slope variable
-  slope_var <- ncvar_def("trend_slope", "m4 s-4 decade-1", list(lat_dim, lon_dim), -9999.0,
-                         longname = "Sen slope trend (storminess) per decade", prec = "float")
-  nc_slope <- nc_create(slope_path, slope_var)
-  ncvar_put(nc_slope, slope_var, slope_grid)
-  ncatt_put(nc_slope, 0, "title", "Storminess: Sen slope per decade (1958-2024)")
-  ncatt_put(nc_slope, 0, "created_by", Sys.info()[["user"]])
-  ncatt_put(nc_slope, 0, "creation_date", as.character(Sys.time()))
-  nc_close(nc_slope)
-  
-  # pvalue var
-  pval_var <- ncvar_def("p_value", "1", list(lat_dim, lon_dim), -9999.0,
-                        longname = "Pre-whitened Mann-Kendall p-value", prec = "float")
-  nc_pval <- nc_create(pval_path, pval_var)
-  ncvar_put(nc_pval, pval_var, pval_grid)
-  ncatt_put(nc_pval, 0, "note", "Nominal p-values; use FDR-adjusted results for multiple-testing conclusions")
-  nc_close(nc_pval)
-  
-  # rho1 var
-  rho1_var <- ncvar_def("lag1_autocorr", "1", list(lat_dim, lon_dim), -9999.0,
-                        longname = "Lag-1 autocorrelation (rho1)", prec = "float")
-  nc_rho1 <- nc_create(rho1_path, rho1_var)
-  ncvar_put(nc_rho1, rho1_var, rho1_grid)
-  nc_close(nc_rho1)
-  
-  cat("Files saved:\n")
-  cat(" -", slope_path, "\n")
-  cat(" -", pval_path, "\n")
-  cat(" -", rho1_path, "\n")
-  if (do_montecarlo) cat(" -", mc_summary_path, "\n")
-  
-  # -------------------------
-  # Final report summary
-  # -------------------------
-  cat("\nFinal summary:\n")
-  cat(sprintf("Total grid cells (lat*lon): %d\n", n_lat * n_lon))
-  cat(sprintf("Cells with enough data: %d\n", cells_with_data))
-  cat(sprintf("Nominal significant (p<0.05): %d\n", n_nominal_sig))
-  cat(sprintf("FDR-significant (q<%.2f): %d\n", fdr_alpha, n_fdr_sig))
-  if (do_montecarlo) cat(sprintf("Monte-Carlo p-value for field significance (observed count): %.4f\n", mc_results$p_value))
-  
-  cat("\nDone.\n")
+      
+      end_time <- Sys.time()
+      cat(sprintf("Grid loop complete. Runtime: %.1f minutes\n", difftime(end_time, start_time, units = "mins")))
+      
+      # -------------------------
+      # Summary & FDR correction
+      # -------------------------
+      # How many p-values are below nominal alpha?
+      valid_pvals <- !is.na(pval_grid)
+      n_total_pvals <- sum(valid_pvals)
+      n_nominal_sig <- sum(pval_grid[valid_pvals] < 0.05, na.rm = TRUE)
+      cat(sprintf("Nominal significant cells (p<0.05): %d / %d (%.2f%%)\n",
+                  n_nominal_sig, n_total_pvals, 100 * n_nominal_sig / n_total_pvals))
+      
+      # FDR (Benjamini-Hochberg)
+      pvec <- as.vector(pval_grid)
+      valid_idx <- which(!is.na(pvec))
+      adj_pvec <- rep(NA_real_, length(pvec))
+      if (length(valid_idx) > 0) {
+        adj_pvec[valid_idx] <- p.adjust(pvec[valid_idx], method = "BH")
+      }
+      adj_pval_grid <- matrix(adj_pvec, nrow = n_lat, ncol = n_lon)
+      n_fdr_sig <- sum(adj_pval_grid < fdr_alpha, na.rm = TRUE)
+      cat(sprintf("FDR-significant cells (q<%.2f): %d / %d (%.2f%%)\n",
+                  fdr_alpha, n_fdr_sig, n_total_pvals, 100 * n_fdr_sig / n_total_pvals))
+      
+      # -------------------------
+      # Monte Carlo field-significance via block resampling (preserves spatial covariance)
+      # -------------------------
+      mc_results <- list()
+      if (do_montecarlo) {
+        cat("Starting Monte Carlo field-significance test (block-resampling)...\n")
+        cat(sprintf(" n_mc = %d, block_length = %d months, n_cores = %d\n", n_mc, block_length, n_cores))
+        
+        # Observed count to compare to MC:
+        observed_count <- n_nominal_sig
+        
+        # Build list of block start indices (non-overlapping block positions)
+        # We'll create surrogate time series by sampling blocks with replacement,
+        # using the same block sequence for every grid cell (keeps spatial covariance).
+        n_blocks <- ceiling(n_time / block_length)
+        block_starts <- seq(1, n_time, by = block_length)
+        
+        # Create vector of block indices (start positions) used to slice original times
+        all_block_idx <- lapply(block_starts, function(s) {
+          end_idx <- min(n_time, s + block_length - 1)
+          seq(s, end_idx)
+        })
+        # To allow uniform sampling, ensure each block has exactly block_length by wrapping (circular)
+        block_series <- lapply(block_starts, function(s) {
+          idx <- seq(s, s + block_length - 1)
+          ((idx - 1) %% n_time) + 1
+        })
+        
+        # Parallel cluster for MC
+        cl <- makeCluster(min(n_cores, parallel::detectCores()))
+        registerDoParallel(cl)
+        on.exit({
+          stopCluster(cl)
+          registerDoSEQ()
+        }, add = TRUE)
+        
+        # Function to build surrogate by sampling blocks (same block sequence applied to all grid cells)
+        build_surrogate_indices <- function() {
+          chosen_blocks <- sample(seq_along(block_series), size = n_blocks, replace = TRUE)
+          idx_concat <- unlist(block_series[chosen_blocks])
+          # keep first n_time elements
+          idx_concat[1:n_time]
+        }
+        
+        # MC loop (parallel)
+        mc_counts <- foreach(iter = seq_len(n_mc), .packages = c("trend", "zoo"), .combine = c) %dopar% {
+          # build time index for surrogate
+          idx_surr <- build_surrogate_indices()
+          
+          # Build surrogate field by reindexing time dimension
+          # This reorders the time slices identically for all grid cells (preserves spatial covariance)
+          surr_field <- storminess[idx_surr, , , drop = FALSE]
+          
+          # For performance, compute trends only for valid cells (same mask from original)
+          # We'll reproduce the same analysis: gap-fill small holes using same routine,
+          # then compute MK on pre-whitened series (if length >= min) and Sen's slope for magnitude,
+          # and count how many have p < 0.05.
+          surr_pvals <- matrix(NA_real_, nrow = n_lat, ncol = n_lon)
+          
+          for (ii in seq_len(n_lat)) {
+            for (jj in seq_len(n_lon)) {
+              ts_s <- surr_field[, ii, jj]
+              if (all(is.na(ts_s))) next
+              valid_frac_s <- sum(!is.na(ts_s)) / length(ts_s)
+              if (valid_frac_s < min_coverage_frac) next
+              if (any(is.na(ts_s))) {
+                ts_s <- tryCatch({
+                  tmp <- na.approx(ts_s, na.rm = FALSE)
+                  tmp <- na.locf(tmp, na.rm = FALSE)
+                  tmp <- na.locf(tmp, fromLast = TRUE, na.rm = FALSE)
+                  tmp
+                }, error = function(e) NA)
+                if (any(is.na(ts_s))) next
+              }
+              # acf/rho1
+              rho1_s <- NA_real_
+              if (length(ts_s) >= min_length_for_acf && var(ts_s, na.rm = TRUE) > 0) {
+                acf_res_s <- tryCatch(acf(ts_s, lag.max = 1, plot = FALSE, na.action = na.pass), error = function(e) NULL)
+                if (!is.null(acf_res_s) && length(acf_res_s$acf) >= 2) rho1_s <- as.numeric(acf_res_s$acf[2])
+              }
+              n_s <- length(ts_s)
+              if (is.na(rho1_s) || n_s < min_length_for_acf) {
+                pw_s <- ts_s
+              } else {
+                pw_s <- ts_s[2:n_s] - rho1_s * ts_s[1:(n_s-1)]
+              }
+              if (length(pw_s) >= min_length_for_mk) {
+                mk_r <- tryCatch(mk.test(pw_s), error = function(e) NULL)
+                if (!is.null(mk_r)) surr_pvals[ii, jj] <- mk_r$p.value
+              }
+            }
+          }
+          # count nominal p<0.05 (same as observed numerator)
+          sum(surr_pvals < 0.05, na.rm = TRUE)
+        } # end foreach
+        
+        # collect results
+        stopCluster(cl)
+        registerDoSEQ()
+        mc_counts <- unlist(mc_counts)
+        mc_results$counts <- mc_counts
+        mc_results$observed_count <- observed_count
+        mc_results$alpha <- 0.05
+        
+        # compute MC p-value: proportion of MC iterations with count >= observed (two-sided rarely used here)
+        p_mc <- mean(mc_counts >= observed_count)
+        mc_results$p_value <- p_mc
+        mc_results$summary <- list(mean = mean(mc_counts), sd = sd(mc_counts),
+                                   quantiles = quantile(mc_counts, probs = c(0.025, 0.5, 0.975)))
+        
+        # Save MC summary to disk
+        saveRDS(mc_results, mc_summary_path)
+        cat(sprintf("Monte Carlo done. Observed significant cells = %d; MC p-value = %.4f\n", observed_count, p_mc))
+      } else {
+        cat("Skipping Monte-Carlo as requested.\n")
+      }
+      
+      # -------------------------
+      # Save NetCDF outputs (latitude x longitude ordering)
+      # -------------------------
+      cat("Saving NetCDF outputs (latitude x longitude ordering)...\n")
+      
+      # Define dims
+      lat_dim <- ncdim_def("latitude", "degrees_north", lat)
+      lon_dim <- ncdim_def("longitude", "degrees_east", lon)
+      
+      # slope variable
+      slope_var <- ncvar_def("trend_slope", "m4 s-4 decade-1", list(lat_dim, lon_dim), -9999.0,
+                             longname = "Sen slope trend (storminess) per decade", prec = "float")
+      nc_slope <- nc_create(slope_path, slope_var)
+      ncvar_put(nc_slope, slope_var, slope_grid)
+      ncatt_put(nc_slope, 0, "title", "Storminess: Sen slope per decade (1958-2024)")
+      ncatt_put(nc_slope, 0, "created_by", Sys.info()[["user"]])
+      ncatt_put(nc_slope, 0, "creation_date", as.character(Sys.time()))
+      nc_close(nc_slope)
+      
+      # pvalue var
+      pval_var <- ncvar_def("p_value", "1", list(lat_dim, lon_dim), -9999.0,
+                            longname = "Pre-whitened Mann-Kendall p-value", prec = "float")
+      nc_pval <- nc_create(pval_path, pval_var)
+      ncvar_put(nc_pval, pval_var, pval_grid)
+      ncatt_put(nc_pval, 0, "note", "Nominal p-values; use FDR-adjusted results for multiple-testing conclusions")
+      nc_close(nc_pval)
+      
+      # rho1 var
+      rho1_var <- ncvar_def("lag1_autocorr", "1", list(lat_dim, lon_dim), -9999.0,
+                            longname = "Lag-1 autocorrelation (rho1)", prec = "float")
+      nc_rho1 <- nc_create(rho1_path, rho1_var)
+      ncvar_put(nc_rho1, rho1_var, rho1_grid)
+      nc_close(nc_rho1)
+      
+      cat("Files saved:\n")
+      cat(" -", slope_path, "\n")
+      cat(" -", pval_path, "\n")
+      cat(" -", rho1_path, "\n")
+      if (do_montecarlo) cat(" -", mc_summary_path, "\n")
+      
+      # -------------------------
+      # Final report summary
+      # -------------------------
+      cat("\nFinal summary:\n")
+      cat(sprintf("Total grid cells (lat*lon): %d\n", n_lat * n_lon))
+      cat(sprintf("Cells with enough data: %d\n", cells_with_data))
+      cat(sprintf("Nominal significant (p<0.05): %d\n", n_nominal_sig))
+      cat(sprintf("FDR-significant (q<%.2f): %d\n", fdr_alpha, n_fdr_sig))
+      if (do_montecarlo) cat(sprintf("Monte-Carlo p-value for field significance (observed count): %.4f\n", mc_results$p_value))
+      
+      cat("\nDone.\n")
 
-}
-```
+    }
+    ```
 
 ### 2.3.3 Spatial Trend Results
 

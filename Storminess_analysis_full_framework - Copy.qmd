@@ -68,7 +68,7 @@ To align with standard conventions and optimize computational efficiency for tem
 # PHASE 1: DATA LOADING AND EXPLORATORY ANALYSIS
 # Arctic Storminess Climatology (1958-2024)
 # ============================================================================
-storm_path <- here("data_raw", "processed", "ERA5_storminess_index_monthly_1958-2024.nc")
+storm_path <- here("Data", "processed", "ERA5_storminess_index_monthly_1958-2024.nc")
 
 cat("Loading truncated storminess index file:\n")
 cat(storm_path, "\n")
