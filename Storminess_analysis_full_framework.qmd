@@ -36,14 +36,16 @@ library(zoo)
 library(foreach)
 library(doParallel)
 library(pbapply)
-library(stars)        # For handling raster/gridded data
-library(modifiedmk) # Use this package for the corrected MK test
+library(stars)        
+library(modifiedmk) 
 library(nlme)
 library(ncmeta)
 library(abind)
 library(knitr)
 library(boot)
 library(here)
+library(corrplot)
+library(ggcorrplot)
 
 # Configure Python Environment
 use_virtualenv("arctic-env", required = TRUE)
@@ -347,7 +349,7 @@ for (metric in names(metrics_list)) {
 
 cat(sprintf("  ✓ All metrics subsetted to Arctic domain\n"))
 cat(sprintf("  New array dimensions: [%s]\n", 
-           paste(dim(metrics_arctic[[1]]), collapse = " x ")))z
+           paste(dim(metrics_arctic[[1]]), collapse = " x ")))
 ```
 
 ## 1.3 Derivation of the Area-Weighted Pan-Arctic Time Series
@@ -728,144 +730,860 @@ cat(sprintf("  ✓ Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarc
 
 ```{r}
 # ============================================================================
-# SECTION 1.10: DIAGNOSTIC PLOTS
+# PHASE 1: DIAGNOSTIC PLOTS
+# Arctic Storminess Climatology (1958-2024)
+# 
+# PURPOSE: Generate all foundational diagnostic figures for Phase 1
+#
+# PLOTS GENERATED:
+#   1. Time series overview (all metrics)
+#   2. ACF plots (all metrics)
+#   3. Seasonal boxplots
+#   4. Climatological seasonal cycle (12-month)
+#   5. STL decomposition
+#   6. Spatial climatology maps (polar projection)
+#   7. Distribution plots (histograms + density)
+#   8. Metric correlation matrix
+#   9. Anomaly time series (deseasonalized)
+#  10. Seasonal cycle by decade (stability check)
+#
+# INPUT: Phase1_Prepared_Data.RData
 # ============================================================================
 
-cat("\n", rep("-", 40), "\n")
-cat("Generating diagnostic plots...\n")
+# ============================================================================
+# SETUP
+# ============================================================================
 
-# Create figures directory
+# Load Phase 1 data
+data_file <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
+if (!file.exists(data_file)) {
+  stop("Phase 1 data not found. Run Phase 1 script first.")
+}
+load(data_file)
+
+cat("✓ Loaded Phase 1 prepared data\n")
+
+# Create output directory
 fig_dir <- here::here("Figures", "Phase1_Diagnostics")
-if (!dir.exists(fig_dir)) {
- dir.create(fig_dir, recursive = TRUE)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+
+# Define color schemes
+metric_colors <- c(
+  "eke_mean" = "#0072B2",
+  "eke_p90" = "#56B4E9", 
+  "eke_p95" = "#009E73",
+  "eke_p99" = "#9467BD",
+  "exceed_p95_freq" = "#D55E00"
+)
+
+season_colors <- c(
+  "DJF" = "#4575B4",  # Winter - blue
+  "MAM" = "#91CF60",  # Spring - green
+  "JJA" = "#FC8D59",  # Summer - orange
+  "SON" = "#D73027"   # Autumn - red
+)
+
+# Metrics to plot
+METRICS <- c("eke_mean", "eke_p90", "eke_p95", "eke_p99", "exceed_p95_freq")
+
+# ============================================================================
+# PLOT 1: TIME SERIES OVERVIEW (ALL METRICS)
+# ============================================================================
+
+cat("\n--- Generating Plot 1: Time Series Overview ---\n")
+
+# Prepare data
+ts_long <- storm_df %>%
+  select(date, all_of(METRICS)) %>%
+  pivot_longer(-date, names_to = "metric", values_to = "value") %>%
+  mutate(
+    metric = factor(metric, levels = METRICS),
+    metric_label = case_when(
+      metric == "eke_mean" ~ "Mean EKE [m²/s²]",
+      metric == "eke_p90" ~ "P90 EKE [m²/s²]",
+      metric == "eke_p95" ~ "P95 EKE [m²/s²]",
+      metric == "eke_p99" ~ "P99 EKE [m²/s²]",
+      metric == "exceed_p95_freq" ~ "P95 Exceedance Frequency"
+    )
+  )
+
+p1 <- ggplot(ts_long, aes(x = date, y = value, color = metric)) +
+  geom_line(alpha = 0.6, linewidth = 0.3) +
+  geom_smooth(method = "loess", span = 0.1, se = FALSE, linewidth = 0.8) +
+  facet_wrap(~ metric_label, scales = "free_y", ncol = 1) +
+  scale_color_manual(values = metric_colors, guide = "none") +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  labs(
+    title = "Pan-Arctic (≥60°N) Storminess Metrics: Monthly Time Series",
+    subtitle = "1958–2024 | Raw data (light) with LOESS smoother (bold)",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    strip.text = element_text(face = "bold", hjust = 0),
+    strip.background = element_rect(fill = "gray95"),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(file.path(fig_dir, "Fig01_TimeSeries_AllMetrics.png"),
+       p1, width = 12, height = 14, dpi = 300)
+cat("  ✓ Saved: Fig01_TimeSeries_AllMetrics.png\n")
+
+# ============================================================================
+# PLOT 2: ACF PLOTS (ALL METRICS)
+# ============================================================================
+
+cat("\n--- Generating Plot 2: ACF Plots ---\n")
+
+# Create multi-panel ACF plot
+png(file.path(fig_dir, "Fig02_ACF_AllMetrics.png"),
+    width = 14, height = 10, units = "in", res = 300)
+
+# Set up layout with more space at top for main title
+par(mfrow = c(2, 3), 
+    mar = c(4, 4, 4, 1),      # bottom, left, top, right margins for each panel
+    oma = c(0, 0, 3, 0))       # outer margins: extra space at top for main title
+
+for (metric in METRICS) {
+  if (metric %in% names(ts_objects)) {
+    # Get rho1 value first
+    rho1 <- acf(ts_objects[[metric]], lag.max = 1, plot = FALSE)$acf[2]
+    
+    # Create ACF plot
+    acf(ts_objects[[metric]], lag.max = 36,
+        main = paste0("ACF: ", metric),
+        xlab = "Lag (months)",
+        ylab = "Autocorrelation",
+        col = metric_colors[metric],
+        lwd = 2)
+    
+    # Add rho1 annotation using expression for proper subscript
+    mtext(bquote(rho[1] == .(sprintf("%.3f", rho1))), 
+          side = 3, line = -1.5, adj = 0.95, cex = 0.9)
+  }
 }
 
-# --- Plot 1: Time Series Overview (All Metrics) ---
-p1 <- storm_df %>%
- pivot_longer(cols = all_of(names(ts_weighted)),
-              names_to = "metric",
-              values_to = "value") %>%
- mutate(metric = factor(metric, levels = c("eke_mean", "eke_p90", "eke_p95", 
-                                           "eke_p99", "exceed_p95_freq"))) %>%
- ggplot(aes(x = date, y = value)) +
- geom_line(color = "#0072B2", alpha = 0.7, linewidth = 0.3) +
- geom_smooth(method = "loess", span = 0.1, color = "#D55E00", 
-             se = FALSE, linewidth = 0.8) +
- facet_wrap(~ metric, scales = "free_y", ncol = 1) +
- labs(
-   title = "Pan-Arctic (≥60°N) Storminess Metrics (1958-2024)",
-   subtitle = "Monthly values with LOESS smoother",
-   x = "Date",
-   y = "Value"
- ) +
- theme_bw(base_size = 12) +
- theme(
-   plot.title = element_text(face = "bold"),
-   strip.text = element_text(face = "bold")
- )
+# Add overall title in outer margin
+mtext("Autocorrelation Functions: Pan-Arctic Storminess Metrics (1958-2024)",
+      outer = TRUE, line = 1, cex = 1.4, font = 2)
 
-ggsave(file.path(fig_dir, "Fig1_All_Metrics_TimeSeries.png"),
-      p1, width = 12, height = 14, dpi = 300)
-cat("  ✓ Saved: Fig1_All_Metrics_TimeSeries.png\n")
-
-# --- Plot 2: ACF for Primary Metric (eke_mean) ---
-png(file.path(fig_dir, "Fig2_ACF_eke_mean.png"), 
-   width = 10, height = 6, units = "in", res = 300)
-acf(ts_objects$eke_mean, lag.max = 36,
-   main = "Autocorrelation Function: Pan-Arctic Mean EKE (1958-2024)",
-   xlab = "Lag (months)",
-   ylab = "ACF")
 dev.off()
-cat("  ✓ Saved: Fig2_ACF_eke_mean.png\n")
+cat("  ✓ Saved: Fig02_ACF_AllMetrics.png\n")
 
-# --- Plot 3: Seasonal Boxplots ---
-p3 <- storm_df %>%
- mutate(season = factor(season, levels = c("DJF", "MAM", "JJA", "SON"))) %>%
- ggplot(aes(x = season, y = eke_mean, fill = season)) +
- geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
- scale_fill_manual(values = c("DJF" = "#4575B4", "MAM" = "#91CF60",
-                              "JJA" = "#FC8D59", "SON" = "#D73027")) +
- labs(
-   title = "Seasonal Distribution of Mean EKE (1958-2024)",
-   subtitle = "Pan-Arctic (≥60°N)",
-   x = "Season",
-   y = expression("Mean EKE [m"^2*"/s"^2*"]")
- ) +
- theme_bw(base_size = 14) +
- theme(legend.position = "none",
-       plot.title = element_text(face = "bold"))
+# ============================================================================
+# PLOT 3: SEASONAL BOXPLOTS
+# ============================================================================
 
-ggsave(file.path(fig_dir, "Fig3_Seasonal_Boxplot.png"),
-      p3, width = 8, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig3_Seasonal_Boxplot.png\n")
+cat("\n--- Generating Plot 3: Seasonal Boxplots ---\n")
 
-# --- Plot 4: Annual Means ---
-annual_means <- storm_df %>%
- group_by(year) %>%
- summarise(
-   eke_mean = mean(eke_mean, na.rm = TRUE),
-   eke_p95 = mean(eke_p95, na.rm = TRUE),
-   exceed_p95_freq = mean(exceed_p95_freq, na.rm = TRUE),
-   .groups = "drop"
- )
+# Prepare data with proper season ordering
+storm_df_season <- storm_df %>%
+  mutate(season = factor(season, levels = c("DJF", "MAM", "JJA", "SON")))
 
-p4 <- ggplot(annual_means, aes(x = year, y = eke_mean)) +
- geom_point(color = "#0072B2", alpha = 0.6, size = 2) +
- geom_line(color = "#0072B2", alpha = 0.8, linewidth = 0.6) +
- geom_smooth(method = "lm", color = "#D55E00", se = TRUE, 
-             fill = "#D55E00", alpha = 0.2) +
- labs(
-   title = "Annual Mean EKE (1958-2024)",
-   subtitle = "Pan-Arctic (≥60°N) | Linear trend shown for reference",
-   x = "Year",
-   y = expression("Annual Mean EKE [m"^2*"/s"^2*"]")
- ) +
- scale_x_continuous(breaks = seq(1960, 2020, 10)) +
- theme_bw(base_size = 14) +
- theme(plot.title = element_text(face = "bold"))
+# Create boxplots for primary metrics
+p3a <- ggplot(storm_df_season, aes(x = season, y = eke_mean, fill = season)) +
+  geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
+  scale_fill_manual(values = season_colors, guide = "none") +
+  labs(title = "Mean EKE", y = expression("m"^2*"/s"^2), x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
-ggsave(file.path(fig_dir, "Fig4_Annual_Mean_EKE.png"),
-      p4, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig4_Annual_Mean_EKE.png\n")
+p3b <- ggplot(storm_df_season, aes(x = season, y = eke_p95, fill = season)) +
+  geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
+  scale_fill_manual(values = season_colors, guide = "none") +
+  labs(title = "P95 EKE", y = expression("m"^2*"/s"^2), x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p3c <- ggplot(storm_df_season, aes(x = season, y = eke_p99, fill = season)) +
+  geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
+  scale_fill_manual(values = season_colors, guide = "none") +
+  labs(title = "P99 EKE", y = expression("m"^2*"/s"^2), x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p3d <- ggplot(storm_df_season, aes(x = season, y = exceed_p95_freq, fill = season)) +
+  geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", linewidth = 0.8) +
+  scale_fill_manual(values = season_colors, guide = "none") +
+  labs(title = "P95 Exceedance Freq.", y = "Fraction", x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p3_combined <- (p3a | p3b | p3c | p3d) +
+  plot_annotation(
+    title = "Seasonal Distribution of Storminess Metrics",
+    subtitle = "Pan-Arctic (≥60°N) | 1958–2024 | Red dashed line = climatological 5% threshold",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5)
+    )
+  )
+
+ggsave(file.path(fig_dir, "Fig03_Seasonal_Boxplots.png"),
+       p3_combined, width = 14, height = 5, dpi = 300)
+cat("  ✓ Saved: Fig03_Seasonal_Boxplots.png\n")
+
+# ============================================================================
+# PLOT 4: CLIMATOLOGICAL SEASONAL CYCLE (12-MONTH)
+# ============================================================================
+
+cat("\n--- Generating Plot 4: Climatological Seasonal Cycle ---\n")
+
+# Calculate monthly climatology (mean for each calendar month)
+monthly_clim <- storm_df %>%
+  group_by(month) %>%
+  summarise(
+    eke_mean_avg = mean(eke_mean, na.rm = TRUE),
+    eke_mean_sd = sd(eke_mean, na.rm = TRUE),
+    eke_p95_avg = mean(eke_p95, na.rm = TRUE),
+    eke_p95_sd = sd(eke_p95, na.rm = TRUE),
+    exceed_freq_avg = mean(exceed_p95_freq, na.rm = TRUE),
+    exceed_freq_sd = sd(exceed_p95_freq, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(month_name = month.abb[month])
+
+# Plot for Mean EKE
+p4a <- ggplot(monthly_clim, aes(x = month)) +
+  geom_ribbon(aes(ymin = eke_mean_avg - eke_mean_sd, 
+                  ymax = eke_mean_avg + eke_mean_sd),
+              fill = "#0072B2", alpha = 0.3) +
+  geom_line(aes(y = eke_mean_avg), color = "#0072B2", linewidth = 1.2) +
+  geom_point(aes(y = eke_mean_avg), color = "#0072B2", size = 3) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "Mean EKE", 
+       y = expression("m"^2*"/s"^2),
+       x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+# Plot for P95 EKE
+p4b <- ggplot(monthly_clim, aes(x = month)) +
+  geom_ribbon(aes(ymin = eke_p95_avg - eke_p95_sd, 
+                  ymax = eke_p95_avg + eke_p95_sd),
+              fill = "#009E73", alpha = 0.3) +
+  geom_line(aes(y = eke_p95_avg), color = "#009E73", linewidth = 1.2) +
+  geom_point(aes(y = eke_p95_avg), color = "#009E73", size = 3) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "P95 EKE",
+       y = expression("m"^2*"/s"^2),
+       x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+# Plot for Exceedance Frequency
+p4c <- ggplot(monthly_clim, aes(x = month)) +
+  geom_ribbon(aes(ymin = exceed_freq_avg - exceed_freq_sd, 
+                  ymax = exceed_freq_avg + exceed_freq_sd),
+              fill = "#D55E00", alpha = 0.3) +
+  geom_line(aes(y = exceed_freq_avg), color = "#D55E00", linewidth = 1.2) +
+  geom_point(aes(y = exceed_freq_avg), color = "#D55E00", size = 3) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(title = "P95 Exceedance Frequency",
+       y = "Fraction",
+       x = NULL) +
+  theme_bw(base_size = 12) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p4_combined <- (p4a | p4b | p4c) +
+  plot_annotation(
+    title = "Climatological Seasonal Cycle of Storminess Metrics",
+    subtitle = "Pan-Arctic (≥60°N) | 1958–2024 mean ± 1 SD",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5)
+    )
+  )
+
+ggsave(file.path(fig_dir, "Fig04_Seasonal_Cycle_Climatology.png"),
+       p4_combined, width = 14, height = 5, dpi = 300)
+cat("  ✓ Saved: Fig04_Seasonal_Cycle_Climatology.png\n")
+
+# ============================================================================
+# PLOT 5: STL DECOMPOSITION
+# ============================================================================
+
+cat("\n--- Generating Plot 5: STL Decomposition ---\n")
+
+# STL decomposition for primary metric (eke_mean)
+stl_result <- stl(ts_objects$eke_mean, s.window = "periodic")
+
+# Extract components
+stl_df <- data.frame(
+  date = time_dates,
+  observed = as.vector(ts_objects$eke_mean),
+  seasonal = as.vector(stl_result$time.series[, "seasonal"]),
+  trend = as.vector(stl_result$time.series[, "trend"]),
+  remainder = as.vector(stl_result$time.series[, "remainder"])
+)
+
+# Calculate component contributions
+var_total <- var(stl_df$observed, na.rm = TRUE)
+var_seasonal <- var(stl_df$seasonal, na.rm = TRUE)
+var_trend <- var(stl_df$trend, na.rm = TRUE)
+var_remainder <- var(stl_df$remainder, na.rm = TRUE)
+
+pct_seasonal <- (var_seasonal / var_total) * 100
+pct_trend <- (var_trend / var_total) * 100
+pct_remainder <- (var_remainder / var_total) * 100
+
+cat(sprintf("  Variance decomposition:\n"))
+cat(sprintf("    Seasonal: %.1f%%\n", pct_seasonal))
+cat(sprintf("    Trend:    %.1f%%\n", pct_trend))
+cat(sprintf("    Residual: %.1f%%\n", pct_remainder))
+
+# Create STL plot
+stl_long <- stl_df %>%
+  pivot_longer(-date, names_to = "component", values_to = "value") %>%
+  mutate(
+    component = factor(component, 
+                       levels = c("observed", "seasonal", "trend", "remainder")),
+    component_label = case_when(
+      component == "observed" ~ sprintf("Observed Data"),
+      component == "seasonal" ~ sprintf("Seasonal (%.1f%% of variance)", pct_seasonal),
+      component == "trend" ~ sprintf("Trend (%.1f%% of variance)", pct_trend),
+      component == "remainder" ~ sprintf("Remainder (%.1f%% of variance)", pct_remainder)
+    ),
+    component_label = factor(component_label, levels = unique(component_label))
+  )
+
+p5 <- ggplot(stl_long, aes(x = date, y = value)) +
+  geom_line(color = "#0072B2", linewidth = 0.4) +
+  facet_wrap(~ component_label, ncol = 1, scales = "free_y") +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  labs(
+    title = "STL Decomposition: Mean EKE (Primary Metric)",
+    subtitle = "Pan-Arctic (≥60°N) | Seasonal-Trend decomposition using LOESS",
+    x = NULL,
+    y = expression("m"^2*"/s"^2)
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    strip.text = element_text(face = "bold", hjust = 0),
+    strip.background = element_rect(fill = "gray95"),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(file.path(fig_dir, "Fig05_STL_Decomposition.png"),
+       p5, width = 12, height = 10, dpi = 300)
+cat("  ✓ Saved: Fig05_STL_Decomposition.png\n")
+
+# Also save STL for P95 (extreme intensity)
+stl_p95 <- stl(ts_objects$eke_p95, s.window = "periodic")
+
+stl_p95_df <- data.frame(
+  date = time_dates,
+  observed = as.vector(ts_objects$eke_p95),
+  seasonal = as.vector(stl_p95$time.series[, "seasonal"]),
+  trend = as.vector(stl_p95$time.series[, "trend"]),
+  remainder = as.vector(stl_p95$time.series[, "remainder"])
+)
+
+# Store for later use
+stl_results <- list(
+  eke_mean = stl_result,
+  eke_p95 = stl_p95
+)
+
+# ============================================================================
+# PLOT 6: SPATIAL CLIMATOLOGY MAPS (POLAR PROJECTION)
+# Using proven methodology from spatial trend analysis
+# NOTE: For visualization, we use the FULL dataset (all available latitudes)
+#       even though the statistical analysis focuses on ≥60°N
+# ============================================================================
+
+cat("\n--- Generating Plot 6: Spatial Climatology Maps (Polar) ---\n")
+
+# Calculate temporal mean at each grid point for each metric
+# Use FULL domain (metrics_list) not Arctic subset (metrics_arctic)
+# Result: [lat, lon] matrices
+climatology_maps_full <- list()
+for (metric in c("eke_mean", "eke_p95", "exceed_p95_freq")) {
+  if (metric %in% names(metrics_list)) {
+    # Apply mean across time dimension (dim 1) - using FULL dataset
+    climatology_maps_full[[metric]] <- apply(metrics_list[[metric]], c(2, 3), mean, na.rm = TRUE)
+  }
+}
+
+cat(sprintf("  Climatology maps calculated (full domain: %.1f°N to %.1f°N)\n", 
+            min(lat), max(lat)))
+
+# ============================================================================
+# STEP 1: CREATE A SPATIALLY-AWARE `stars` OBJECT
+# ============================================================================
+
+# Safeguard: Ensure lon and lat are simple vectors
+# Use FULL lat vector, not lat_arctic
+lon_vec <- as.vector(lon)
+lat_vec <- as.vector(lat)  # Full latitude range
+
+# Combine climatology matrices into a single list
+# Transpose from [lat, lon] to [lon, lat] order for stars
+data_list_plot <- list(
+  eke_mean = t(climatology_maps_full$eke_mean),
+  eke_p95 = t(climatology_maps_full$eke_p95),
+  exceed_freq = t(climatology_maps_full$exceed_p95_freq)
+)
+
+# Explicitly define the dimensions
+dims <- st_dimensions(x = lon_vec, y = lat_vec)
+
+# Create the stars object and set CRS
+clim_stars <- st_as_stars(data_list_plot, dimensions = dims) %>%
+  st_set_crs(4326)
+
+cat("  Stars object created\n")
+
+# ============================================================================
+# STEP 2: REPROJECT ALL SPATIAL DATA
+# ============================================================================
+
+# Define the target projection: Lambert Azimuthal Equal-Area, centered on North Pole
+arctic_crs <- "+proj=laea +lat_0=90 +lon_0=0"
+
+# Warp the raster data to polar projection
+clim_polar <- st_warp(clim_stars, crs = arctic_crs)
+
+# Load and transform coastlines
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world_polar <- st_transform(world, crs = arctic_crs)
+
+cat("  Data reprojected to polar CRS\n")
+
+# ============================================================================
+# STEP 3: CREATE CARTOGRAPHIC ELEMENTS
+# ============================================================================
+
+# Define two radii for "two-ring" masking approach
+view_radius <- 3700000  # 3700 km - data boundary
+plot_radius <- 4400000  # 4400 km - space for labels
+
+# Create circular mask
+circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
+  st_buffer(dist = view_radius)
+
+# Apply mask to data
+clim_polar_masked <- clim_polar[circle_mask]
+
+# Create inverse mask (square with circular hole)
+square_box <- st_as_sfc(st_bbox(c(
+  xmin = -plot_radius, xmax = plot_radius,
+  ymin = -plot_radius, ymax = plot_radius
+), crs = arctic_crs))
+inverse_mask <- st_difference(square_box, circle_mask)
+
+# Create graticule lines
+graticules <- st_graticule(
+  lon = seq(-180, 180, by = 60),
+  lat = c(60, 70, 80),
+  crs = 4326
+) %>%
+  st_transform(crs = arctic_crs)
+
+# Create latitude labels (positioned at 180° longitude for visibility)
+lat_labels <- data.frame(
+  lon = 180,
+  lat = c(60, 70, 80)
+) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lat_labels$label <- c("60°N", "70°N", "80°N")
+
+# Create longitude labels (positioned in the blank space between radii)
+lon_labels <- data.frame(
+  lon = seq(0, 300, by = 60),
+  lat = 54  # Falls in blank space between view_radius and plot_radius
+) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lon_labels$label <- c("0°", "60°E", "120°E", "180°", "120°W", "60°W")
+
+cat("  Cartographic elements created\n")
+
+# ============================================================================
+# STEP 4: ASSEMBLE THE PLOTS
+# ============================================================================
+
+# --- MAP 1: Mean EKE Climatology ---
+p6a <- ggplot() +
+  geom_stars(data = clim_polar_masked, aes(fill = eke_mean), na.rm = TRUE) +
+  scale_fill_viridis(
+    name = expression(atop("Mean EKE", "[m"^2*"/s"^2*"]")),
+    option = "C",
+    na.value = "transparent"
+  ) +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label), size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label), size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius), ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(title = "(a) Mean EKE Climatology") +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "right",
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    panel.background = element_rect(fill = "gray95", color = NA),
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+# --- MAP 2: P95 EKE Climatology ---
+p6b <- ggplot() +
+  geom_stars(data = clim_polar_masked, aes(fill = eke_p95), na.rm = TRUE) +
+  scale_fill_viridis(
+    name = expression(atop("P95 EKE", "[m"^2*"/s"^2*"]")),
+    option = "C",
+    na.value = "transparent"
+  ) +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label), size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label), size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius), ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(title = "(b) P95 EKE Climatology") +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "right",
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    panel.background = element_rect(fill = "gray95", color = NA),
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+# --- MAP 3: Exceedance Frequency Climatology ---
+p6c <- ggplot() +
+  geom_stars(data = clim_polar_masked, aes(fill = exceed_freq), na.rm = TRUE) +
+  scale_fill_viridis(
+    name = "Exceedance\nFrequency",
+    option = "D",
+    na.value = "transparent"
+  ) +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label), size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label), size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius), ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(title = "(c) P95 Exceedance Frequency") +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "right",
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(1.5, "cm"),
+    panel.background = element_rect(fill = "gray95", color = NA),
+    plot.margin = margin(5, 5, 5, 5)
+  )
+
+# Combine panels
+p6_combined <- p6a + p6b + p6c +
+  plot_layout(ncol = 3) +
+  plot_annotation(
+    title = "Spatial Climatology of Storminess Metrics (1958-2024)",
+    subtitle = "Full domain visualization (≥56°N) | Lambert Azimuthal Equal-Area Projection",
+    theme = theme(
+      plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 12, hjust = 0.5)
+    )
+  )
+
+# Print to viewer
+print(p6_combined)
+
+# Save combined figure
+ggsave(file.path(fig_dir, "Fig06_Spatial_Climatology_Polar.png"),
+       p6_combined, width = 20, height = 8, dpi = 300, bg = "white")
+cat("  ✓ Saved: Fig06_Spatial_Climatology_Polar.png\n")
+
+# Also save individual high-res versions
+ggsave(file.path(fig_dir, "Fig06a_MeanEKE_Climatology_Polar.png"),
+       p6a, width = 8, height = 8, dpi = 300, bg = "white")
+ggsave(file.path(fig_dir, "Fig06b_P95EKE_Climatology_Polar.png"),
+       p6b, width = 8, height = 8, dpi = 300, bg = "white")
+ggsave(file.path(fig_dir, "Fig06c_ExceedFreq_Climatology_Polar.png"),
+       p6c, width = 8, height = 8, dpi = 300, bg = "white")
+cat("  ✓ Saved individual polar maps\n")
+cat("  ✓ Saved individual polar maps\n")
+
+# ============================================================================
+# PLOT 7: DISTRIBUTION PLOTS (HISTOGRAMS + DENSITY)
+# ============================================================================
+
+cat("\n--- Generating Plot 7: Distribution Plots ---\n")
+
+# Prepare data
+dist_data <- storm_df %>%
+  select(all_of(METRICS)) %>%
+  pivot_longer(everything(), names_to = "metric", values_to = "value") %>%
+  mutate(metric = factor(metric, levels = METRICS))
+
+p7 <- ggplot(dist_data, aes(x = value, fill = metric)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 50, alpha = 0.7, color = "white") +
+  geom_density(color = "black", linewidth = 0.8) +
+  facet_wrap(~ metric, scales = "free", ncol = 3) +
+  scale_fill_manual(values = metric_colors, guide = "none") +
+  labs(
+    title = "Distribution of Monthly Storminess Metrics",
+    subtitle = "Pan-Arctic (≥60°N) | 1958–2024 | n = 804 months",
+    x = "Value",
+    y = "Density"
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    strip.text = element_text(face = "bold")
+  )
+
+ggsave(file.path(fig_dir, "Fig07_Distributions.png"),
+       p7, width = 12, height = 8, dpi = 300)
+cat("  ✓ Saved: Fig07_Distributions.png\n")
+
+# ============================================================================
+# PLOT 8: METRIC CORRELATION MATRIX
+# ============================================================================
+
+cat("\n--- Generating Plot 8: Correlation Matrix ---\n")
+
+# Calculate correlation matrix
+cor_data <- storm_df %>%
+  select(all_of(METRICS))
+
+cor_matrix <- cor(cor_data, use = "pairwise.complete.obs")
+
+# Rename for display
+rownames(cor_matrix) <- c("Mean EKE", "P90 EKE", "P95 EKE", "P99 EKE", "Exceed. Freq.")
+colnames(cor_matrix) <- rownames(cor_matrix)
+
+# Create correlation plot
+png(file.path(fig_dir, "Fig08_Correlation_Matrix.png"),
+    width = 8, height = 7, units = "in", res = 300)
+
+corrplot(cor_matrix, 
+         method = "color",
+         type = "upper",
+         order = "original",
+         addCoef.col = "black",
+         number.cex = 0.9,
+         tl.col = "black",
+         tl.srt = 45,
+         col = colorRampPalette(c("#B2182B", "white", "#2166AC"))(200),
+         title = "Correlation Between Storminess Metrics\n(Pan-Arctic, 1958–2024)",
+         mar = c(0, 0, 2, 0))
+
+dev.off()
+cat("  ✓ Saved: Fig08_Correlation_Matrix.png\n")
+
+# Print correlation summary
+cat("\n  Correlation matrix:\n")
+print(round(cor_matrix, 3))
+
+# ============================================================================
+# PLOT 9: ANOMALY TIME SERIES (DESEASONALIZED)
+# ============================================================================
+
+cat("\n--- Generating Plot 9: Anomaly Time Series ---\n")
+
+# Calculate anomalies (remove seasonal cycle)
+storm_df_anom <- storm_df %>%
+  group_by(month) %>%
+  mutate(
+    eke_mean_anom = eke_mean - mean(eke_mean, na.rm = TRUE),
+    eke_p95_anom = eke_p95 - mean(eke_p95, na.rm = TRUE),
+    exceed_freq_anom = exceed_p95_freq - mean(exceed_p95_freq, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Plot anomalies
+p9a <- ggplot(storm_df_anom, aes(x = date, y = eke_mean_anom)) +
+  geom_hline(yintercept = 0, color = "gray50") +
+  geom_line(color = "#0072B2", alpha = 0.5, linewidth = 0.3) +
+  geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
+  labs(title = "Mean EKE Anomaly", y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p9b <- ggplot(storm_df_anom, aes(x = date, y = eke_p95_anom)) +
+  geom_hline(yintercept = 0, color = "gray50") +
+  geom_line(color = "#009E73", alpha = 0.5, linewidth = 0.3) +
+  geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
+  labs(title = "P95 EKE Anomaly", y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p9c <- ggplot(storm_df_anom, aes(x = date, y = exceed_freq_anom)) +
+  geom_hline(yintercept = 0, color = "gray50") +
+  geom_line(color = "#D55E00", alpha = 0.5, linewidth = 0.3) +
+  geom_smooth(method = "loess", span = 0.1, color = "black", se = FALSE, linewidth = 0.8) +
+  labs(title = "Exceedance Frequency Anomaly", y = "Anomaly [fraction]", x = NULL) +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+p9_combined <- (p9a / p9b / p9c) +
+  plot_annotation(
+    title = "Deseasonalized Storminess Anomalies",
+    subtitle = "Pan-Arctic (≥60°N) | Monthly anomalies from 1958–2024 climatology",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5)
+    )
+  )
+
+ggsave(file.path(fig_dir, "Fig09_Anomaly_TimeSeries.png"),
+       p9_combined, width = 12, height = 10, dpi = 300)
+cat("  ✓ Saved: Fig09_Anomaly_TimeSeries.png\n")
+
+# ============================================================================
+# PLOT 10: SEASONAL CYCLE BY DECADE (STABILITY CHECK)
+# ============================================================================
+
+cat("\n--- Generating Plot 10: Seasonal Cycle Stability ---\n")
+
+# Create decade labels
+storm_df_decade <- storm_df %>%
+  mutate(
+    decade = case_when(
+      year >= 1958 & year < 1970 ~ "1958-1969",
+      year >= 1970 & year < 1980 ~ "1970-1979",
+      year >= 1980 & year < 1990 ~ "1980-1989",
+      year >= 1990 & year < 2000 ~ "1990-1999",
+      year >= 2000 & year < 2010 ~ "2000-2009",
+      year >= 2010 & year < 2020 ~ "2010-2019",
+      year >= 2020 ~ "2020-2024"
+    ),
+    decade = factor(decade)
+  )
+
+# Calculate seasonal cycle by decade
+seasonal_by_decade <- storm_df_decade %>%
+  group_by(decade, month) %>%
+  summarise(
+    eke_mean_avg = mean(eke_mean, na.rm = TRUE),
+    eke_mean_se = sd(eke_mean, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# Define decade colors
+decade_colors <- colorRampPalette(c("#2166AC", "#D1E5F0", "#F7F7F7", 
+                                    "#FDDBC7", "#B2182B"))(7)
+names(decade_colors) <- levels(seasonal_by_decade$decade)
+
+p10 <- ggplot(seasonal_by_decade, aes(x = month, y = eke_mean_avg, 
+                                       color = decade, group = decade)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_manual(values = decade_colors, name = "Decade") +
+  labs(
+    title = "Evolution of the Seasonal Cycle: Mean EKE",
+    subtitle = "Pan-Arctic (≥60°N) | Has the seasonal pattern changed over time?",
+    x = NULL,
+    y = expression("Mean EKE [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "right"
+  )
+
+ggsave(file.path(fig_dir, "Fig10_Seasonal_Cycle_ByDecade.png"),
+       p10, width = 12, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig10_Seasonal_Cycle_ByDecade.png\n")
+
+# Also create for exceedance frequency (important for autumn hypothesis)
+seasonal_exceed_decade <- storm_df_decade %>%
+  group_by(decade, month) %>%
+  summarise(
+    exceed_avg = mean(exceed_p95_freq, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+p10b <- ggplot(seasonal_exceed_decade, aes(x = month, y = exceed_avg, 
+                                            color = decade, group = decade)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_manual(values = decade_colors, name = "Decade") +
+  labs(
+    title = "Evolution of the Seasonal Cycle: P95 Exceedance Frequency",
+    subtitle = "Pan-Arctic (≥60°N) | Dashed line = climatological 5%",
+    x = NULL,
+    y = "Exceedance Frequency"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "right"
+  )
+
+ggsave(file.path(fig_dir, "Fig10b_Seasonal_Exceedance_ByDecade.png"),
+       p10b, width = 12, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig10b_Seasonal_Exceedance_ByDecade.png\n")
+
+# ============================================================================
+# SAVE ADDITIONAL OUTPUTS
+# ============================================================================
+
+cat("\n--- Saving additional outputs ---\n")
+
+# Save STL results
+save(stl_results, stl_df, stl_p95_df,
+     file = file.path(fig_dir, "STL_decomposition_results.RData"))
+cat("  ✓ Saved: STL_decomposition_results.RData\n")
+
+# Save climatology maps (full domain for visualization)
+save(climatology_maps_full,
+     file = file.path(fig_dir, "climatology_maps_full_domain.RData"))
+cat("  ✓ Saved: climatology_maps_full_domain.RData\n")
+
+# Save correlation matrix
+write.csv(cor_matrix, file.path(fig_dir, "correlation_matrix.csv"))
+cat("  ✓ Saved: correlation_matrix.csv\n")
 
 # ============================================================================
 # FINAL SUMMARY
 # ============================================================================
 
 cat("\n", rep("=", 70), "\n")
-cat("PHASE 1 COMPLETE: FOUNDATIONAL ANALYSIS\n")
+cat("PHASE 1 DIAGNOSTIC PLOTS COMPLETE\n")
 cat(rep("=", 70), "\n\n")
 
-cat("Data Summary:\n")
-cat(sprintf("  Time period: %s to %s\n", 
-           format(min(time_dates), "%Y-%m"), 
-           format(max(time_dates), "%Y-%m")))
-cat(sprintf("  Spatial domain: %.1f°N to %.1f°N (Core Arctic)\n",
-           min(lat_arctic), max(lat_arctic)))
-cat(sprintf("  Total months: %d\n", nrow(storm_df)))
-cat(sprintf("  Metrics analyzed: %d\n", length(ts_weighted)))
+cat("Generated figures:\n")
+cat("  1.  Fig01_TimeSeries_AllMetrics.png\n")
+cat("  2.  Fig02_ACF_AllMetrics.png\n")
+cat("  3.  Fig03_Seasonal_Boxplots.png\n")
+cat("  4.  Fig04_Seasonal_Cycle_Climatology.png\n")
+cat("  5.  Fig05_STL_Decomposition.png\n")
+cat("  6.  Fig06_Spatial_Climatology_Polar.png\n")
+cat("  7.  Fig07_Distributions.png\n")
+cat("  8.  Fig08_Correlation_Matrix.png\n")
+cat("  9.  Fig09_Anomaly_TimeSeries.png\n")
+cat("  10. Fig10_Seasonal_Cycle_ByDecade.png\n")
+cat("  10b.Fig10b_Seasonal_Exceedance_ByDecade.png\n")
 
-cat("\nKey Findings:\n")
-for (metric in c("eke_mean", "eke_p95", "exceed_p95_freq")) {
- if (metric %in% names(acf_results)) {
-   rho1 <- acf_results[[metric]]$acf[2]
-   cat(sprintf("  %s: ρ₁ = %.3f %s\n", 
-               metric, rho1,
-               ifelse(abs(rho1) > 0.1, "(significant autocorrelation)", "")))
- }
-}
+cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 
-cat("\nNext Steps:\n")
-cat("  1. Load Phase1_Prepared_Data.RData in subsequent phases\n")
-cat("  2. Run Phase 2: Trend Analysis using ts_objects$eke_mean as PRIMARY metric\n")
-cat("  3. Repeat Phase 2 for percentile metrics (eke_p95, eke_p99, exceed_p95_freq)\n")
-cat("  4. Apply spatial analysis to metrics_arctic arrays\n")
+cat("\nKey findings from diagnostic plots:\n")
+cat(sprintf("  - STL variance decomposition: Seasonal=%.1f%%, Trend=%.1f%%, Residual=%.1f%%\n",
+            pct_seasonal, pct_trend, pct_remainder))
+cat(sprintf("  - Metric correlations: eke_mean vs eke_p95 = %.3f\n", 
+            cor_matrix["Mean EKE", "P95 EKE"]))
+cat(sprintf("  - Metric correlations: eke_mean vs exceed_freq = %.3f\n",
+            cor_matrix["Mean EKE", "Exceed. Freq."]))
 
-cat("\n", rep("=", 70), "\n")
-cat("READY FOR PHASE 2 ANALYSIS\n")
-cat(rep("=", 70), "\n\n")
-
-
+cat("\n", rep("=", 70), "\n\n")
 ```
 
 
