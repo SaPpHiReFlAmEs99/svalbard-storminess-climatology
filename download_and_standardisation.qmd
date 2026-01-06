@@ -7,6 +7,7 @@ editor: visual
 warning: false
 error: false
 toc: true
+---zz
 ---
 
 # Setup
@@ -885,7 +886,6 @@ result <- py$combine_all_continuous(PROCESSED_DATA_DIR, as.list(FULL_YEARS))
 log_message(result)
 
 log_message("Step 2 complete: Single continuous file created")
-
 ```
 
 ```{python jun16-appending-in-ERA5_1958-2024_std_res_vars_continuous.nc}
@@ -1075,8 +1075,7 @@ print(f"Expected: 120 (30 days × 4/day)")
 ds.close()
 ```
 
-
-################################# OLD ######################################
+################################# OLD
 
 ## Reynolds decomposition and indices
 
@@ -2784,3 +2783,68 @@ ds_orig.close()
 ds_new.close()
 
 ```
+
+# Modified workflow
+
+```{python}
+# ============================================================================
+# STEP 0: COMBINE RAW ERA5 FILES INTO YEARLY FILES (Skip final merge)
+# ============================================================================
+import xarray as xr
+import os
+from glob import glob
+from datetime import datetime
+
+DATA_DIRECTORY = "E:/ERA5_data/raw"
+PROCESSED_DATA_DIR = "E:/ERA5_data/processed"
+os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
+
+def log(msg):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+ENCODING = {
+    'u': {'zlib': True, 'complevel': 4, 'dtype': 'float32'},
+    'v': {'zlib': True, 'complevel': 4, 'dtype': 'float32'}
+}
+
+monthly_files = sorted(glob(os.path.join(DATA_DIRECTORY, "era5_850hpa_panarctic_*.nc")))
+log(f"Found {len(monthly_files)} monthly files")
+
+# Check latitude range
+with xr.open_dataset(monthly_files[0]) as test:
+    lat_max = float(test.latitude.max())
+    log(f"Max latitude: {lat_max}°N")
+
+log("Processing year by year...")
+
+for year in range(1958, 2026):
+    year_pattern = os.path.join(DATA_DIRECTORY, f"era5_850hpa_panarctic_{year}-*.nc")
+    year_files = sorted(glob(year_pattern))
+    
+    if not year_files:
+        continue
+    
+    yearly_output = os.path.join(PROCESSED_DATA_DIR, f"ERA5_panarctic_{year}.nc")
+    
+    if os.path.exists(yearly_output):
+        log(f"Skipping {year} (already exists)")
+        continue
+    
+    log(f"Processing {year} ({len(year_files)} files)...")
+    
+    ds = xr.open_mfdataset(year_files, combine='by_coords', parallel=False)
+    ds = ds.rename({'valid_time': 'time'})
+    
+    if 'pressure_level' in ds.dims:
+        ds = ds.squeeze('pressure_level', drop=True)
+    
+    # EXCLUDE 90°N to avoid ECMWF pole issue
+    ds = ds.sel(latitude=ds.latitude[ds.latitude < 90])
+    
+    ds.to_netcdf(yearly_output, encoding=ENCODING)
+    ds.close()
+
+log("✓ Done! Yearly files ready.")
+log("To use: xr.open_mfdataset('ERA5_panarctic_*.nc', combine='by_coords')")
+```
+
