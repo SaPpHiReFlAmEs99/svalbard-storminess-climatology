@@ -1556,7 +1556,7 @@ def butterworth_bandpass_filter(data_array, time_dim='time', fs=4,
                 cp.get_default_memory_pool().free_all_blocks()
                 
             except Exception:
-                # Fallback to CPU silently
+                # Fallback to CPU
                 row_detrended = signal.detrend(row_T, axis=1)
                 result = signal.filtfilt(b, a, row_detrended, axis=1).astype('float32')
                 del row_detrended
