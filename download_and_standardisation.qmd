@@ -83,7 +83,7 @@ library(nlme)
 use_virtualenv("arctic-env", required = TRUE)
 
 # Define the absolute path to the data storage folder
-DATA_DIRECTORY <- "E:/ERA5_data"
+DATA_DIRECTORY <- "E:/ERA5_data/raw"
 PROCESSED_DATA_DIR <- "E:/ERA5_data/processed"
 
 # Setting for more parallel downloads
@@ -160,6 +160,77 @@ for year in YEARS_TO_DOWNLOAD:
             print(f"--- File for {year}-{month_str} already exists. Skipping. ---")
 
 print("\nFull data download process complete for the specified years.")
+```
+
+```{python single-download}
+import cdsapi
+import os
+import xarray as xr
+from scipy import signal
+import numpy as np
+
+# --- 1. CONFIGURATION ---
+# Access the DATA_DIRECTORY variable from your R configuration chunk
+data_dir = r.DATA_DIRECTORY
+
+# Create the directory on your hard disk if it doesn't exist
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
+    print(f"Created directory: {data_dir}")
+
+YEARS_TO_DOWNLOAD = [1957] 
+
+AREA_PAN_ARCTIC = [90, -180, 55, 180] # North, West, South, East
+
+# --- 2. NESTED LOOP AND DOWNLOAD ---
+c = cdsapi.Client()
+print("Starting batch download process (one file per month)...")
+
+# Outer loop for each year
+for year in YEARS_TO_DOWNLOAD:
+    # Inner loop for each month (from 1 to 12)
+    for month in [12]:
+        # Format the month with a leading zero (e.g., 1 -> "01", 10 -> "10")
+        month_str = f"{month:02d}"
+        
+        # Create a specific filename for each YEAR and MONTH
+        final_path = os.path.join(data_dir, f"era5_850hpa_panarctic_{year}-{month_str}.nc")
+        
+        # Check if this specific monthly file already exists
+        if not os.path.exists(final_path):
+            print(f"--- Downloading data for: {year}-{month_str} ---")
+            
+            request = {
+                "product_type": "reanalysis",
+                "variable": ["u_component_of_wind", "v_component_of_wind"],
+                "year": str(year),
+                "month": month_str, # Dynamically set the month
+                "day": [
+                    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+                    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+                    "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", 
+                    "31"
+                ],
+                "time": [
+                    '00:00', '06:00', '12:00', '18:00'
+                ],
+                "pressure_level": "850",
+                "format": "netcdf",
+                "area": AREA_PAN_ARCTIC
+            }
+            
+            # Use a try-except block to handle potential API errors for a single month
+            try:
+                c.retrieve('reanalysis-era5-pressure-levels', request).download(target=final_path)
+                print(f"Successfully downloaded to {final_path}")
+            except Exception as e:
+                print(f"!!! FAILED to download data for {year}-{month_str}. Error: {e}")
+
+        else:
+            print(f"--- File for {year}-{month_str} already exists. Skipping. ---")
+
+print("\nFull data download process complete for the specified years.")
+
 ```
 
 ```{python parallel-download}
@@ -2847,4 +2918,3 @@ for year in range(1958, 2026):
 log("✓ Done! Yearly files ready.")
 log("To use: xr.open_mfdataset('ERA5_panarctic_*.nc', combine='by_coords')")
 ```
-

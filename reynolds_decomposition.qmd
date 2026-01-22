@@ -76,9 +76,1428 @@ library(nlme)
 use_virtualenv("arctic-env", required = TRUE)
 
 # Define the absolute path to the data storage folder
-DATA_DIRECTORY <- "E:/ERA5_data"
+DATA_DIRECTORY <- "E:/ERA5_data/raw"
 PROCESSED_DATA_DIR <- "E:/ERA5_data/processed"
 ```
+
+```{python}
+"""
+Create yearly ERA5 files for 2025 and buffer periods (1957, 2026)
+Raw monthly files named: era5_850hpa_panarctic_YYYY-MM.nc
+"""
+
+import xarray as xr
+import os
+from glob import glob
+
+# Paths
+RAW_DIR = "E:/ERA5_data/raw"
+PROCESSED_DIR = "E:/ERA5_data/processed"
+
+
+def create_yearly_file(year, monthly_files, output_path):
+    """Combine monthly files into a yearly file with consistent coordinates."""
+    
+    if not monthly_files:
+        print(f"  ERROR: No files provided")
+        return False
+    
+    print(f"  Found {len(monthly_files)} file(s):")
+    for f in monthly_files:
+        size_mb = os.path.getsize(f) / (1024**2)
+        print(f"    {os.path.basename(f)}: {size_mb:.1f} MB")
+    
+    datasets = []
+    
+    print(f"  Loading and preprocessing monthly files...")
+    for f in monthly_files:
+        ds = xr.open_dataset(f, engine="netcdf4")
+        
+        # Standardize time coordinate
+        if "valid_time" in ds.dims:
+            ds = ds.rename({"valid_time": "time"})
+        
+        # Remove pressure level (we only want 850 hPa)
+        if "pressure_level" in ds.dims:
+            ds = ds.squeeze("pressure_level", drop=True)
+        
+        # CRITICAL: exclude 90°N
+        ds = ds.sel(latitude=ds.latitude < 90)
+        
+        # Enforce descending latitude (north → south)
+        ds = ds.sortby("latitude", ascending=False)
+        
+        datasets.append(ds)
+    
+    if len(datasets) == 1:
+        ds_year = datasets[0]
+    else:
+        print(f"  Concatenating {len(datasets)} monthly files...")
+        ds_year = xr.concat(datasets, dim="time")
+        ds_year = ds_year.sortby("time")
+    
+    # Print info
+    print(f"  Time range: {str(ds_year.time.values[0])[:16]} to {str(ds_year.time.values[-1])[:16]}")
+    print(f"  Timesteps: {len(ds_year.time)}")
+    print(f"  Latitude points: {ds_year.latitude.size}")
+    print(f"  Latitude max: {float(ds_year.latitude.max())}")
+    
+    print(f"  Saving to {output_path}...")
+    ds_year.to_netcdf(output_path, engine="netcdf4")
+    
+    file_size_gb = os.path.getsize(output_path) / (1024**3)
+    print(f"  Done! File size: {file_size_gb:.2f} GB")
+    
+    # Close datasets
+    for ds in datasets:
+        ds.close()
+    
+    return True
+
+
+# ==============================================================================
+# 1. CREATE 2025 YEARLY FILE
+# ==============================================================================
+print("\n" + "=" * 60)
+print("1. Creating ERA5_panarctic_2025.nc")
+print("=" * 60)
+
+output_2025 = os.path.join(PROCESSED_DIR, "ERA5_panarctic_2025.nc")
+
+if os.path.exists(output_2025):
+    print(f"File already exists: {output_2025}")
+    print("Delete it first if you want to recreate it.")
+else:
+    # Find all 2025 monthly files
+    files_2025 = sorted(glob(os.path.join(RAW_DIR, "era5_850hpa_panarctic_2025-*.nc")))
+    
+    if files_2025:
+        create_yearly_file(2025, files_2025, output_2025)
+    else:
+        print(f"  ERROR: No 2025 files found in {RAW_DIR}")
+        print(f"  Looking for pattern: era5_850hpa_panarctic_2025-*.nc")
+
+
+# ==============================================================================
+# 2. CREATE 1957 BUFFER FILE (December only)
+# ==============================================================================
+print("\n" + "=" * 60)
+print("2. Creating ERA5_panarctic_1957.nc (December only, for start buffer)")
+print("=" * 60)
+
+output_1957 = os.path.join(PROCESSED_DIR, "ERA5_panarctic_1957.nc")
+
+if os.path.exists(output_1957):
+    print(f"File already exists: {output_1957}")
+    print("Delete it first if you want to recreate it.")
+else:
+    # Find December 1957 file
+    file_1957 = os.path.join(RAW_DIR, "era5_850hpa_panarctic_1957-12.nc")
+    
+    if os.path.exists(file_1957):
+        create_yearly_file(1957, [file_1957], output_1957)
+    else:
+        print(f"  ERROR: December 1957 file not found")
+        print(f"  Looking for: {file_1957}")
+
+
+# ==============================================================================
+# 3. CREATE 2026 BUFFER FILE (January 1-15 only)
+# ==============================================================================
+print("\n" + "=" * 60)
+print("3. Creating ERA5_panarctic_2026.nc (January 1-15 only, for end buffer)")
+print("=" * 60)
+
+output_2026 = os.path.join(PROCESSED_DIR, "ERA5_panarctic_2026.nc")
+
+if os.path.exists(output_2026):
+    print(f"File already exists: {output_2026}")
+    print("Delete it first if you want to recreate it.")
+else:
+    # Find January 2026 file
+    file_2026 = os.path.join(RAW_DIR, "era5_850hpa_panarctic_2026-01.nc")
+    
+    if os.path.exists(file_2026):
+        create_yearly_file(2026, [file_2026], output_2026)
+    else:
+        print(f"  ERROR: January 2026 file not found")
+        print(f"  Looking for: {file_2026}")
+
+
+# ==============================================================================
+# VERIFICATION
+# ==============================================================================
+print("\n" + "=" * 60)
+print("VERIFICATION")
+print("=" * 60)
+
+print("\nChecking processed directory for new files:")
+for year, path in [(1957, output_1957), (2025, output_2025), (2026, output_2026)]:
+    if os.path.exists(path):
+        ds = xr.open_dataset(path, engine='netcdf4')
+        t0 = str(ds.time.values[0])[:10]
+        t1 = str(ds.time.values[-1])[:10]
+        nt = len(ds.time)
+        size_gb = os.path.getsize(path) / (1024**3)
+        ds.close()
+        print(f"  ✓ {year}: {t0} to {t1} ({nt} timesteps, {size_gb:.2f} GB)")
+    else:
+        print(f"  ✗ {year}: FILE MISSING")
+
+print("\nAll yearly files in processed directory:")
+yearly_files = sorted(glob(os.path.join(PROCESSED_DIR, "ERA5_panarctic_*.nc")))
+print(f"Total: {len(yearly_files)} files")
+print(f"Range: {os.path.basename(yearly_files[0])} to {os.path.basename(yearly_files[-1])}")
+```
+
+
+
+```{python}
+"""
+================================================================================
+ARCTIC STORMINESS CLIMATOLOGY (1958-2025)
+Complete Analysis Pipeline using ERA5 Reanalysis
+================================================================================
+
+Author: Francesco Lucano
+Supervisors: Andreas Zischg, Stefan Brönnimann
+Institution: University of Bern
+
+================================================================================
+THESIS OVERVIEW
+================================================================================
+
+This script supports my Master's thesis investigating long-term trends in 
+Arctic storminess and their relationship to accelerated coastal erosion,
+with a particular focus on the Svalbard archipelago.
+
+CENTRAL HYPOTHESIS:
+    An autumnal positive feedback loop exists whereby sea-ice loss amplifies
+    cyclone intensity, thereby increasing mechanical stress on Arctic 
+    coastlines and accelerating erosion rates.
+
+To test this hypothesis, I develop a comprehensive 68-year climatology of
+synoptic-scale storminess using ERA5 reanalysis data.
+
+================================================================================
+METHODOLOGICAL FRAMEWORK
+================================================================================
+
+PRIMARY STORMINESS METRIC: Eddy Kinetic Energy (EKE) at 850 hPa
+
+WHY 850 hPa EKE?
+    Yau & Chang (2020, Journal of Climate) systematically evaluated multiple
+    Eulerian and Lagrangian storm track metrics against weather impacts
+    (precipitation and high winds). Their key findings:
+    
+    - 850 hPa EKE shows the STRONGEST correlation with weather impacts
+    - Near-surface metrics outperform upper-tropospheric metrics
+    - EKE outperforms other variance statistics (SLP, vorticity)
+    
+    Since coastal erosion is driven by wind and waves (weather impacts),
+    850 hPa EKE is the optimal choice for my thesis.
+
+================================================================================
+BANDPASS FILTER: WHY 1.2-6 DAYS?
+================================================================================
+
+Following Yau & Chang (2020), I use a 1.2-6 day Butterworth bandpass filter.
+
+VALIDATION:
+    Yau & Chang tested multiple filter configurations (1-6, 2-8, 1-10 days)
+    and found that the 1.2-6 day band (equivalent to their 24-h difference
+    filter) MAXIMIZES correlation between storm track metrics and weather
+    impacts including precipitation and high winds.
+
+PHYSICAL INTERPRETATION:
+    The filter isolates synoptic-scale transient eddies by removing:
+    
+    PERIODS > 6 DAYS (low-pass removes):
+        - Seasonal cycle (365 days)
+        - Intraseasonal oscillations (30-60 days)
+        - Planetary waves and blocking (10-30 days)
+        - Quasi-stationary features
+    
+    PERIODS < 1.2 DAYS (high-pass removes):
+        - Diurnal cycle (1 day)
+        - Semi-diurnal variations
+        - Mesoscale turbulence
+        - Numerical noise
+    
+    WHAT REMAINS (1.2-6 days):
+        - Synoptic-scale extratropical cyclones
+        - The weather systems that drive coastal erosion
+
+ARCTIC CYCLONE LIFETIMES:
+    Vessey et al. (2022) showed that Arctic cyclones can have total lifetimes
+    of 6-10 days. However, the 6-day cutoff is still appropriate because:
+    
+    - Total cyclone lifetime (Lagrangian) ≠ perturbation duration at a point (Eulerian)
+    - As a cyclone passes a fixed location, the wind perturbation lasts only 2-5 days
+    - The 1.2-6 day filter captures the local weather impact, not the cyclone's existence
+
+================================================================================
+ANALYSIS PIPELINE
+================================================================================
+
+STEP 1: BANDPASS FILTERING
+    Apply 1.2-6 day Butterworth filter to isolate synoptic-scale eddies (u', v')
+    
+STEP 2: KINETIC ENERGY BUDGET
+    Calculate TKE, MKE, EKE to understand energy partitioning
+    Verify budget closure: TKE = MKE + EKE
+    
+STEP 3: STORMINESS METRICS
+    From bandpass-filtered EKE, compute:
+    - Mean EKE (primary metric for overall storminess)
+    - Percentiles P90, P95, P99 (extreme storm intensity)
+    - Variance (episodic nature of storminess)
+    - Exceedance frequency (changes in extreme event occurrence)
+
+================================================================================
+IMPORTANT TECHNICAL NOTE: 90°N EXCLUSION
+================================================================================
+
+ERA5 data at exactly 90°N contains erroneous values: u ≈ 0 and v ≈ 0.
+This is a documented ECMWF issue caused by spherical harmonic interpolation
+to a regular lat-lon grid at the pole singularity.
+
+Solution: Exclude latitude = 90°N from all analyses.
+
+Reference: https://confluence.ecmwf.int/pages/viewpage.action?pageId=129134800
+
+================================================================================
+KEY REFERENCES
+================================================================================
+
+Yau & Chang (2020): Storm track metrics correlated with weather impacts
+Blackmon (1976): Foundational storm track climatology
+Hoskins & Hodges (2002): Northern Hemisphere storm track analysis
+Vessey et al. (2022): Arctic cyclone structure and lifetimes
+IPCC AR6 WG1 Chapter 11: Extreme event methodology
+
+================================================================================
+"""
+
+# ==============================================================================
+# IMPORT REQUIRED LIBRARIES
+# ==============================================================================
+
+import xarray as xr
+import numpy as np
+import gc  
+import os
+from glob import glob
+from datetime import datetime
+from scipy import signal
+import netCDF4 as nc
+import pandas as pd
+
+# ------------------------------------------------------------------------------
+# GPU ACCELERATION (OPTIONAL)
+# ------------------------------------------------------------------------------
+# CuPy enables GPU-accelerated filtering, which significantly speeds up
+# processing of the large ERA5 dataset. If unavailable, falls back to CPU.
+# ------------------------------------------------------------------------------
+
+try:
+    import cupy as cp
+    import cupyx.scipy.signal as cusignal
+    USE_GPU = True
+    print("✓ GPU acceleration enabled (CuPy detected)")
+except ImportError:
+    USE_GPU = False
+    print("✗ GPU not available - using CPU (slower but functional)")
+
+
+# ==============================================================================
+# CONFIGURATION PARAMETERS
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# FILE PATHS
+# ------------------------------------------------------------------------------
+
+# Directory containing yearly ERA5 NetCDF files
+PROCESSED_DATA_DIR = "E:/ERA5_data/processed"
+OUTPUT_DIR = "E:/ERA5_data/processed/output"
+
+# Input file pattern (adjust to match your naming convention)
+YEARLY_FILES_PATTERN = os.path.join(PROCESSED_DATA_DIR, "ERA5_panarctic_*.nc")
+
+# Output file paths
+EDDY_COMPONENTS_PATH = os.path.join(OUTPUT_DIR, "ERA5_eddy_components_1958-2025.nc")
+TKE_PATH = os.path.join(OUTPUT_DIR, "ERA5_TKE_monthly.nc")
+MKE_PATH = os.path.join(OUTPUT_DIR, "ERA5_MKE_monthly.nc")
+EKE_BUDGET_PATH = os.path.join(OUTPUT_DIR, "ERA5_EKE_budget_monthly.nc")
+STORMINESS_METRICS_PATH = os.path.join(OUTPUT_DIR, "ERA5_storminess_metrics_monthly.nc")
+
+# ------------------------------------------------------------------------------
+# TIME PERIODS
+# ------------------------------------------------------------------------------
+
+# Analysis period (68 years)
+ANALYSIS_START = '1958-01-01'
+ANALYSIS_END = '2025-12-31'
+
+# Buffer periods for edge overlap (data outside analysis period for filter edges)
+# December 1957 provides ~31 days of buffer at the start
+# January 1-15, 2026 provides ~15 days of buffer at the end
+BUFFER_START = '1957-12-01'
+BUFFER_END = '2026-01-16'
+
+# Climatological reference period (pre-Arctic Amplification baseline)
+# Using 1961-1990 instead of 1981-2010 because:
+#   1. Excludes the intense post-2000 Arctic warming period
+#   2. Provides a "pre-feedback" baseline before major sea-ice decline
+#   3. More appropriate for detecting changes driven by sea-ice loss
+#   4. Previous WMO standard, still widely used in climate change studies
+REFERENCE_START = '1961-01-01'
+REFERENCE_END = '1990-12-31'
+
+# ------------------------------------------------------------------------------
+# BANDPASS FILTER PARAMETERS (Yau & Chang 2020)
+# ------------------------------------------------------------------------------
+
+LOWCUT_DAYS = 6.0    # Remove periods LONGER than 6 days
+HIGHCUT_DAYS = 1.2   # Remove periods SHORTER than 1.2 days
+FILTER_ORDER = 5     # Butterworth filter order (effective order = 10 with filtfilt)
+
+
+# ==============================================================================
+# UTILITY FUNCTIONS
+# ==============================================================================
+
+def log_message(message):
+    """Print a timestamped log message for tracking progress."""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[{timestamp}] {message}")
+
+
+def load_yearly_data(file_pattern, start_date=None, end_date=None):
+    """
+    Load ERA5 yearly files as a single virtual dataset.
+    
+    This function handles several data preprocessing steps:
+    1. Opens all yearly files lazily (memory-efficient)
+    2. Excludes 90°N to avoid ECMWF pole interpolation errors
+    3. Renames time coordinate if needed
+    4. Optionally subsets to a date range
+    
+    Parameters
+    ----------
+    file_pattern : str
+        Glob pattern to find yearly files (e.g., "ERA5_panarctic_*.nc")
+    start_date : str, optional
+        Start date for temporal subsetting (e.g., '1958-01-01')
+    end_date : str, optional
+        End date for temporal subsetting (e.g., '2025-12-31')
+    
+    Returns
+    -------
+    xarray.Dataset
+        Combined dataset with consistent coordinates
+    """
+    # Find all matching files
+    yearly_files = sorted(glob(file_pattern))
+    
+    if not yearly_files:
+        raise FileNotFoundError(f"No files found matching: {file_pattern}")
+    
+    log_message(f"Found {len(yearly_files)} yearly files")
+    
+    # Open as single virtual dataset (lazy loading)
+    ds = xr.open_mfdataset(
+        yearly_files,
+        combine='by_coords',
+        parallel=False,
+        engine='netcdf4'
+    )
+    
+    # Standardize time coordinate name
+    if 'valid_time' in ds.dims:
+        ds = ds.rename({'valid_time': 'time'})
+    
+    # Remove pressure_level dimension if present (we only have 850 hPa)
+    if 'pressure_level' in ds.dims:
+        ds = ds.squeeze('pressure_level', drop=True)
+    
+    # CRITICAL: Exclude 90°N (ECMWF pole interpolation issue)
+    ds = ds.sel(latitude=ds.latitude[ds.latitude < 90])
+    
+    log_message(f"Latitude range: {float(ds.latitude.min()):.1f}°N to {float(ds.latitude.max()):.1f}°N")
+    
+    # Apply temporal subsetting if specified
+    if start_date or end_date:
+        ds = ds.sel(time=slice(start_date, end_date))
+        log_message(f"Time range: {str(ds.time.values[0])[:10]} to {str(ds.time.values[-1])[:10]}")
+    
+    return ds
+
+
+# ==============================================================================
+# STEP 1: BANDPASS FILTERING
+# ==============================================================================
+#
+# PURPOSE:
+#     Isolate synoptic-scale transient eddies from the 850 hPa wind field
+#     by removing both slow background variations and high-frequency noise.
+#
+# METHOD:
+#     Apply a 1.2-6 day Butterworth bandpass filter to u and v components.
+#     The filter is applied forward-backward (filtfilt) to achieve zero phase
+#     shift, which preserves the correct timing of storm events.
+#
+# OUTPUT:
+#     u_eddy (u') and v_eddy (v'): bandpass-filtered wind components
+#
+# ==============================================================================
+
+log_message("=" * 70)
+log_message("STEP 1: BANDPASS FILTERING (1.2-6 days)")
+log_message("Following Yau & Chang (2020) for optimal weather impact correlation")
+log_message("=" * 70)
+
+
+def butterworth_bandpass_filter(data_array, time_dim='time', fs=4,
+                                 lowcut_days=6.0, highcut_days=1.2, order=5,
+                                 show_progress=False):
+    """
+    Apply Butterworth bandpass filter to isolate synoptic-scale eddies.
+    
+    ULTRA MEMORY-EFFICIENT: Processes one latitude row at a time.
+    Memory per iteration: ~25 MB (vs ~350 MB per lat band, or ~5 GB full array)
+    
+    Parameters
+    ----------
+    data_array : xarray.DataArray
+        Input wind component (u or v) at 850 hPa
+        Expected dimensions: (time, latitude, longitude)
+    fs : float
+        Sampling frequency in samples per day (4 for 6-hourly data)
+    lowcut_days : float
+        Low-frequency cutoff period in days (default: 6.0)
+    highcut_days : float
+        High-frequency cutoff period in days (default: 1.2)
+    order : int
+        Butterworth filter order (default: 5)
+    show_progress : bool
+        Print progress every 25% (default: False)
+    
+    Returns
+    -------
+    xarray.DataArray
+        Bandpass-filtered wind component (eddy component)
+    """
+    import gc  # Garbage collector for aggressive memory cleanup
+    
+    # Convert periods to frequencies
+    lowcut_freq = 1.0 / lowcut_days
+    highcut_freq = 1.0 / highcut_days
+    
+    # Design Butterworth bandpass filter
+    b, a = signal.butter(order, [lowcut_freq, highcut_freq], btype='band', fs=fs)
+    
+    # Ensure data is in (time, lat, lon) order
+    data_array = data_array.transpose('time', 'latitude', 'longitude')
+    data = data_array.values
+    n_times, n_lats, n_lons = data.shape
+    
+    # Output array (use float32 to save memory)
+    filtered_data = np.empty((n_times, n_lats, n_lons), dtype='float32')
+    
+    # Progress tracking
+    progress_points = [int(n_lats * p) for p in [0.25, 0.5, 0.75, 1.0]]
+    
+    # Process ONE LATITUDE AT A TIME to minimize memory usage
+    # Each iteration: (n_lons, n_times) ≈ 1440 × 2200 × 8 bytes ≈ 25 MB
+    
+    for lat_idx in range(n_lats):
+        # Extract single latitude row: (n_times, n_lons)
+        row = data[:, lat_idx, :].copy()
+        
+        # Transpose to (n_lons, n_times) for filtering along time axis
+        row_T = row.T.astype('float64')  # (n_lons, n_times)
+        
+        if USE_GPU:
+            try:
+                # Try GPU processing
+                row_gpu = cp.asarray(row_T)
+                row_detrended = cusignal.detrend(row_gpu, axis=1)
+                row_filtered = cusignal.filtfilt(b, a, row_detrended, axis=1)
+                result = cp.asnumpy(row_filtered).astype('float32')
+                
+                # Clean up GPU memory immediately
+                del row_gpu, row_detrended, row_filtered
+                cp.get_default_memory_pool().free_all_blocks()
+                
+            except Exception:
+                # Fallback to CPU
+                row_detrended = signal.detrend(row_T, axis=1)
+                result = signal.filtfilt(b, a, row_detrended, axis=1).astype('float32')
+                del row_detrended
+        else:
+            # CPU processing
+            row_detrended = signal.detrend(row_T, axis=1)
+            result = signal.filtfilt(b, a, row_detrended, axis=1).astype('float32')
+            del row_detrended
+        
+        # Store result: transpose back to (n_times, n_lons)
+        filtered_data[:, lat_idx, :] = result.T
+        
+        # Free memory
+        del row, row_T, result
+        
+        # Progress indicator
+        if show_progress and (lat_idx + 1) in progress_points:
+            pct = (lat_idx + 1) / n_lats * 100
+            log_message(f"      Filtering progress: {pct:.0f}%")
+    
+    # Force garbage collection
+    gc.collect()
+    
+    # Create output DataArray
+    filtered_da = xr.DataArray(
+        filtered_data,
+        dims=['time', 'latitude', 'longitude'],
+        coords={
+            'time': data_array.time,
+            'latitude': data_array.latitude,
+            'longitude': data_array.longitude
+        }
+    )
+    
+    return filtered_da
+
+
+# Check if eddy components already exist
+if os.path.exists(EDDY_COMPONENTS_PATH):
+    log_message("Eddy components file exists - checking completeness...")
+    try:
+        ds_test = xr.open_dataset(EDDY_COMPONENTS_PATH, engine='netcdf4')
+        if 'u_eddy' in ds_test and 'v_eddy' in ds_test:
+            log_message("→ Eddy components complete - SKIPPING Step 1")
+            ds_test.close()
+            SKIP_STEP1 = True
+        else:
+            ds_test.close()
+            os.remove(EDDY_COMPONENTS_PATH)
+            SKIP_STEP1 = False
+    except:
+        if os.path.exists(EDDY_COMPONENTS_PATH):
+            os.remove(EDDY_COMPONENTS_PATH)
+        SKIP_STEP1 = False
+else:
+    SKIP_STEP1 = False
+
+
+if not SKIP_STEP1:
+    # Load ERA5 data (including buffer periods for edge overlap)
+    log_message("Loading ERA5 850 hPa wind data...")
+    log_message(f"  Loading with buffer: {BUFFER_START} to {BUFFER_END}")
+    ds = load_yearly_data(YEARLY_FILES_PATTERN, BUFFER_START, BUFFER_END)
+    
+    # Get time information
+    all_times = pd.to_datetime(ds.time.values)
+    total_timesteps_with_buffer = len(all_times)
+    
+    # Find analysis period boundaries within the loaded data
+    analysis_start_dt = pd.Timestamp(ANALYSIS_START)
+    analysis_end_dt = pd.Timestamp(ANALYSIS_END) + pd.Timedelta(hours=18)  # Include last day's timesteps
+    
+    first_analysis_idx = int(np.searchsorted(all_times, analysis_start_dt))
+    last_analysis_idx = int(np.searchsorted(all_times, analysis_end_dt, side='right') - 1)
+    
+    # Analysis period info
+    n_timesteps_analysis = last_analysis_idx - first_analysis_idx + 1
+    start_buffer_size = first_analysis_idx
+    end_buffer_size = total_timesteps_with_buffer - 1 - last_analysis_idx
+    
+    log_message(f"  Total timesteps (with buffer): {total_timesteps_with_buffer:,}")
+    log_message(f"  Analysis period timesteps: {n_timesteps_analysis:,}")
+    log_message(f"  Start buffer: {start_buffer_size} timesteps ({start_buffer_size/4:.1f} days)")
+    log_message(f"  End buffer: {end_buffer_size} timesteps ({end_buffer_size/4:.1f} days)")
+    
+    # -------------------------------------------------------------------------
+    # OVERLAP-SAVE ALGORITHM
+    # -------------------------------------------------------------------------
+    # Process data in temporal chunks with overlap to handle edge effects.
+    # The overlap region is discarded after filtering to avoid artifacts.
+    # Buffer data (Dec 1957, Jan 2026) provides overlap at dataset boundaries.
+    # -------------------------------------------------------------------------
+    
+    log_message(f"Applying {HIGHCUT_DAYS}-{LOWCUT_DAYS} day bandpass filter...")
+    
+    # -------------------------------------------------------------------------
+    # MEMORY-OPTIMIZED CHUNKING PARAMETERS
+    # -------------------------------------------------------------------------
+    # chunk_size: Number of timesteps per chunk
+    #   - 2000 timesteps ≈ 6 months of 6-hourly data
+    #   - Fits comfortably in GPU memory (~4-6 GB per variable)
+    #
+    # overlap: Timesteps of overlap between chunks to handle filter edge effects
+    #   - 15 days × 4 timesteps/day = 60 timesteps 
+    # -------------------------------------------------------------------------
+    
+    chunk_size = 2000   # ~6 months per chunk 
+    overlap = 60        # ~15 days overlap 
+    
+    # Process the full buffered data, but only output analysis period
+    total_timesteps = total_timesteps_with_buffer
+    n_chunks = int(np.ceil(total_timesteps / chunk_size))
+    
+    log_message(f"Processing in {n_chunks} chunks with {overlap}-timestep overlap")
+    log_message(f"Writing directly to disk to avoid memory issues...")
+    log_message(f"Output will contain only analysis period: {ANALYSIS_START} to {ANALYSIS_END}")
+    
+    # -------------------------------------------------------------------------
+    # PRE-CREATE OUTPUT FILE
+    # -------------------------------------------------------------------------
+    # Instead of storing chunks in memory and concatenating, we create the
+    # output NetCDF file first and write each chunk directly to disk.
+    # This avoids the ~80GB memory requirement for concatenation.
+    # Output file sized for ANALYSIS PERIOD ONLY (excludes buffer data).
+    # -------------------------------------------------------------------------
+    
+    # Get coordinate info
+    lats = ds.latitude.values
+    lons = ds.longitude.values
+    # Output times: analysis period only (1958-2025)
+    times = all_times[first_analysis_idx:last_analysis_idx + 1].values
+    n_times_total = len(times)
+    n_lats = len(lats)
+    n_lons = len(lons)
+    
+    # Create output file with pre-allocated arrays
+    log_message(f"  Creating output file: {EDDY_COMPONENTS_PATH}")
+    log_message(f"  Dimensions: ({n_times_total}, {n_lats}, {n_lons})")
+    
+    # Remove existing file if present
+    if os.path.exists(EDDY_COMPONENTS_PATH):
+        os.remove(EDDY_COMPONENTS_PATH)
+    
+    # Create NetCDF file
+    ncfile = nc.Dataset(EDDY_COMPONENTS_PATH, 'w', format='NETCDF4')
+    
+    # Create dimensions
+    ncfile.createDimension('time', n_times_total)
+    ncfile.createDimension('latitude', n_lats)
+    ncfile.createDimension('longitude', n_lons)
+    
+    # Create coordinate variables
+    time_var = ncfile.createVariable('time', 'f8', ('time',))
+    time_var.units = 'hours since 1900-01-01'
+    time_var.calendar = 'gregorian'
+    
+    lat_var = ncfile.createVariable('latitude', 'f4', ('latitude',))
+    lat_var.units = 'degrees_north'
+    lat_var[:] = lats
+    
+    lon_var = ncfile.createVariable('longitude', 'f4', ('longitude',))
+    lon_var.units = 'degrees_east'
+    lon_var[:] = lons
+    
+    # Create data variables with chunking and compression
+    # Chunk size optimized for time-series access at single points
+    chunk_sizes = (min(500, n_times_total), 1, n_lons)
+    
+    u_eddy_var = ncfile.createVariable(
+        'u_eddy', 'f4', ('time', 'latitude', 'longitude'),
+        chunksizes=chunk_sizes, zlib=True, complevel=4
+    )
+    u_eddy_var.long_name = 'Bandpass-filtered zonal wind (eddy component)'
+    u_eddy_var.units = 'm/s'
+    
+    v_eddy_var = ncfile.createVariable(
+        'v_eddy', 'f4', ('time', 'latitude', 'longitude'),
+        chunksizes=chunk_sizes, zlib=True, complevel=4
+    )
+    v_eddy_var.long_name = 'Bandpass-filtered meridional wind (eddy component)'
+    v_eddy_var.units = 'm/s'
+    
+    # Add global attributes
+    ncfile.title = 'Bandpass-filtered 850 hPa wind components'
+    ncfile.description = f'Synoptic-scale eddies isolated using {HIGHCUT_DAYS}-{LOWCUT_DAYS} day filter'
+    ncfile.methodology = 'Butterworth bandpass filter following Yau & Chang (2020)'
+    ncfile.filter_passband = f'{HIGHCUT_DAYS}-{LOWCUT_DAYS} days'
+    ncfile.source = 'ERA5 reanalysis at 850 hPa'
+    ncfile.analysis_period = f'{ANALYSIS_START} to {ANALYSIS_END}'
+    ncfile.buffer_periods = f'Start: {BUFFER_START}, End: {BUFFER_END}'
+    ncfile.author = 'Francesco Lucano'
+    ncfile.institution = 'University of Bern'
+    ncfile.created = datetime.now().isoformat()
+    
+    # Convert times to numeric values for NetCDF
+    time_values = pd.to_datetime(times)
+    hours_since_1900 = (time_values - pd.Timestamp('1900-01-01')).total_seconds() / 3600
+    time_var[:] = hours_since_1900.values
+    
+    log_message(f"  Output file created, now processing chunks...")
+    
+    for i in range(n_chunks):
+        # Define chunk boundaries with overlap
+        start_idx = max(0, i * chunk_size - overlap)
+        end_idx = min(total_timesteps, (i + 1) * chunk_size + overlap)
+        
+        log_message(f"  Chunk {i+1}/{n_chunks}: timesteps {start_idx:,}-{end_idx:,}")
+        
+        # Load chunk into memory
+        u_chunk = ds['u'].isel(time=slice(start_idx, end_idx)).load()
+        v_chunk = ds['v'].isel(time=slice(start_idx, end_idx)).load()
+        
+        # Apply bandpass filter
+        log_message(f"    Filtering u component...")
+        u_eddy_chunk = butterworth_bandpass_filter(
+            u_chunk, lowcut_days=LOWCUT_DAYS, highcut_days=HIGHCUT_DAYS, 
+            order=FILTER_ORDER, show_progress=False
+        )
+        log_message(f"    Filtering v component...")
+        v_eddy_chunk = butterworth_bandpass_filter(
+            v_chunk, lowcut_days=LOWCUT_DAYS, highcut_days=HIGHCUT_DAYS, 
+            order=FILTER_ORDER, show_progress=False
+        )
+        
+        # Determine which timesteps to keep (trim overlap between chunks)
+        if i == 0:
+            # First chunk: keep from start, trim end overlap
+            keep_start = 0
+            keep_end = chunk_size if i < n_chunks - 1 else (end_idx - start_idx)
+        elif i == n_chunks - 1:
+            # Last chunk: trim start overlap, keep to end
+            keep_start = overlap
+            keep_end = end_idx - start_idx
+        else:
+            # Middle chunks: trim both ends
+            keep_start = overlap
+            keep_end = (end_idx - start_idx) - overlap
+        
+        # The "good" filtered data spans [start_idx + keep_start, start_idx + keep_end) 
+        # in input (buffered) coordinates
+        good_start_input = start_idx + keep_start
+        good_end_input = start_idx + keep_end
+        
+        # Intersect with analysis period [first_analysis_idx, last_analysis_idx]
+        # to exclude buffer data from output
+        write_start_input = max(good_start_input, first_analysis_idx)
+        write_end_input = min(good_end_input, last_analysis_idx + 1)
+        
+        if write_start_input < write_end_input:
+            # Convert to local chunk coordinates (indices within filtered chunk)
+            local_start = write_start_input - start_idx
+            local_end = write_end_input - start_idx
+            
+            # Convert to output coordinates (indices in output file)
+            output_start = write_start_input - first_analysis_idx
+            output_end = write_end_input - first_analysis_idx
+            
+            # Extract data to write
+            u_data = u_eddy_chunk.values[local_start:local_end, :, :]
+            v_data = v_eddy_chunk.values[local_start:local_end, :, :]
+            
+            # Write directly to NetCDF file
+            log_message(f"    Writing to output positions {output_start:,}-{output_end:,}")
+            u_eddy_var[output_start:output_end, :, :] = u_data
+            v_eddy_var[output_start:output_end, :, :] = v_data
+            
+            del u_data, v_data
+        else:
+            log_message(f"    No data to write (chunk outside analysis period)")
+        
+        # Aggressive memory cleanup
+        del u_chunk, v_chunk, u_eddy_chunk, v_eddy_chunk
+        gc.collect()
+        
+        # Clear GPU memory cache if using CuPy
+        if USE_GPU:
+            try:
+                cp.get_default_memory_pool().free_all_blocks()
+            except:
+                pass
+    
+    # Close the NetCDF file
+    ncfile.close()
+    
+    log_message(f"  All chunks written to disk")
+    
+    # Verify the file
+    file_size_gb = os.path.getsize(EDDY_COMPONENTS_PATH) / (1024**3)
+    log_message(f"→ Saved: {EDDY_COMPONENTS_PATH} ({file_size_gb:.2f} GB)")
+    
+    # Verify filter removed seasonal cycle by sampling
+    log_message("Verifying filter (sampling subset)...")
+    ds_verify = xr.open_dataset(EDDY_COMPONENTS_PATH, engine='netcdf4')
+    u_sample = ds_verify['u_eddy'].isel(time=slice(0, 10000)).mean()
+    v_sample = ds_verify['v_eddy'].isel(time=slice(0, 10000)).mean()
+    log_message(f"  Sample mean u_eddy: {float(u_sample):.6f} m/s (expect ~0)")
+    log_message(f"  Sample mean v_eddy: {float(v_sample):.6f} m/s (expect ~0)")
+    ds_verify.close()
+    
+    # Close input dataset
+    ds.close()
+
+log_message("Step 1 complete\n")
+
+
+# ==============================================================================
+# STEP 2: KINETIC ENERGY BUDGET
+# ==============================================================================
+#
+# PURPOSE:
+#     Decompose total atmospheric kinetic energy into mean and eddy components
+#     to understand how energy is partitioned between the time-mean flow
+#     and transient eddies.
+#
+# ENERGY BUDGET:
+#     TKE = MKE + EKE
+#     
+#     where:
+#     TKE = (1/2) × mean(u² + v²)      Total Kinetic Energy
+#     MKE = (1/2) × (ū² + v̄²)          Mean Kinetic Energy (jet stream, etc.)
+#     EKE = (1/2) × mean(u'² + v'²)    Eddy Kinetic Energy (transient eddies)
+#
+# NOTE:
+#     The EKE calculated here uses monthly-mean deviations for budget closure.
+#     This is DIFFERENT from the bandpass-filtered EKE in Step 3, which
+#     specifically targets the 1.2-6 day synoptic band.
+#
+# ==============================================================================
+
+log_message("=" * 70)
+log_message("STEP 2: KINETIC ENERGY BUDGET")
+log_message("Calculating TKE, MKE, and EKE for energy partitioning")
+log_message("=" * 70)
+
+
+# ------------------------------------------------------------------------------
+# 2.1: TOTAL KINETIC ENERGY (TKE)
+# ------------------------------------------------------------------------------
+
+log_message("2.1: Total Kinetic Energy (TKE)...")
+
+if os.path.exists(TKE_PATH):
+    log_message("→ TKE file exists - SKIPPING")
+else:
+    ds = load_yearly_data(YEARLY_FILES_PATTERN, ANALYSIS_START, ANALYSIS_END)
+    
+    # TKE = (1/2) × (u² + v²) averaged monthly
+    tke_instant = 0.5 * (ds['u']**2 + ds['v']**2)
+    tke_monthly = tke_instant.resample(time='ME').mean(dim='time')
+    tke_monthly.name = 'tke'
+    
+    tke_monthly.attrs = {
+        'long_name': 'Total Kinetic Energy',
+        'units': 'm^2/s^2',
+        'formula': 'TKE = 0.5 × mean(u² + v²)'
+    }
+    
+    tke_monthly = tke_monthly.compute()
+    tke_monthly.to_netcdf(TKE_PATH)
+    log_message(f"→ Saved: {TKE_PATH}")
+    
+    ds.close()
+    del tke_instant, tke_monthly
+
+
+# ------------------------------------------------------------------------------
+# 2.2: MEAN KINETIC ENERGY (MKE)
+# ------------------------------------------------------------------------------
+
+log_message("2.2: Mean Kinetic Energy (MKE)...")
+
+if os.path.exists(MKE_PATH):
+    log_message("→ MKE file exists - SKIPPING")
+else:
+    ds = load_yearly_data(YEARLY_FILES_PATTERN, ANALYSIS_START, ANALYSIS_END)
+    
+    # MKE = (1/2) × (ū² + v̄²) from monthly-mean winds
+    u_monthly = ds['u'].resample(time='ME').mean(dim='time')
+    v_monthly = ds['v'].resample(time='ME').mean(dim='time')
+    mke_monthly = 0.5 * (u_monthly**2 + v_monthly**2)
+    mke_monthly.name = 'mke'
+    
+    mke_monthly.attrs = {
+        'long_name': 'Mean Kinetic Energy',
+        'units': 'm^2/s^2',
+        'formula': 'MKE = 0.5 × (ū² + v̄²)'
+    }
+    
+    mke_monthly = mke_monthly.compute()
+    mke_monthly.to_netcdf(MKE_PATH)
+    log_message(f"→ Saved: {MKE_PATH}")
+    
+    ds.close()
+    del u_monthly, v_monthly, mke_monthly
+
+
+# ------------------------------------------------------------------------------
+# 2.3: EDDY KINETIC ENERGY FOR BUDGET CLOSURE (EKE_budget)
+# ------------------------------------------------------------------------------
+
+log_message("2.3: Eddy Kinetic Energy for budget (EKE_budget)...")
+
+if os.path.exists(EKE_BUDGET_PATH):
+    log_message("→ EKE_budget file exists - SKIPPING")
+else:
+    ds = load_yearly_data(YEARLY_FILES_PATTERN, ANALYSIS_START, ANALYSIS_END)
+    
+    log_message("  Processing month-by-month...")
+    
+    eke_monthly_list = []
+    month_coords = []
+    month_count = 0
+    
+    for label, group in ds.resample(time='ME'):
+        month_count += 1
+        if month_count % 100 == 0:
+            log_message(f"    Processed {month_count} months...")
+        
+        group = group.load()
+        
+        # Calculate deviations from THIS month's mean
+        u_mean = group['u'].mean(dim='time')
+        v_mean = group['v'].mean(dim='time')
+        u_anom = group['u'] - u_mean
+        v_anom = group['v'] - v_mean
+        
+        # EKE = (1/2) × mean(u'² + v'²)
+        eke_instant = 0.5 * (u_anom**2 + v_anom**2)
+        eke_month = eke_instant.mean(dim='time')
+        
+        eke_monthly_list.append(eke_month)
+        month_coords.append(label)
+        
+        del group, u_anom, v_anom, eke_instant
+    
+    log_message(f"  Processed {month_count} months total")
+    
+    eke_budget = xr.concat(eke_monthly_list, dim='time').assign_coords(time=month_coords)
+    eke_budget.name = 'eke_budget'
+    
+    eke_budget.attrs = {
+        'long_name': 'Eddy Kinetic Energy (budget)',
+        'units': 'm^2/s^2',
+        'formula': "EKE = 0.5 × mean(u'² + v'²)",
+        'note': 'For budget closure (TKE = MKE + EKE); uses monthly deviations'
+    }
+    
+    eke_budget.to_netcdf(EKE_BUDGET_PATH)
+    log_message(f"→ Saved: {EKE_BUDGET_PATH}")
+    
+    ds.close()
+    del eke_monthly_list, eke_budget
+
+
+# ------------------------------------------------------------------------------
+# 2.4: VERIFY ENERGY BUDGET CLOSURE
+# ------------------------------------------------------------------------------
+
+log_message("2.4: Verifying energy budget closure...")
+
+try:
+    ds_tke = xr.open_dataset(TKE_PATH, engine='netcdf4')
+    ds_mke = xr.open_dataset(MKE_PATH, engine='netcdf4')
+    ds_eke = xr.open_dataset(EKE_BUDGET_PATH, engine='netcdf4')
+    
+    # Test at sample months
+    test_months = [50, 200, 500, 700]
+    errors = []
+    
+    for idx in test_months:
+        if idx >= len(ds_tke.time):
+            continue
+        
+        tke = float(ds_tke['tke'].isel(time=idx).mean())
+        mke = float(ds_mke['mke'].isel(time=idx).mean())
+        eke = float(ds_eke['eke_budget'].isel(time=idx).mean())
+        
+        error_pct = abs(tke - (mke + eke)) / tke * 100
+        errors.append(error_pct)
+    
+    mean_error = np.mean(errors)
+    log_message(f"  Mean budget error: {mean_error:.6f}%")
+    
+    if mean_error < 0.01:
+        log_message("→ Budget verified (error < 0.01%)")
+    else:
+        log_message("→ WARNING: Budget error exceeds tolerance")
+    
+    ds_tke.close()
+    ds_mke.close()
+    ds_eke.close()
+
+except Exception as e:
+    log_message(f"→ ERROR: {e}")
+
+log_message("Step 2 complete\n")
+
+
+# ==============================================================================
+# STEP 3: STORMINESS METRICS
+# ==============================================================================
+#
+# PURPOSE:
+#     Calculate monthly storminess metrics from the bandpass-filtered EKE.
+#     These metrics characterize different aspects of synoptic-scale storm
+#     activity relevant to coastal erosion.
+#
+# METRICS:
+#     1. MEAN EKE (eke_mean)
+#        Monthly average of instantaneous EKE from filtered eddies.
+#        PRIMARY METRIC: Yau & Chang (2020) showed this is most strongly
+#        correlated with weather impacts.
+#
+#     2. PERCENTILES (eke_p90, eke_p95, eke_p99)
+#        Monthly percentiles capture extreme storm intensity.
+#        P95/P99 are most relevant for acute coastal erosion events.
+#
+#     3. VARIANCE (eke_variance)
+#        Captures the episodic nature of storminess.
+#        High variance = alternating intense storms and calm periods.
+#        Relevant for understanding recovery time between erosion events.
+#
+#     4. EXCEEDANCE FREQUENCY (exceed_p95_freq)
+#        Fraction of timesteps exceeding the 1961-1990 P95 threshold.
+#        If this increases while mean stays stable → more frequent extremes.
+#
+# ==============================================================================
+
+log_message("=" * 70)
+log_message("STEP 3: STORMINESS METRICS")
+log_message("Computing metrics from bandpass-filtered EKE")
+log_message("=" * 70)
+
+
+# Check if already complete
+if os.path.exists(STORMINESS_METRICS_PATH):
+    log_message("Storminess metrics file exists - checking completeness...")
+    try:
+        ds_test = xr.open_dataset(STORMINESS_METRICS_PATH, engine='netcdf4')
+        required = ['eke_mean', 'eke_p90', 'eke_p95', 'eke_p99', 
+                    'eke_variance', 'exceed_p95_freq']
+        if all(var in ds_test for var in required):
+            log_message("→ All metrics present - SKIPPING Step 3")
+            ds_test.close()
+            SKIP_STEP3 = True
+        else:
+            ds_test.close()
+            os.remove(STORMINESS_METRICS_PATH)
+            SKIP_STEP3 = False
+    except:
+        if os.path.exists(STORMINESS_METRICS_PATH):
+            os.remove(STORMINESS_METRICS_PATH)
+        SKIP_STEP3 = False
+else:
+    SKIP_STEP3 = False
+
+
+if not SKIP_STEP3:
+    # -------------------------------------------------------------------------
+    # MEMORY-EFFICIENT PROCESSING
+    # -------------------------------------------------------------------------
+    # Instead of loading the entire 74 GB array, we:
+    # 1. First calculate climatological P95 using a subset of data
+    # 2. Then process each month individually, loading only that month's data
+    # -------------------------------------------------------------------------
+    
+    log_message("Opening eddy components file (lazy loading)...")
+    ds_eddy = xr.open_dataset(EDDY_COMPONENTS_PATH, engine='netcdf4')
+    
+    # Get time information
+    all_times = pd.to_datetime(ds_eddy.time.values)
+    lats = ds_eddy.latitude.values
+    lons = ds_eddy.longitude.values
+    n_lats = len(lats)
+    n_lons = len(lons)
+    
+    log_message(f"  Total timesteps: {len(all_times):,}")
+    log_message(f"  Grid: {n_lats} × {n_lons}")
+    
+    # -------------------------------------------------------------------------
+    # Calculate climatological P95 threshold (reference period)
+    # -------------------------------------------------------------------------
+    # Process in yearly chunks to avoid memory issues
+    # -------------------------------------------------------------------------
+    
+    log_message(f"Calculating P95 climatology ({REFERENCE_START[:4]}-{REFERENCE_END[:4]})...")
+    log_message("  Processing reference period in yearly chunks...")
+    
+    ref_start = pd.Timestamp(REFERENCE_START)
+    ref_end = pd.Timestamp(REFERENCE_END)
+    
+    # Collect EKE values from reference period (sample every Nth timestep to save memory)
+    # For P95, we need good coverage but don't need every single timestep
+    eke_samples = []
+    
+    for year in range(ref_start.year, ref_end.year + 1):
+        year_start = f'{year}-01-01'
+        year_end = f'{year}-12-31'
+        
+        log_message(f"    Processing {year}...")
+        
+        # Load one year of data
+        u_year = ds_eddy['u_eddy'].sel(time=slice(year_start, year_end)).values
+        v_year = ds_eddy['v_eddy'].sel(time=slice(year_start, year_end)).values
+        
+        # Calculate EKE for this year
+        eke_year = 0.5 * (u_year**2 + v_year**2)
+        
+        # Sample every 4th timestep (still ~365 samples per year)
+        eke_samples.append(eke_year[::4, :, :])
+        
+        del u_year, v_year, eke_year
+        gc.collect()
+    
+    # Stack all samples and compute P95
+    log_message("  Computing P95 threshold...")
+    eke_ref_stack = np.concatenate(eke_samples, axis=0)
+    eke_p95_clim = np.percentile(eke_ref_stack, 95, axis=0).astype('float32')
+    
+    log_message(f"  P95 range: {eke_p95_clim.min():.2f} to {eke_p95_clim.max():.2f} m²/s²")
+    
+    del eke_samples, eke_ref_stack
+    gc.collect()
+    
+    # -------------------------------------------------------------------------
+    # Calculate monthly metrics - process each month individually
+    # -------------------------------------------------------------------------
+    
+    log_message("Calculating monthly metrics (processing month by month)...")
+    
+    # Get unique year-months
+    year_months = all_times.to_period('M').unique()
+    n_months = len(year_months)
+    log_message(f"  Total months to process: {n_months}")
+    
+    # Storage for monthly metrics
+    mean_list, p90_list, p95_list, p99_list = [], [], [], []
+    var_list, exceed_list = [], []
+    time_labels = []
+    
+    for i, ym in enumerate(year_months):
+        if (i + 1) % 100 == 0:
+            log_message(f"  Processed {i+1}/{n_months} months...")
+        
+        # Define time range for this month
+        month_start = ym.start_time
+        month_end = ym.end_time
+        
+        # Load only this month's data
+        u_month = ds_eddy['u_eddy'].sel(time=slice(month_start, month_end)).values
+        v_month = ds_eddy['v_eddy'].sel(time=slice(month_start, month_end)).values
+        
+        # Calculate EKE for this month
+        eke_month = 0.5 * (u_month**2 + v_month**2)
+        
+        # Calculate metrics
+        mean_eke = np.mean(eke_month, axis=0)
+        p90_eke = np.percentile(eke_month, 90, axis=0)
+        p95_eke = np.percentile(eke_month, 95, axis=0)
+        p99_eke = np.percentile(eke_month, 99, axis=0)
+        var_eke = np.var(eke_month, axis=0)
+        exceed_freq = np.mean(eke_month > eke_p95_clim, axis=0)
+        
+        # Store as DataArrays
+        coords = {'latitude': lats, 'longitude': lons}
+        dims = ['latitude', 'longitude']
+        
+        mean_list.append(xr.DataArray(mean_eke.astype('float32'), dims=dims, coords=coords))
+        p90_list.append(xr.DataArray(p90_eke.astype('float32'), dims=dims, coords=coords))
+        p95_list.append(xr.DataArray(p95_eke.astype('float32'), dims=dims, coords=coords))
+        p99_list.append(xr.DataArray(p99_eke.astype('float32'), dims=dims, coords=coords))
+        var_list.append(xr.DataArray(var_eke.astype('float32'), dims=dims, coords=coords))
+        exceed_list.append(xr.DataArray(exceed_freq.astype('float32'), dims=dims, coords=coords))
+        time_labels.append(month_end)  # Use end of month as timestamp
+        
+        # Free memory
+        del u_month, v_month, eke_month
+        del mean_eke, p90_eke, p95_eke, p99_eke, var_eke, exceed_freq
+    
+    log_message(f"  Processed {n_months} months total")
+    
+    # Close eddy components file
+    ds_eddy.close()
+    
+    # -------------------------------------------------------------------------
+    # Combine into Dataset
+    # -------------------------------------------------------------------------
+    log_message("Assembling output Dataset...")
+    
+    # Create P95 climatology DataArray
+    eke_p95_clim_da = xr.DataArray(
+        eke_p95_clim,
+        dims=['latitude', 'longitude'],
+        coords={'latitude': lats, 'longitude': lons}
+    )
+    
+    ds_metrics = xr.Dataset({
+        'eke_mean': xr.concat(mean_list, dim='time').assign_coords(time=time_labels),
+        'eke_p90': xr.concat(p90_list, dim='time').assign_coords(time=time_labels),
+        'eke_p95': xr.concat(p95_list, dim='time').assign_coords(time=time_labels),
+        'eke_p99': xr.concat(p99_list, dim='time').assign_coords(time=time_labels),
+        'eke_variance': xr.concat(var_list, dim='time').assign_coords(time=time_labels),
+        'exceed_p95_freq': xr.concat(exceed_list, dim='time').assign_coords(time=time_labels),
+        'eke_p95_climatology': eke_p95_clim_da
+    })
+    
+    # -------------------------------------------------------------------------
+    # Add metadata
+    # -------------------------------------------------------------------------
+    ds_metrics.attrs = {
+        'title': 'Arctic Storminess Metrics (1958-2025)',
+        'description': 'Monthly metrics from 850 hPa bandpass-filtered EKE',
+        'bandpass_filter': f'{HIGHCUT_DAYS}-{LOWCUT_DAYS} days (Yau & Chang 2020)',
+        'reference_period': f'{REFERENCE_START[:4]}-{REFERENCE_END[:4]}',
+        'source': 'ERA5 reanalysis',
+        'author': 'Francesco Lucano',
+        'institution': 'University of Bern',
+        'created': datetime.now().isoformat()
+    }
+    
+    ds_metrics['eke_mean'].attrs = {
+        'long_name': 'Monthly mean EKE',
+        'units': 'm^2/s^2',
+        'description': 'Primary storminess metric (Yau & Chang 2020)'
+    }
+    
+    ds_metrics['eke_p90'].attrs = {
+        'long_name': 'Monthly 90th percentile EKE',
+        'units': 'm^2/s^2'
+    }
+    
+    ds_metrics['eke_p95'].attrs = {
+        'long_name': 'Monthly 95th percentile EKE',
+        'units': 'm^2/s^2',
+        'description': 'Strong storm intensity'
+    }
+    
+    ds_metrics['eke_p99'].attrs = {
+        'long_name': 'Monthly 99th percentile EKE',
+        'units': 'm^2/s^2',
+        'description': 'Extreme storm intensity - most relevant for coastal erosion'
+    }
+    
+    ds_metrics['eke_variance'].attrs = {
+        'long_name': 'Monthly variance of EKE',
+        'units': 'm^4/s^4',
+        'description': 'Storminess variability (episodic nature)'
+    }
+    
+    ds_metrics['exceed_p95_freq'].attrs = {
+        'long_name': 'P95 exceedance frequency',
+        'units': 'fraction',
+        'description': f'Fraction exceeding {REFERENCE_START[:4]}-{REFERENCE_END[:4]} P95 (pre-warming baseline)'
+    }
+    
+    ds_metrics['eke_p95_climatology'].attrs = {
+        'long_name': 'Climatological P95 threshold',
+        'units': 'm^2/s^2',
+        'description': f'{REFERENCE_START[:4]}-{REFERENCE_END[:4]} pre-warming baseline'
+    }
+    
+    # -------------------------------------------------------------------------
+    # Save
+    # -------------------------------------------------------------------------
+    log_message("Saving storminess metrics...")
+    
+    encoding = {var: {'zlib': True, 'complevel': 4} for var in ds_metrics.data_vars}
+    ds_metrics.to_netcdf(STORMINESS_METRICS_PATH, encoding=encoding, format='NETCDF4')
+    
+    file_size_mb = os.path.getsize(STORMINESS_METRICS_PATH) / (1024**2)
+    log_message(f"→ Saved: {STORMINESS_METRICS_PATH} ({file_size_mb:.1f} MB)")
+    
+    # -------------------------------------------------------------------------
+    # Summary statistics
+    # -------------------------------------------------------------------------
+    log_message("\nSUMMARY STATISTICS (domain average):")
+    log_message(f"  Mean EKE:        {float(ds_metrics['eke_mean'].mean()):.2f} m²/s²")
+    log_message(f"  Mean P95 EKE:    {float(ds_metrics['eke_p95'].mean()):.2f} m²/s²")
+    log_message(f"  Mean P99 EKE:    {float(ds_metrics['eke_p99'].mean()):.2f} m²/s²")
+    
+    # Quick trend check
+    early = ds_metrics.sel(time=slice('1958', '1990'))
+    late = ds_metrics.sel(time=slice('2000', '2025'))
+    
+    log_message("\nPRELIMINARY CHANGE (1958-1990 vs 2000-2025):")
+    log_message(f"  Mean EKE change: {float(late['eke_mean'].mean()) - float(early['eke_mean'].mean()):+.3f} m²/s²")
+    log_message(f"  P99 EKE change:  {float(late['eke_p99'].mean()) - float(early['eke_p99'].mean()):+.3f} m²/s²")
+    
+    ds_metrics.close()
+
+log_message("Step 3 complete\n")
+
+
+# ==============================================================================
+# FINAL SUMMARY
+# ==============================================================================
+
+log_message("=" * 70)
+log_message("ANALYSIS COMPLETE")
+log_message("=" * 70)
+
+log_message("\nOUTPUT FILES:")
+files = [
+    (EDDY_COMPONENTS_PATH, "Bandpass-filtered eddies (u', v')"),
+    (TKE_PATH, "Total Kinetic Energy (monthly)"),
+    (MKE_PATH, "Mean Kinetic Energy (monthly)"),
+    (EKE_BUDGET_PATH, "EKE for budget closure (monthly)"),
+    (STORMINESS_METRICS_PATH, "Storminess metrics (mean, percentiles, etc.)")
+]
+
+for path, desc in files:
+    if os.path.exists(path):
+        size = os.path.getsize(path) / (1024**2)
+        log_message(f"  ✓ {desc}: {size:.1f} MB")
+    else:
+        log_message(f"  ✗ {desc}: MISSING")
+
+log_message(f"""
+METHODOLOGY SUMMARY
+===================
+Bandpass filter:    {HIGHCUT_DAYS}-{LOWCUT_DAYS} days (Yau & Chang 2020)
+Reference period:   {REFERENCE_START[:4]}-{REFERENCE_END[:4]} (pre-Arctic Amplification baseline)
+Analysis period:    {ANALYSIS_START[:4]}-{ANALYSIS_END[:4]} (68 years)
+Buffer periods:     {BUFFER_START} to {BUFFER_END} (for edge overlap)
+Primary metric:     850 hPa EKE (optimal for weather impacts)
+
+NEXT STEPS
+==========
+1. Run diagnostic plots (Phase 1)
+2. Apply trend analysis with modified Mann-Kendall test
+3. Seasonal stratification (focus on autumn for feedback hypothesis)
+4. Svalbard regional case study
+""")
+
+log_message("=" * 70)
+```
+
+
+```{python}
+import os
+path = "E:/ERA5_data/processed/output/ERA5_eddy_components_1958-2025.nc"
+print(f"File exists: {os.path.exists(path)}")
+if os.path.exists(path):
+    print(f"File size: {os.path.getsize(path) / (1024**3):.2f} GB")
+    import xarray as xr
+    ds = xr.open_dataset(path)
+    print(f"Variables: {list(ds.data_vars)}")
+    print(f"Timesteps: {len(ds.time)}")
+    ds.close()
+```
+
+```{python}
+import xarray as xr
+
+ds = xr.open_dataset("E:/ERA5_data/processed/output/ERA5_eddy_components_1958-2025.nc")
+print(f"Time range: {str(ds.time.values[0])[:10]} to {str(ds.time.values[-1])[:10]}")
+print(f"Total timesteps: {len(ds.time)}")
+ds.close()
+```
+
+
+
+
+
+############### OLD ####################
 
 ```{python}
 # ============================================================================
@@ -1174,1209 +2593,3 @@ log_message("=" * 70)
 log_message("END OF ANALYSIS")
 log_message("=" * 70)
 ```
-
-
-
-
-
-
-
-```{python}
-"""
-================================================================================
-ARCTIC STORMINESS CLIMATOLOGY (1958-2024)
-Complete Analysis Pipeline using ERA5 Reanalysis
-================================================================================
-
-Author: Francesco Lucano
-Supervisors: Andreas Zischg, Stefan Brönnimann
-Institution: University of Bern
-
-================================================================================
-THESIS OVERVIEW
-================================================================================
-
-This script supports my Master's thesis investigating long-term trends in 
-Arctic storminess and their relationship to accelerated coastal erosion,
-with a particular focus on the Svalbard archipelago.
-
-CENTRAL HYPOTHESIS:
-    An autumnal positive feedback loop exists whereby sea-ice loss amplifies
-    cyclone intensity, thereby increasing mechanical stress on Arctic 
-    coastlines and accelerating erosion rates.
-
-To test this hypothesis, I develop a comprehensive 67-year climatology of
-synoptic-scale storminess using ERA5 reanalysis data.
-
-================================================================================
-METHODOLOGICAL FRAMEWORK
-================================================================================
-
-PRIMARY STORMINESS METRIC: Eddy Kinetic Energy (EKE) at 850 hPa
-
-WHY 850 hPa EKE?
-    Yau & Chang (2020, Journal of Climate) systematically evaluated multiple
-    Eulerian and Lagrangian storm track metrics against weather impacts
-    (precipitation and high winds). Their key findings:
-    
-    - 850 hPa EKE shows the STRONGEST correlation with weather impacts
-    - Near-surface metrics outperform upper-tropospheric metrics
-    - EKE outperforms other variance statistics (SLP, vorticity)
-    
-    Since coastal erosion is driven by wind and waves (weather impacts),
-    850 hPa EKE is the optimal choice for my thesis.
-
-================================================================================
-BANDPASS FILTER: WHY 1.2-6 DAYS?
-================================================================================
-
-Following Yau & Chang (2020), I use a 1.2-6 day Butterworth bandpass filter.
-
-VALIDATION:
-    Yau & Chang tested multiple filter configurations (1-6, 2-8, 1-10 days)
-    and found that the 1.2-6 day band (equivalent to their 24-h difference
-    filter) MAXIMIZES correlation between storm track metrics and weather
-    impacts including precipitation and high winds.
-
-PHYSICAL INTERPRETATION:
-    The filter isolates synoptic-scale transient eddies by removing:
-    
-    PERIODS > 6 DAYS (low-pass removes):
-        - Seasonal cycle (365 days)
-        - Intraseasonal oscillations (30-60 days)
-        - Planetary waves and blocking (10-30 days)
-        - Quasi-stationary features
-    
-    PERIODS < 1.2 DAYS (high-pass removes):
-        - Diurnal cycle (1 day)
-        - Semi-diurnal variations
-        - Mesoscale turbulence
-        - Numerical noise
-    
-    WHAT REMAINS (1.2-6 days):
-        - Synoptic-scale extratropical cyclones
-        - The weather systems that drive coastal erosion
-
-ARCTIC CYCLONE LIFETIMES:
-    Vessey et al. (2022) showed that Arctic cyclones can have total lifetimes
-    of 6-10 days. However, the 6-day cutoff is still appropriate because:
-    
-    - Total cyclone lifetime (Lagrangian) ≠ perturbation duration at a point (Eulerian)
-    - As a cyclone passes a fixed location, the wind perturbation lasts only 2-5 days
-    - The 1.2-6 day filter captures the local weather impact, not the cyclone's existence
-
-================================================================================
-ANALYSIS PIPELINE
-================================================================================
-
-STEP 1: BANDPASS FILTERING
-    Apply 1.2-6 day Butterworth filter to isolate synoptic-scale eddies (u', v')
-    
-STEP 2: KINETIC ENERGY BUDGET
-    Calculate TKE, MKE, EKE to understand energy partitioning
-    Verify budget closure: TKE = MKE + EKE
-    
-STEP 3: STORMINESS METRICS
-    From bandpass-filtered EKE, compute:
-    - Mean EKE (primary metric for overall storminess)
-    - Percentiles P90, P95, P99 (extreme storm intensity)
-    - Variance (episodic nature of storminess)
-    - Exceedance frequency (changes in extreme event occurrence)
-
-================================================================================
-IMPORTANT TECHNICAL NOTE: 90°N EXCLUSION
-================================================================================
-
-ERA5 data at exactly 90°N contains erroneous values: u ≈ 0 and v ≈ 0.
-This is a documented ECMWF issue caused by spherical harmonic interpolation
-to a regular lat-lon grid at the pole singularity.
-
-Solution: Exclude latitude = 90°N from all analyses.
-Impact: Negligible (polar point has near-zero weight in area-weighted averages)
-
-Reference: https://confluence.ecmwf.int/pages/viewpage.action?pageId=129134800
-
-================================================================================
-KEY REFERENCES
-================================================================================
-
-Yau & Chang (2020): Storm track metrics correlated with weather impacts
-Blackmon (1976): Foundational storm track climatology
-Hoskins & Hodges (2002): Northern Hemisphere storm track analysis
-Vessey et al. (2022): Arctic cyclone structure and lifetimes
-IPCC AR6 WG1 Chapter 11: Extreme event methodology
-
-================================================================================
-"""
-
-# ==============================================================================
-# IMPORT REQUIRED LIBRARIES
-# ==============================================================================
-
-import xarray as xr
-import numpy as np
-import gc  # Garbage collector for memory management
-import os
-from glob import glob
-from datetime import datetime
-from scipy import signal
-import netCDF4 as nc
-import pandas as pd
-
-# ------------------------------------------------------------------------------
-# GPU ACCELERATION (OPTIONAL)
-# ------------------------------------------------------------------------------
-# CuPy enables GPU-accelerated filtering, which significantly speeds up
-# processing of the large ERA5 dataset. If unavailable, falls back to CPU.
-# ------------------------------------------------------------------------------
-
-try:
-    import cupy as cp
-    import cupyx.scipy.signal as cusignal
-    USE_GPU = True
-    print("✓ GPU acceleration enabled (CuPy detected)")
-except ImportError:
-    USE_GPU = False
-    print("✗ GPU not available - using CPU (slower but functional)")
-
-
-# ==============================================================================
-# CONFIGURATION PARAMETERS
-# ==============================================================================
-
-# ------------------------------------------------------------------------------
-# FILE PATHS
-# ------------------------------------------------------------------------------
-
-# Directory containing yearly ERA5 NetCDF files
-PROCESSED_DATA_DIR = "E:/ERA5_data/processed"
-OUTPUT_DIR = PROCESSED_DATA_DIR
-
-# Input file pattern (adjust to match your naming convention)
-YEARLY_FILES_PATTERN = os.path.join(PROCESSED_DATA_DIR, "ERA5_panarctic_*.nc")
-
-# Output file paths
-EDDY_COMPONENTS_PATH = os.path.join(OUTPUT_DIR, "ERA5_eddy_components_1958-2024.nc")
-TKE_PATH = os.path.join(OUTPUT_DIR, "ERA5_TKE_monthly.nc")
-MKE_PATH = os.path.join(OUTPUT_DIR, "ERA5_MKE_monthly.nc")
-EKE_BUDGET_PATH = os.path.join(OUTPUT_DIR, "ERA5_EKE_budget_monthly.nc")
-STORMINESS_METRICS_PATH = os.path.join(OUTPUT_DIR, "ERA5_storminess_metrics_monthly.nc")
-
-# ------------------------------------------------------------------------------
-# TIME PERIODS
-# ------------------------------------------------------------------------------
-
-# Analysis period (67 years)
-ANALYSIS_START = '1958-01-01'
-ANALYSIS_END = '2024-12-31'
-
-# Climatological reference period (pre-Arctic Amplification baseline)
-# Using 1961-1990 instead of 1981-2010 because:
-#   1. Excludes the intense post-2000 Arctic warming period
-#   2. Provides a "pre-feedback" baseline before major sea-ice decline
-#   3. More appropriate for detecting changes driven by sea-ice loss
-#   4. Previous WMO standard, still widely used in climate change studies
-REFERENCE_START = '1961-01-01'
-REFERENCE_END = '1990-12-31'
-
-# ------------------------------------------------------------------------------
-# BANDPASS FILTER PARAMETERS (Yau & Chang 2020)
-# ------------------------------------------------------------------------------
-
-LOWCUT_DAYS = 6.0    # Remove periods LONGER than 6 days
-HIGHCUT_DAYS = 1.2   # Remove periods SHORTER than 1.2 days
-FILTER_ORDER = 5     # Butterworth filter order (effective order = 10 with filtfilt)
-
-
-# ==============================================================================
-# UTILITY FUNCTIONS
-# ==============================================================================
-
-def log_message(message):
-    """Print a timestamped log message for tracking progress."""
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {message}")
-
-
-def load_yearly_data(file_pattern, start_date=None, end_date=None):
-    """
-    Load ERA5 yearly files as a single virtual dataset.
-    
-    This function handles several data preprocessing steps:
-    1. Opens all yearly files lazily (memory-efficient)
-    2. Excludes 90°N to avoid ECMWF pole interpolation errors
-    3. Renames time coordinate if needed
-    4. Optionally subsets to a date range
-    
-    Parameters
-    ----------
-    file_pattern : str
-        Glob pattern to find yearly files (e.g., "ERA5_panarctic_*.nc")
-    start_date : str, optional
-        Start date for temporal subsetting (e.g., '1958-01-01')
-    end_date : str, optional
-        End date for temporal subsetting (e.g., '2024-12-31')
-    
-    Returns
-    -------
-    xarray.Dataset
-        Combined dataset with consistent coordinates
-    """
-    # Find all matching files
-    yearly_files = sorted(glob(file_pattern))
-    
-    if not yearly_files:
-        raise FileNotFoundError(f"No files found matching: {file_pattern}")
-    
-    log_message(f"Found {len(yearly_files)} yearly files")
-    
-    # Open as single virtual dataset (lazy loading)
-    ds = xr.open_mfdataset(
-        yearly_files,
-        combine='by_coords',
-        parallel=False,
-        engine='netcdf4'
-    )
-    
-    # Standardize time coordinate name
-    if 'valid_time' in ds.dims:
-        ds = ds.rename({'valid_time': 'time'})
-    
-    # Remove pressure_level dimension if present (we only have 850 hPa)
-    if 'pressure_level' in ds.dims:
-        ds = ds.squeeze('pressure_level', drop=True)
-    
-    # CRITICAL: Exclude 90°N (ECMWF pole interpolation issue)
-    ds = ds.sel(latitude=ds.latitude[ds.latitude < 90])
-    
-    log_message(f"Latitude range: {float(ds.latitude.min()):.1f}°N to {float(ds.latitude.max()):.1f}°N")
-    
-    # Apply temporal subsetting if specified
-    if start_date or end_date:
-        ds = ds.sel(time=slice(start_date, end_date))
-        log_message(f"Time range: {str(ds.time.values[0])[:10]} to {str(ds.time.values[-1])[:10]}")
-    
-    return ds
-
-
-# ==============================================================================
-# STEP 1: BANDPASS FILTERING
-# ==============================================================================
-#
-# PURPOSE:
-#     Isolate synoptic-scale transient eddies from the 850 hPa wind field
-#     by removing both slow background variations and high-frequency noise.
-#
-# METHOD:
-#     Apply a 1.2-6 day Butterworth bandpass filter to u and v components.
-#     The filter is applied forward-backward (filtfilt) to achieve zero phase
-#     shift, which preserves the correct timing of storm events.
-#
-# OUTPUT:
-#     u_eddy (u') and v_eddy (v'): bandpass-filtered wind components
-#
-# ==============================================================================
-
-log_message("=" * 70)
-log_message("STEP 1: BANDPASS FILTERING (1.2-6 days)")
-log_message("Following Yau & Chang (2020) for optimal weather impact correlation")
-log_message("=" * 70)
-
-
-def butterworth_bandpass_filter(data_array, time_dim='time', fs=4,
-                                 lowcut_days=6.0, highcut_days=1.2, order=5,
-                                 show_progress=False):
-    """
-    Apply Butterworth bandpass filter to isolate synoptic-scale eddies.
-    
-    ULTRA MEMORY-EFFICIENT: Processes one latitude row at a time.
-    Memory per iteration: ~25 MB (vs ~350 MB per lat band, or ~5 GB full array)
-    
-    Parameters
-    ----------
-    data_array : xarray.DataArray
-        Input wind component (u or v) at 850 hPa
-        Expected dimensions: (time, latitude, longitude)
-    fs : float
-        Sampling frequency in samples per day (4 for 6-hourly data)
-    lowcut_days : float
-        Low-frequency cutoff period in days (default: 6.0)
-    highcut_days : float
-        High-frequency cutoff period in days (default: 1.2)
-    order : int
-        Butterworth filter order (default: 5)
-    show_progress : bool
-        Print progress every 25% (default: False)
-    
-    Returns
-    -------
-    xarray.DataArray
-        Bandpass-filtered wind component (eddy component)
-    """
-    import gc  # Garbage collector for aggressive memory cleanup
-    
-    # Convert periods to frequencies
-    lowcut_freq = 1.0 / lowcut_days
-    highcut_freq = 1.0 / highcut_days
-    
-    # Design Butterworth bandpass filter
-    b, a = signal.butter(order, [lowcut_freq, highcut_freq], btype='band', fs=fs)
-    
-    # Ensure data is in (time, lat, lon) order
-    data_array = data_array.transpose('time', 'latitude', 'longitude')
-    data = data_array.values
-    n_times, n_lats, n_lons = data.shape
-    
-    # Output array (use float32 to save memory)
-    filtered_data = np.empty((n_times, n_lats, n_lons), dtype='float32')
-    
-    # Progress tracking
-    progress_points = [int(n_lats * p) for p in [0.25, 0.5, 0.75, 1.0]]
-    
-    # Process ONE LATITUDE AT A TIME to minimize memory usage
-    # Each iteration: (n_lons, n_times) ≈ 1440 × 2200 × 8 bytes ≈ 25 MB
-    
-    for lat_idx in range(n_lats):
-        # Extract single latitude row: (n_times, n_lons)
-        row = data[:, lat_idx, :].copy()
-        
-        # Transpose to (n_lons, n_times) for filtering along time axis
-        row_T = row.T.astype('float64')  # (n_lons, n_times)
-        
-        if USE_GPU:
-            try:
-                # Try GPU processing
-                row_gpu = cp.asarray(row_T)
-                row_detrended = cusignal.detrend(row_gpu, axis=1)
-                row_filtered = cusignal.filtfilt(b, a, row_detrended, axis=1)
-                result = cp.asnumpy(row_filtered).astype('float32')
-                
-                # Clean up GPU memory immediately
-                del row_gpu, row_detrended, row_filtered
-                cp.get_default_memory_pool().free_all_blocks()
-                
-            except Exception:
-                # Fallback to CPU
-                row_detrended = signal.detrend(row_T, axis=1)
-                result = signal.filtfilt(b, a, row_detrended, axis=1).astype('float32')
-                del row_detrended
-        else:
-            # CPU processing
-            row_detrended = signal.detrend(row_T, axis=1)
-            result = signal.filtfilt(b, a, row_detrended, axis=1).astype('float32')
-            del row_detrended
-        
-        # Store result: transpose back to (n_times, n_lons)
-        filtered_data[:, lat_idx, :] = result.T
-        
-        # Free memory
-        del row, row_T, result
-        
-        # Progress indicator
-        if show_progress and (lat_idx + 1) in progress_points:
-            pct = (lat_idx + 1) / n_lats * 100
-            log_message(f"      Filtering progress: {pct:.0f}%")
-    
-    # Force garbage collection
-    gc.collect()
-    
-    # Create output DataArray
-    filtered_da = xr.DataArray(
-        filtered_data,
-        dims=['time', 'latitude', 'longitude'],
-        coords={
-            'time': data_array.time,
-            'latitude': data_array.latitude,
-            'longitude': data_array.longitude
-        }
-    )
-    
-    return filtered_da
-
-
-# Check if eddy components already exist
-if os.path.exists(EDDY_COMPONENTS_PATH):
-    log_message("Eddy components file exists - checking completeness...")
-    try:
-        ds_test = xr.open_dataset(EDDY_COMPONENTS_PATH, engine='netcdf4')
-        if 'u_eddy' in ds_test and 'v_eddy' in ds_test:
-            log_message("→ Eddy components complete - SKIPPING Step 1")
-            ds_test.close()
-            SKIP_STEP1 = True
-        else:
-            ds_test.close()
-            os.remove(EDDY_COMPONENTS_PATH)
-            SKIP_STEP1 = False
-    except:
-        if os.path.exists(EDDY_COMPONENTS_PATH):
-            os.remove(EDDY_COMPONENTS_PATH)
-        SKIP_STEP1 = False
-else:
-    SKIP_STEP1 = False
-
-
-if not SKIP_STEP1:
-    # Load ERA5 data
-    log_message("Loading ERA5 850 hPa wind data...")
-    ds = load_yearly_data(YEARLY_FILES_PATTERN)
-    
-    total_timesteps = len(ds.time)
-    log_message(f"Total timesteps: {total_timesteps:,}")
-    
-    # -------------------------------------------------------------------------
-    # OVERLAP-SAVE ALGORITHM
-    # -------------------------------------------------------------------------
-    # Process data in temporal chunks with overlap to handle edge effects.
-    # The overlap region is discarded after filtering to avoid artifacts.
-    # -------------------------------------------------------------------------
-    
-    log_message(f"Applying {HIGHCUT_DAYS}-{LOWCUT_DAYS} day bandpass filter...")
-    
-    # -------------------------------------------------------------------------
-    # MEMORY-OPTIMIZED CHUNKING PARAMETERS
-    # -------------------------------------------------------------------------
-    # chunk_size: Number of timesteps per chunk
-    #   - 2000 timesteps ≈ 6 months of 6-hourly data
-    #   - Fits comfortably in GPU memory (~4-6 GB per variable)
-    #
-    # overlap: Timesteps of overlap between chunks to handle filter edge effects
-    #   - Rule of thumb: 3× the longest filter period
-    #   - For 6-day filter: 3 × 6 days × 4 timesteps/day = 72 timesteps minimum
-    #   - Using 100 timesteps (~25 days) for safety margin
-    # -------------------------------------------------------------------------
-    
-    chunk_size = 2000   # ~6 months per chunk (memory-efficient)
-    overlap = 100       # ~25 days overlap (4× the 6-day filter period)
-    n_chunks = int(np.ceil(total_timesteps / chunk_size))
-    
-    log_message(f"Processing in {n_chunks} chunks with {overlap}-timestep overlap")
-    log_message(f"Writing directly to disk to avoid memory issues...")
-    
-    # -------------------------------------------------------------------------
-    # PRE-CREATE OUTPUT FILE
-    # -------------------------------------------------------------------------
-    # Instead of storing chunks in memory and concatenating, we create the
-    # output NetCDF file first and write each chunk directly to disk.
-    # This avoids the ~80GB memory requirement for concatenation.
-    # -------------------------------------------------------------------------
-    
-    # Get coordinate info from first chunk
-    sample_chunk = ds['u'].isel(time=slice(0, 10)).load()
-    lats = ds.latitude.values
-    lons = ds.longitude.values
-    times = ds.time.values
-    n_times_total = len(times)
-    n_lats = len(lats)
-    n_lons = len(lons)
-    del sample_chunk
-    
-    # Create output file with pre-allocated arrays
-    log_message(f"  Creating output file: {EDDY_COMPONENTS_PATH}")
-    log_message(f"  Dimensions: ({n_times_total}, {n_lats}, {n_lons})")
-    
-    # Remove existing file if present
-    if os.path.exists(EDDY_COMPONENTS_PATH):
-        os.remove(EDDY_COMPONENTS_PATH)
-    
-    # Create NetCDF file
-    ncfile = nc.Dataset(EDDY_COMPONENTS_PATH, 'w', format='NETCDF4')
-    
-    # Create dimensions
-    ncfile.createDimension('time', n_times_total)
-    ncfile.createDimension('latitude', n_lats)
-    ncfile.createDimension('longitude', n_lons)
-    
-    # Create coordinate variables
-    time_var = ncfile.createVariable('time', 'f8', ('time',))
-    time_var.units = 'hours since 1900-01-01'
-    time_var.calendar = 'gregorian'
-    
-    lat_var = ncfile.createVariable('latitude', 'f4', ('latitude',))
-    lat_var.units = 'degrees_north'
-    lat_var[:] = lats
-    
-    lon_var = ncfile.createVariable('longitude', 'f4', ('longitude',))
-    lon_var.units = 'degrees_east'
-    lon_var[:] = lons
-    
-    # Create data variables with chunking and compression
-    # Chunk size optimized for time-series access at single points
-    chunk_sizes = (min(500, n_times_total), 1, n_lons)
-    
-    u_eddy_var = ncfile.createVariable(
-        'u_eddy', 'f4', ('time', 'latitude', 'longitude'),
-        chunksizes=chunk_sizes, zlib=True, complevel=4
-    )
-    u_eddy_var.long_name = 'Bandpass-filtered zonal wind (eddy component)'
-    u_eddy_var.units = 'm/s'
-    
-    v_eddy_var = ncfile.createVariable(
-        'v_eddy', 'f4', ('time', 'latitude', 'longitude'),
-        chunksizes=chunk_sizes, zlib=True, complevel=4
-    )
-    v_eddy_var.long_name = 'Bandpass-filtered meridional wind (eddy component)'
-    v_eddy_var.units = 'm/s'
-    
-    # Add global attributes
-    ncfile.title = 'Bandpass-filtered 850 hPa wind components'
-    ncfile.description = f'Synoptic-scale eddies isolated using {HIGHCUT_DAYS}-{LOWCUT_DAYS} day filter'
-    ncfile.methodology = 'Butterworth bandpass filter following Yau & Chang (2020)'
-    ncfile.filter_passband = f'{HIGHCUT_DAYS}-{LOWCUT_DAYS} days'
-    ncfile.source = 'ERA5 reanalysis at 850 hPa'
-    ncfile.author = 'Francesco Lucano'
-    ncfile.institution = 'University of Bern'
-    ncfile.created = datetime.now().isoformat()
-    
-    # Convert times to numeric values for NetCDF
-    time_values = pd.to_datetime(times)
-    hours_since_1900 = (time_values - pd.Timestamp('1900-01-01')).total_seconds() / 3600
-    time_var[:] = hours_since_1900.values
-    
-    log_message(f"  Output file created, now processing chunks...")
-    
-    # Track which timesteps have been written
-    write_position = 0
-    
-    for i in range(n_chunks):
-        # Define chunk boundaries with overlap
-        start_idx = max(0, i * chunk_size - overlap)
-        end_idx = min(n_times_total, (i + 1) * chunk_size + overlap)
-        
-        log_message(f"  Chunk {i+1}/{n_chunks}: timesteps {start_idx:,}-{end_idx:,}")
-        
-        # Load chunk into memory
-        u_chunk = ds['u'].isel(time=slice(start_idx, end_idx)).load()
-        v_chunk = ds['v'].isel(time=slice(start_idx, end_idx)).load()
-        
-        # Apply bandpass filter
-        log_message(f"    Filtering u component...")
-        u_eddy_chunk = butterworth_bandpass_filter(
-            u_chunk, lowcut_days=LOWCUT_DAYS, highcut_days=HIGHCUT_DAYS, 
-            order=FILTER_ORDER, show_progress=False
-        )
-        log_message(f"    Filtering v component...")
-        v_eddy_chunk = butterworth_bandpass_filter(
-            v_chunk, lowcut_days=LOWCUT_DAYS, highcut_days=HIGHCUT_DAYS, 
-            order=FILTER_ORDER, show_progress=False
-        )
-        
-        # Determine which timesteps to keep (trim overlap)
-        if i == 0:
-            # First chunk: keep from start, trim end overlap
-            keep_start = 0
-            keep_end = chunk_size if i < n_chunks - 1 else (end_idx - start_idx)
-            write_start = 0
-            write_end = keep_end
-        elif i == n_chunks - 1:
-            # Last chunk: trim start overlap, keep to end
-            keep_start = overlap
-            keep_end = end_idx - start_idx
-            write_start = write_position
-            write_end = write_start + (keep_end - keep_start)
-        else:
-            # Middle chunks: trim both ends
-            keep_start = overlap
-            keep_end = (end_idx - start_idx) - overlap
-            write_start = write_position
-            write_end = write_start + (keep_end - keep_start)
-        
-        # Extract data to write
-        u_data = u_eddy_chunk.values[keep_start:keep_end, :, :]
-        v_data = v_eddy_chunk.values[keep_start:keep_end, :, :]
-        
-        # Write directly to NetCDF file
-        log_message(f"    Writing to disk: positions {write_start:,}-{write_end:,}")
-        u_eddy_var[write_start:write_end, :, :] = u_data
-        v_eddy_var[write_start:write_end, :, :] = v_data
-        
-        # Update write position
-        write_position = write_end
-        
-        # Aggressive memory cleanup
-        del u_chunk, v_chunk, u_eddy_chunk, v_eddy_chunk, u_data, v_data
-        gc.collect()
-        
-        # Clear GPU memory cache if using CuPy
-        if USE_GPU:
-            try:
-                cp.get_default_memory_pool().free_all_blocks()
-            except:
-                pass
-    
-    # Close the NetCDF file
-    ncfile.close()
-    
-    log_message(f"  All chunks written to disk")
-    
-    # Verify the file
-    file_size_gb = os.path.getsize(EDDY_COMPONENTS_PATH) / (1024**3)
-    log_message(f"→ Saved: {EDDY_COMPONENTS_PATH} ({file_size_gb:.2f} GB)")
-    
-    # Verify filter removed seasonal cycle by sampling
-    log_message("Verifying filter (sampling subset)...")
-    ds_verify = xr.open_dataset(EDDY_COMPONENTS_PATH, engine='netcdf4')
-    u_sample = ds_verify['u_eddy'].isel(time=slice(0, 10000)).mean()
-    v_sample = ds_verify['v_eddy'].isel(time=slice(0, 10000)).mean()
-    log_message(f"  Sample mean u_eddy: {float(u_sample):.6f} m/s (expect ~0)")
-    log_message(f"  Sample mean v_eddy: {float(v_sample):.6f} m/s (expect ~0)")
-    ds_verify.close()
-    
-    # Close input dataset
-    ds.close()
-
-log_message("Step 1 complete\n")
-
-
-# ==============================================================================
-# STEP 2: KINETIC ENERGY BUDGET
-# ==============================================================================
-#
-# PURPOSE:
-#     Decompose total atmospheric kinetic energy into mean and eddy components
-#     to understand how energy is partitioned between the time-mean flow
-#     and transient eddies.
-#
-# ENERGY BUDGET:
-#     TKE = MKE + EKE
-#     
-#     where:
-#     TKE = (1/2) × mean(u² + v²)      Total Kinetic Energy
-#     MKE = (1/2) × (ū² + v̄²)          Mean Kinetic Energy (jet stream, etc.)
-#     EKE = (1/2) × mean(u'² + v'²)    Eddy Kinetic Energy (transient eddies)
-#
-# NOTE:
-#     The EKE calculated here uses monthly-mean deviations for budget closure.
-#     This is DIFFERENT from the bandpass-filtered EKE in Step 3, which
-#     specifically targets the 1.2-6 day synoptic band.
-#
-# ==============================================================================
-
-log_message("=" * 70)
-log_message("STEP 2: KINETIC ENERGY BUDGET")
-log_message("Calculating TKE, MKE, and EKE for energy partitioning")
-log_message("=" * 70)
-
-
-# ------------------------------------------------------------------------------
-# 2.1: TOTAL KINETIC ENERGY (TKE)
-# ------------------------------------------------------------------------------
-
-log_message("2.1: Total Kinetic Energy (TKE)...")
-
-if os.path.exists(TKE_PATH):
-    log_message("→ TKE file exists - SKIPPING")
-else:
-    ds = load_yearly_data(YEARLY_FILES_PATTERN, ANALYSIS_START, ANALYSIS_END)
-    
-    # TKE = (1/2) × (u² + v²) averaged monthly
-    tke_instant = 0.5 * (ds['u']**2 + ds['v']**2)
-    tke_monthly = tke_instant.resample(time='ME').mean(dim='time')
-    tke_monthly.name = 'tke'
-    
-    tke_monthly.attrs = {
-        'long_name': 'Total Kinetic Energy',
-        'units': 'm^2/s^2',
-        'formula': 'TKE = 0.5 × mean(u² + v²)'
-    }
-    
-    tke_monthly = tke_monthly.compute()
-    tke_monthly.to_netcdf(TKE_PATH)
-    log_message(f"→ Saved: {TKE_PATH}")
-    
-    ds.close()
-    del tke_instant, tke_monthly
-
-
-# ------------------------------------------------------------------------------
-# 2.2: MEAN KINETIC ENERGY (MKE)
-# ------------------------------------------------------------------------------
-
-log_message("2.2: Mean Kinetic Energy (MKE)...")
-
-if os.path.exists(MKE_PATH):
-    log_message("→ MKE file exists - SKIPPING")
-else:
-    ds = load_yearly_data(YEARLY_FILES_PATTERN, ANALYSIS_START, ANALYSIS_END)
-    
-    # MKE = (1/2) × (ū² + v̄²) from monthly-mean winds
-    u_monthly = ds['u'].resample(time='ME').mean(dim='time')
-    v_monthly = ds['v'].resample(time='ME').mean(dim='time')
-    mke_monthly = 0.5 * (u_monthly**2 + v_monthly**2)
-    mke_monthly.name = 'mke'
-    
-    mke_monthly.attrs = {
-        'long_name': 'Mean Kinetic Energy',
-        'units': 'm^2/s^2',
-        'formula': 'MKE = 0.5 × (ū² + v̄²)'
-    }
-    
-    mke_monthly = mke_monthly.compute()
-    mke_monthly.to_netcdf(MKE_PATH)
-    log_message(f"→ Saved: {MKE_PATH}")
-    
-    ds.close()
-    del u_monthly, v_monthly, mke_monthly
-
-
-# ------------------------------------------------------------------------------
-# 2.3: EDDY KINETIC ENERGY FOR BUDGET CLOSURE (EKE_budget)
-# ------------------------------------------------------------------------------
-
-log_message("2.3: Eddy Kinetic Energy for budget (EKE_budget)...")
-
-if os.path.exists(EKE_BUDGET_PATH):
-    log_message("→ EKE_budget file exists - SKIPPING")
-else:
-    ds = load_yearly_data(YEARLY_FILES_PATTERN, ANALYSIS_START, ANALYSIS_END)
-    
-    log_message("  Processing month-by-month...")
-    
-    eke_monthly_list = []
-    month_coords = []
-    month_count = 0
-    
-    for label, group in ds.resample(time='ME'):
-        month_count += 1
-        if month_count % 100 == 0:
-            log_message(f"    Processed {month_count} months...")
-        
-        group = group.load()
-        
-        # Calculate deviations from THIS month's mean
-        u_mean = group['u'].mean(dim='time')
-        v_mean = group['v'].mean(dim='time')
-        u_anom = group['u'] - u_mean
-        v_anom = group['v'] - v_mean
-        
-        # EKE = (1/2) × mean(u'² + v'²)
-        eke_instant = 0.5 * (u_anom**2 + v_anom**2)
-        eke_month = eke_instant.mean(dim='time')
-        
-        eke_monthly_list.append(eke_month)
-        month_coords.append(label)
-        
-        del group, u_anom, v_anom, eke_instant
-    
-    log_message(f"  Processed {month_count} months total")
-    
-    eke_budget = xr.concat(eke_monthly_list, dim='time').assign_coords(time=month_coords)
-    eke_budget.name = 'eke_budget'
-    
-    eke_budget.attrs = {
-        'long_name': 'Eddy Kinetic Energy (budget)',
-        'units': 'm^2/s^2',
-        'formula': "EKE = 0.5 × mean(u'² + v'²)",
-        'note': 'For budget closure (TKE = MKE + EKE); uses monthly deviations'
-    }
-    
-    eke_budget.to_netcdf(EKE_BUDGET_PATH)
-    log_message(f"→ Saved: {EKE_BUDGET_PATH}")
-    
-    ds.close()
-    del eke_monthly_list, eke_budget
-
-
-# ------------------------------------------------------------------------------
-# 2.4: VERIFY ENERGY BUDGET CLOSURE
-# ------------------------------------------------------------------------------
-
-log_message("2.4: Verifying energy budget closure...")
-
-try:
-    ds_tke = xr.open_dataset(TKE_PATH, engine='netcdf4')
-    ds_mke = xr.open_dataset(MKE_PATH, engine='netcdf4')
-    ds_eke = xr.open_dataset(EKE_BUDGET_PATH, engine='netcdf4')
-    
-    # Test at sample months
-    test_months = [50, 200, 500, 700]
-    errors = []
-    
-    for idx in test_months:
-        if idx >= len(ds_tke.time):
-            continue
-        
-        tke = float(ds_tke['tke'].isel(time=idx).mean())
-        mke = float(ds_mke['mke'].isel(time=idx).mean())
-        eke = float(ds_eke['eke_budget'].isel(time=idx).mean())
-        
-        error_pct = abs(tke - (mke + eke)) / tke * 100
-        errors.append(error_pct)
-    
-    mean_error = np.mean(errors)
-    log_message(f"  Mean budget error: {mean_error:.6f}%")
-    
-    if mean_error < 0.01:
-        log_message("→ Budget verified (error < 0.01%)")
-    else:
-        log_message("→ WARNING: Budget error exceeds tolerance")
-    
-    ds_tke.close()
-    ds_mke.close()
-    ds_eke.close()
-
-except Exception as e:
-    log_message(f"→ ERROR: {e}")
-
-log_message("Step 2 complete\n")
-
-
-# ==============================================================================
-# STEP 3: STORMINESS METRICS
-# ==============================================================================
-#
-# PURPOSE:
-#     Calculate monthly storminess metrics from the bandpass-filtered EKE.
-#     These metrics characterize different aspects of synoptic-scale storm
-#     activity relevant to coastal erosion.
-#
-# METRICS:
-#     1. MEAN EKE (eke_mean)
-#        Monthly average of instantaneous EKE from filtered eddies.
-#        PRIMARY METRIC: Yau & Chang (2020) showed this is most strongly
-#        correlated with weather impacts.
-#
-#     2. PERCENTILES (eke_p90, eke_p95, eke_p99)
-#        Monthly percentiles capture extreme storm intensity.
-#        P95/P99 are most relevant for acute coastal erosion events.
-#
-#     3. VARIANCE (eke_variance)
-#        Captures the episodic nature of storminess.
-#        High variance = alternating intense storms and calm periods.
-#        Relevant for understanding recovery time between erosion events.
-#
-#     4. EXCEEDANCE FREQUENCY (exceed_p95_freq)
-#        Fraction of timesteps exceeding the 1961-1990 P95 threshold.
-#        If this increases while mean stays stable → more frequent extremes.
-#
-# ==============================================================================
-
-log_message("=" * 70)
-log_message("STEP 3: STORMINESS METRICS")
-log_message("Computing metrics from bandpass-filtered EKE")
-log_message("=" * 70)
-
-
-# Check if already complete
-if os.path.exists(STORMINESS_METRICS_PATH):
-    log_message("Storminess metrics file exists - checking completeness...")
-    try:
-        ds_test = xr.open_dataset(STORMINESS_METRICS_PATH, engine='netcdf4')
-        required = ['eke_mean', 'eke_p90', 'eke_p95', 'eke_p99', 
-                    'eke_variance', 'exceed_p95_freq']
-        if all(var in ds_test for var in required):
-            log_message("→ All metrics present - SKIPPING Step 3")
-            ds_test.close()
-            SKIP_STEP3 = True
-        else:
-            ds_test.close()
-            os.remove(STORMINESS_METRICS_PATH)
-            SKIP_STEP3 = False
-    except:
-        if os.path.exists(STORMINESS_METRICS_PATH):
-            os.remove(STORMINESS_METRICS_PATH)
-        SKIP_STEP3 = False
-else:
-    SKIP_STEP3 = False
-
-
-if not SKIP_STEP3:
-    # -------------------------------------------------------------------------
-    # MEMORY-EFFICIENT PROCESSING
-    # -------------------------------------------------------------------------
-    # Instead of loading the entire 74 GB array, we:
-    # 1. First calculate climatological P95 using a subset of data
-    # 2. Then process each month individually, loading only that month's data
-    # -------------------------------------------------------------------------
-    
-    log_message("Opening eddy components file (lazy loading)...")
-    ds_eddy = xr.open_dataset(EDDY_COMPONENTS_PATH, engine='netcdf4')
-    
-    # Get time information
-    all_times = pd.to_datetime(ds_eddy.time.values)
-    lats = ds_eddy.latitude.values
-    lons = ds_eddy.longitude.values
-    n_lats = len(lats)
-    n_lons = len(lons)
-    
-    log_message(f"  Total timesteps: {len(all_times):,}")
-    log_message(f"  Grid: {n_lats} × {n_lons}")
-    
-    # -------------------------------------------------------------------------
-    # Calculate climatological P95 threshold (reference period)
-    # -------------------------------------------------------------------------
-    # Process in yearly chunks to avoid memory issues
-    # -------------------------------------------------------------------------
-    
-    log_message(f"Calculating P95 climatology ({REFERENCE_START[:4]}-{REFERENCE_END[:4]})...")
-    log_message("  Processing reference period in yearly chunks...")
-    
-    ref_start = pd.Timestamp(REFERENCE_START)
-    ref_end = pd.Timestamp(REFERENCE_END)
-    
-    # Collect EKE values from reference period (sample every Nth timestep to save memory)
-    # For P95, we need good coverage but don't need every single timestep
-    eke_samples = []
-    
-    for year in range(ref_start.year, ref_end.year + 1):
-        year_start = f'{year}-01-01'
-        year_end = f'{year}-12-31'
-        
-        log_message(f"    Processing {year}...")
-        
-        # Load one year of data
-        u_year = ds_eddy['u_eddy'].sel(time=slice(year_start, year_end)).values
-        v_year = ds_eddy['v_eddy'].sel(time=slice(year_start, year_end)).values
-        
-        # Calculate EKE for this year
-        eke_year = 0.5 * (u_year**2 + v_year**2)
-        
-        # Sample every 4th timestep (still ~365 samples per year)
-        eke_samples.append(eke_year[::4, :, :])
-        
-        del u_year, v_year, eke_year
-        gc.collect()
-    
-    # Stack all samples and compute P95
-    log_message("  Computing P95 threshold...")
-    eke_ref_stack = np.concatenate(eke_samples, axis=0)
-    eke_p95_clim = np.percentile(eke_ref_stack, 95, axis=0).astype('float32')
-    
-    log_message(f"  P95 range: {eke_p95_clim.min():.2f} to {eke_p95_clim.max():.2f} m²/s²")
-    
-    del eke_samples, eke_ref_stack
-    gc.collect()
-    
-    # -------------------------------------------------------------------------
-    # Calculate monthly metrics - process each month individually
-    # -------------------------------------------------------------------------
-    
-    log_message("Calculating monthly metrics (processing month by month)...")
-    
-    # Get unique year-months
-    year_months = all_times.to_period('M').unique()
-    n_months = len(year_months)
-    log_message(f"  Total months to process: {n_months}")
-    
-    # Storage for monthly metrics
-    mean_list, p90_list, p95_list, p99_list = [], [], [], []
-    var_list, exceed_list = [], []
-    time_labels = []
-    
-    for i, ym in enumerate(year_months):
-        if (i + 1) % 100 == 0:
-            log_message(f"  Processed {i+1}/{n_months} months...")
-        
-        # Define time range for this month
-        month_start = ym.start_time
-        month_end = ym.end_time
-        
-        # Load only this month's data
-        u_month = ds_eddy['u_eddy'].sel(time=slice(month_start, month_end)).values
-        v_month = ds_eddy['v_eddy'].sel(time=slice(month_start, month_end)).values
-        
-        # Calculate EKE for this month
-        eke_month = 0.5 * (u_month**2 + v_month**2)
-        
-        # Calculate metrics
-        mean_eke = np.mean(eke_month, axis=0)
-        p90_eke = np.percentile(eke_month, 90, axis=0)
-        p95_eke = np.percentile(eke_month, 95, axis=0)
-        p99_eke = np.percentile(eke_month, 99, axis=0)
-        var_eke = np.var(eke_month, axis=0)
-        exceed_freq = np.mean(eke_month > eke_p95_clim, axis=0)
-        
-        # Store as DataArrays
-        coords = {'latitude': lats, 'longitude': lons}
-        dims = ['latitude', 'longitude']
-        
-        mean_list.append(xr.DataArray(mean_eke.astype('float32'), dims=dims, coords=coords))
-        p90_list.append(xr.DataArray(p90_eke.astype('float32'), dims=dims, coords=coords))
-        p95_list.append(xr.DataArray(p95_eke.astype('float32'), dims=dims, coords=coords))
-        p99_list.append(xr.DataArray(p99_eke.astype('float32'), dims=dims, coords=coords))
-        var_list.append(xr.DataArray(var_eke.astype('float32'), dims=dims, coords=coords))
-        exceed_list.append(xr.DataArray(exceed_freq.astype('float32'), dims=dims, coords=coords))
-        time_labels.append(month_end)  # Use end of month as timestamp
-        
-        # Free memory
-        del u_month, v_month, eke_month
-        del mean_eke, p90_eke, p95_eke, p99_eke, var_eke, exceed_freq
-    
-    log_message(f"  Processed {n_months} months total")
-    
-    # Close eddy components file
-    ds_eddy.close()
-    
-    # -------------------------------------------------------------------------
-    # Combine into Dataset
-    # -------------------------------------------------------------------------
-    log_message("Assembling output Dataset...")
-    
-    # Create P95 climatology DataArray
-    eke_p95_clim_da = xr.DataArray(
-        eke_p95_clim,
-        dims=['latitude', 'longitude'],
-        coords={'latitude': lats, 'longitude': lons}
-    )
-    
-    ds_metrics = xr.Dataset({
-        'eke_mean': xr.concat(mean_list, dim='time').assign_coords(time=time_labels),
-        'eke_p90': xr.concat(p90_list, dim='time').assign_coords(time=time_labels),
-        'eke_p95': xr.concat(p95_list, dim='time').assign_coords(time=time_labels),
-        'eke_p99': xr.concat(p99_list, dim='time').assign_coords(time=time_labels),
-        'eke_variance': xr.concat(var_list, dim='time').assign_coords(time=time_labels),
-        'exceed_p95_freq': xr.concat(exceed_list, dim='time').assign_coords(time=time_labels),
-        'eke_p95_climatology': eke_p95_clim_da
-    })
-    
-    # -------------------------------------------------------------------------
-    # Add metadata
-    # -------------------------------------------------------------------------
-    ds_metrics.attrs = {
-        'title': 'Arctic Storminess Metrics (1958-2024)',
-        'description': 'Monthly metrics from 850 hPa bandpass-filtered EKE',
-        'bandpass_filter': f'{HIGHCUT_DAYS}-{LOWCUT_DAYS} days (Yau & Chang 2020)',
-        'reference_period': f'{REFERENCE_START[:4]}-{REFERENCE_END[:4]}',
-        'source': 'ERA5 reanalysis',
-        'author': 'Francesco Lucano',
-        'institution': 'University of Bern',
-        'created': datetime.now().isoformat()
-    }
-    
-    ds_metrics['eke_mean'].attrs = {
-        'long_name': 'Monthly mean EKE',
-        'units': 'm^2/s^2',
-        'description': 'Primary storminess metric (Yau & Chang 2020)'
-    }
-    
-    ds_metrics['eke_p90'].attrs = {
-        'long_name': 'Monthly 90th percentile EKE',
-        'units': 'm^2/s^2'
-    }
-    
-    ds_metrics['eke_p95'].attrs = {
-        'long_name': 'Monthly 95th percentile EKE',
-        'units': 'm^2/s^2',
-        'description': 'Strong storm intensity'
-    }
-    
-    ds_metrics['eke_p99'].attrs = {
-        'long_name': 'Monthly 99th percentile EKE',
-        'units': 'm^2/s^2',
-        'description': 'Extreme storm intensity - most relevant for coastal erosion'
-    }
-    
-    ds_metrics['eke_variance'].attrs = {
-        'long_name': 'Monthly variance of EKE',
-        'units': 'm^4/s^4',
-        'description': 'Storminess variability (episodic nature)'
-    }
-    
-    ds_metrics['exceed_p95_freq'].attrs = {
-        'long_name': 'P95 exceedance frequency',
-        'units': 'fraction',
-        'description': f'Fraction exceeding {REFERENCE_START[:4]}-{REFERENCE_END[:4]} P95 (pre-warming baseline)'
-    }
-    
-    ds_metrics['eke_p95_climatology'].attrs = {
-        'long_name': 'Climatological P95 threshold',
-        'units': 'm^2/s^2',
-        'description': f'{REFERENCE_START[:4]}-{REFERENCE_END[:4]} pre-warming baseline'
-    }
-    
-    # -------------------------------------------------------------------------
-    # Save
-    # -------------------------------------------------------------------------
-    log_message("Saving storminess metrics...")
-    
-    encoding = {var: {'zlib': True, 'complevel': 4} for var in ds_metrics.data_vars}
-    ds_metrics.to_netcdf(STORMINESS_METRICS_PATH, encoding=encoding, format='NETCDF4')
-    
-    file_size_mb = os.path.getsize(STORMINESS_METRICS_PATH) / (1024**2)
-    log_message(f"→ Saved: {STORMINESS_METRICS_PATH} ({file_size_mb:.1f} MB)")
-    
-    # -------------------------------------------------------------------------
-    # Summary statistics
-    # -------------------------------------------------------------------------
-    log_message("\nSUMMARY STATISTICS (domain average):")
-    log_message(f"  Mean EKE:        {float(ds_metrics['eke_mean'].mean()):.2f} m²/s²")
-    log_message(f"  Mean P95 EKE:    {float(ds_metrics['eke_p95'].mean()):.2f} m²/s²")
-    log_message(f"  Mean P99 EKE:    {float(ds_metrics['eke_p99'].mean()):.2f} m²/s²")
-    
-    # Quick trend check
-    early = ds_metrics.sel(time=slice('1958', '1990'))
-    late = ds_metrics.sel(time=slice('2000', '2024'))
-    
-    log_message("\nPRELIMINARY CHANGE (1958-1990 vs 2000-2024):")
-    log_message(f"  Mean EKE change: {float(late['eke_mean'].mean()) - float(early['eke_mean'].mean()):+.3f} m²/s²")
-    log_message(f"  P99 EKE change:  {float(late['eke_p99'].mean()) - float(early['eke_p99'].mean()):+.3f} m²/s²")
-    
-    ds_metrics.close()
-
-log_message("Step 3 complete\n")
-
-
-# ==============================================================================
-# FINAL SUMMARY
-# ==============================================================================
-
-log_message("=" * 70)
-log_message("ANALYSIS COMPLETE")
-log_message("=" * 70)
-
-log_message("\nOUTPUT FILES:")
-files = [
-    (EDDY_COMPONENTS_PATH, "Bandpass-filtered eddies (u', v')"),
-    (TKE_PATH, "Total Kinetic Energy (monthly)"),
-    (MKE_PATH, "Mean Kinetic Energy (monthly)"),
-    (EKE_BUDGET_PATH, "EKE for budget closure (monthly)"),
-    (STORMINESS_METRICS_PATH, "Storminess metrics (mean, percentiles, etc.)")
-]
-
-for path, desc in files:
-    if os.path.exists(path):
-        size = os.path.getsize(path) / (1024**2)
-        log_message(f"  ✓ {desc}: {size:.1f} MB")
-    else:
-        log_message(f"  ✗ {desc}: MISSING")
-
-log_message(f"""
-METHODOLOGY SUMMARY
-===================
-Bandpass filter:    {HIGHCUT_DAYS}-{LOWCUT_DAYS} days (Yau & Chang 2020)
-Reference period:   {REFERENCE_START[:4]}-{REFERENCE_END[:4]} (pre-Arctic Amplification baseline)
-Primary metric:     850 hPa EKE (optimal for weather impacts)
-
-NEXT STEPS
-==========
-1. Run diagnostic plots (Phase 1)
-2. Apply trend analysis with modified Mann-Kendall test
-3. Seasonal stratification (focus on autumn for feedback hypothesis)
-4. Svalbard regional case study
-""")
-
-log_message("=" * 70)
-```
-
-
-```{python}
-import os
-path = "E:/ERA5_data/processed/ERA5_eddy_components_1958-2024.nc"
-print(f"File exists: {os.path.exists(path)}")
-if os.path.exists(path):
-    print(f"File size: {os.path.getsize(path) / (1024**3):.2f} GB")
-    import xarray as xr
-    ds = xr.open_dataset(path)
-    print(f"Variables: {list(ds.data_vars)}")
-    print(f"Timesteps: {len(ds.time)}")
-    ds.close()
-```
-
-
-
-
-
-
-
-
-
-
