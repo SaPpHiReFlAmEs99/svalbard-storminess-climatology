@@ -1,7 +1,0 @@
-Region,Test,Hypothesis,Statistic,Result,Conclusion
-Pan-Arctic (≥ 60°N),Pettitt's Test,Single abrupt step-change,p = 0.9486,Not Significant,No step-change
-Pan-Arctic (≥ 60°N),MBB Diff. in Means,H₀: μ₁₉₅₈₋₈₇ = μ₁₉₈₈₋₂₀₂₄,"95% CI: [-6.617, 6.683]",Not Significant,No step-change
-Pan-Arctic (≥ 60°N),MBB Diff. in Means,H₀: μ₁₉₅₈₋₈₇ = μ₂₀₀₅₋₂₀₂₄,"95% CI: [-7.691, 7.884]",Not Significant,No step-change
-Pan-Arctic (≥ 60°N),GLS Interaction,H₀: Autumn trend ≠ Other seasons,p = 0.9253,Not Significant,No Autumn Intensification
-Fram Strait,GLS Interaction,H₀: Autumn trend ≠ Other seasons,p = 0.749,Not Significant,No Autumn Intensification
-Svalbard/Barents,GLS Interaction,H₀: Autumn trend ≠ Other seasons,p = 0.751,Not Significant,No Autumn Intensification
