@@ -474,18 +474,21 @@ cat(sprintf("  ✓ Created data frame with %d rows and %d columns\n",
 
 ## 1.4 Assessment of Temporal Autocorrelation
 
-This diagnostic is the single most important prerequisite for the entire statistical framework. Standard statistical tests, including Ordinary Least 
-Squares (OLS) regression, operate on the strict assumption that the data points (or model residuals) are independent. Climate time series violate this  assumption due to strong persistence, or "memory," arising from the inertia of the climate system.
+This diagnostic is a critical prerequisite for the entire statistical framework. Standard statistical tests, including Ordinary Least Squares (OLS) regression, operate on the strict assumption that data points (or model residuals) are independent. Climate time series violate this assumption due to persistence, or "memory," arising from the inertia of the climate system.
 
-### 1.4.1 Autocorrelation and Partial Autocorrelation Functions
+### 1.4.1 Deseasonalization Requirement
 
-To quantify the degree of persistence in the area-weighted Pan-Arctic storminess metrics, both the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) were computed for lags up to 36 months. The ACF measures the correlation between observations separated by $k$ time steps:
+As demonstrated by the STL decomposition (Section 1.4.3), the seasonal cycle accounts for 70.9% of total variance in the Pan-Arctic storminess time series. To obtain valid estimates of atmospheric persistence, autocorrelation must be calculated on deseasonalized anomalies, monthly values minus the climatological mean for that specific calendar month (calculated over the 1961–1990 reference period), rather than raw data.
+
+### 1.4.2 Autocorrelation and Partial Autocorrelation Functions
+
+To quantify the degree of persistence in the deseasonalized Pan-Arctic storminess metrics, both the Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) were computed for lags up to 36 months. The ACF measures the correlation between observations separated by $k$ time steps:
 
 $$\rho_k = \frac{\text{Cov}(X_t, X_{t-k})}{\text{Var}(X_t)}$$
 
 The PACF measures the correlation at lag $k$ after removing the linear dependence on intermediate lags, providing insight into the appropriate autoregressive order for error modelling.
 
-### 1.4.2 Effective Sample Size
+### 1.4.3 Effective Sample Size
 
 When autocorrelation is present, the effective number of independent observations is smaller than the nominal sample size. Following Zwiers and von Storch (1995), the effective sample size was calculated as:
 
@@ -493,21 +496,23 @@ $$n_{eff} = \frac{N}{1 + 2\sum_{k=1}^{K}\left(1 - \frac{k}{N}\right)\rho_k}$$
 
 where $N$ is the original sample size and $\rho_k$ is the autocorrelation at lag $k$.
 
-The analysis yielded the following results:
+The analysis of deseasonalized anomalies yielded the following results:
 
-| Metric          | Lag-1 ACF ($\rho_1$) | Lag-1 PACF ($\phi_1$) | $n_{eff}$ | DoF Reduction |
-|-----------------|----------------------|-----------------------|-----------|---------------|
-| eke_mean        | 0.648                | 0.648                 | 592       | 27.4%         |
-| eke_p90         | 0.649                | 0.649                 | 599       | 26.6%         |
-| eke_p95         | 0.658                | 0.658                 | 595       | 27.1%         |
-| eke_p99         | 0.664                | 0.664                 | 600       | 26.5%         |
-| exceed_p95_freq | 0.583                | 0.583                 | 571       | 30.1%         |
+| Metric          | Lag-1 ACF ($\rho_1$) | $n_{eff}$ | DoF Reduction |
+|-----------------|----------------------|-----------|---------------|
+| eke_mean        | 0.153                | 313       | 61.7%         |
+| eke_p90         | 0.149                | 316       | 61.3%         |
+| eke_p95         | 0.152                | 308       | 62.2%         |
+| eke_p99         | 0.160                | 313       | 61.6%         |
+| exceed_p95_freq | 0.125                | 328       | 59.7%         |
 
-: Autocorrelation diagnostics for Pan-Arctic storminess metrics {#tbl-acf}
+: Autocorrelation diagnostics for deseasonalized Pan-Arctic storminess anomalies {#tbl-acf}
 
-All lag-1 values substantially exceed the threshold of $\rho_1 > 0.1$ that indicates violation of the independence assumption for monthly atmospheric data (Santer et al. 2000). The PACF exhibits a significant spike at lag 1 followed by rapid decay toward the confidence bounds at subsequent lags, confirming that an AR(1) error structure is appropriate for GLS regression analyses. Secondary significant spikes at lags 12 and 24 reflect residual seasonality, consistent with the strong seasonal cycle identified in the STL decomposition.
+All lag-1 values exceed the threshold of $\rho_1 > 0.1$ that indicates violation of the independence assumption for monthly atmospheric data (Santer et al. 2000), confirming that autocorrelation-corrected methods are required. The modest lag-1 autocorrelation ($\rho_1 \approx 0.15$) reflects genuine atmospheric memory, likely arising from slower-varying boundary forcing such as sea surface temperatures and sea ice extent that impart persistence to monthly-mean atmospheric statistics.
 
-### 1.4.3 Variance Decomposition
+The PACF exhibits a significant spike at lag 1 followed by rapid decay toward the confidence bounds, confirming that an AR(1) error structure is appropriate for GLS regression analyses.
+
+### 1.4.4 Variance Decomposition
 
 To further characterize the temporal structure, Seasonal-Trend decomposition using LOESS (STL) was applied to the primary metric (mean EKE). The variance contribution of each component was:
 
@@ -519,51 +524,96 @@ To further characterize the temporal structure, Seasonal-Trend decomposition usi
 
 : STL variance decomposition for Pan-Arctic mean EKE {#tbl-stl}
 
-The seasonal cycle dominates the variance structure, reflecting the pronounced winter-summer contrast in Arctic storm activity. Critically, the trend component explains only 3.9% of total variance, indicating that any long-term systematic change in Pan-Arctic storminess is small relative to seasonal and interannual variability. This finding provides important context 
-for interpreting subsequent trend analyses.
+The seasonal cycle dominates the variance structure, reflecting the pronounced winter-summer contrast in Arctic storm activity. Critically, the trend component explains only 3.9% of total variance, indicating that any long-term systematic change in Pan-Arctic storminess is small relative to seasonal and interannual variability. This finding provides important context for interpreting subsequent trend analyses.
 
 ```{r}
 # ============================================================================
-# Section 1.4: Assessment of Temporal Autocorrelation
+# Section 1.4: Assessment of Temporal Autocorrelation (CORRECTED)
+# Calculate ACF on DESEASONALIZED ANOMALIES, not raw data
 # ============================================================================
 
 cat("\n", rep("-", 40), "\n")
-cat("Assessing temporal autocorrelation...\n\n")
+cat("Assessing temporal autocorrelation on DESEASONALIZED data...\n\n")
 
-# Store ACF results
-acf_results <- list()
+# ----------------------------------------------------------------------------
+# Step 1: Create deseasonalized anomalies for each metric
+# ----------------------------------------------------------------------------
+
+# Function to deseasonalize by removing monthly climatology
+deseasonalize <- function(df, metric_col) {
+  df %>%
+    group_by(month) %>%
+    mutate(anomaly = .data[[metric_col]] - mean(.data[[metric_col]], na.rm = TRUE)) %>%
+    ungroup() %>%
+    pull(anomaly)
+}
+
+# Create anomalies for all metrics
+storm_df_anom <- storm_df %>%
+  mutate(
+    eke_mean_anom = deseasonalize(., "eke_mean"),
+    eke_p90_anom = deseasonalize(., "eke_p90"),
+    eke_p95_anom = deseasonalize(., "eke_p95"),
+    eke_p99_anom = deseasonalize(., "eke_p99"),
+    exceed_p95_freq_anom = deseasonalize(., "exceed_p95_freq")
+  )
+
+# Create ts objects for anomalies
+ts_objects_anom <- list(
+  eke_mean = ts(storm_df_anom$eke_mean_anom, start = c(1958, 1), frequency = 12),
+  eke_p90 = ts(storm_df_anom$eke_p90_anom, start = c(1958, 1), frequency = 12),
+  eke_p95 = ts(storm_df_anom$eke_p95_anom, start = c(1958, 1), frequency = 12),
+  eke_p99 = ts(storm_df_anom$eke_p99_anom, start = c(1958, 1), frequency = 12),
+  exceed_p95_freq = ts(storm_df_anom$exceed_p95_freq_anom, start = c(1958, 1), frequency = 12)
+)
+
+# ----------------------------------------------------------------------------
+# Step 2: Calculate ACF on anomalies and compare with raw
+# ----------------------------------------------------------------------------
+
+acf_results_anom <- list()
+acf_comparison <- data.frame()
 
 for (metric in names(ts_objects)) {
- ts_data <- ts_objects[[metric]]
- 
- # Calculate ACF
- acf_result <- acf(ts_data, lag.max = 24, plot = FALSE)
- acf_results[[metric]] <- acf_result
- 
- # Extract lag-1 autocorrelation
- rho1 <- acf_result$acf[2]
- 
- # Calculate effective sample size (Zwiers & von Storch, 1995)
- N <- length(ts_data)
- rho_k <- acf_result$acf[-1]  # All lags from 1 to 24
- k <- 1:length(rho_k)
- neff <- N / (1 + 2 * sum((1 - k/N) * rho_k))
- 
- # Report
- cat(sprintf("--- %s ---\n", metric))
- cat(sprintf("  Lag-1 autocorrelation (ρ₁): %.3f\n", rho1))
- cat(sprintf("  Original sample size (N): %d\n", N))
- cat(sprintf("  Effective sample size (neff): %.1f\n", neff))
- cat(sprintf("  Reduction in degrees of freedom: %.1f%%\n", (1 - neff/N) * 100))
- 
- if (abs(rho1) > 0.1) {
-   cat("  → Significant autocorrelation detected\n")
-   cat("  → Use autocorrelation-corrected tests (Modified MK, GLS)\n\n")
- } else {
-   cat("  → Weak autocorrelation\n")
-   cat("  → Standard tests may be acceptable\n\n")
- }
+  ts_raw <- ts_objects[[metric]]
+  ts_anom <- ts_objects_anom[[metric]]
+  
+  # ACF on raw data (for comparison)
+  acf_raw <- acf(ts_raw, lag.max = 24, plot = FALSE)
+  rho1_raw <- acf_raw$acf[2]
+  
+  # ACF on deseasonalized anomalies (CORRECT approach)
+  acf_anom <- acf(ts_anom, lag.max = 24, plot = FALSE)
+  rho1_anom <- acf_anom$acf[2]
+  
+  acf_results_anom[[metric]] <- acf_anom
+  
+  # Calculate effective sample size using ANOMALY autocorrelation
+  N <- length(ts_anom)
+  rho_k <- acf_anom$acf[-1]  # All lags from 1 to 24
+  k <- 1:length(rho_k)
+  neff <- N / (1 + 2 * sum((1 - k/N) * pmax(rho_k, 0)))  # Only positive correlations
+  
+  # Store comparison
+  acf_comparison <- rbind(acf_comparison, data.frame(
+    metric = metric,
+    rho1_raw = rho1_raw,
+    rho1_anomaly = rho1_anom,
+    inflation_factor = rho1_raw / rho1_anom,
+    N = N,
+    neff = neff,
+    dof_reduction_pct = (1 - neff/N) * 100
+  ))
+  
+  cat(sprintf("--- %s ---\n", metric))
+  cat(sprintf("  ρ₁ (raw data):        %.3f  [INFLATED by seasonality]\n", rho1_raw))
+  cat(sprintf("  ρ₁ (anomalies):       %.3f  [TRUE atmospheric memory]\n", rho1_anom))
+  cat(sprintf("  Inflation factor:     %.2fx\n", rho1_raw / rho1_anom))
+  cat(sprintf("  Effective sample size: %.1f (%.1f%% reduction)\n", neff, (1 - neff/N) * 100))
+  cat("\n")
 }
+
+print(knitr::kable(acf_comparison, digits = 3, format = "simple"))
 ```
 
 ```{r}
@@ -846,14 +896,12 @@ ggsave(file.path(fig_dir, "Fig01_TimeSeries_AllMetrics.png"),
 cat("  ✓ Saved: Fig01_TimeSeries_AllMetrics.png\n")
 
 # ============================================================================
-# PLOT 2: ACF PLOTS (ALL METRICS)
+# PLOT 2: ACF AND PACF PLOTS (ON DESEASONALIZED ANOMALIES)
 # ============================================================================
 
-cat("\n--- Generating Plot 2: ACF and PACF Plots ---\n")
+cat("\n--- Generating Plot 2: ACF and PACF Plots (Anomalies) ---\n")
 
-# Create multi-panel ACF/PACF plot
-# Layout: 5 metrics × 2 columns (ACF, PACF)
-png(file.path(fig_dir, "Fig02_ACF_PACF_AllMetrics.png"),
+png(file.path(fig_dir, "Fig02_ACF_PACF_Anomalies.png"),
     width = 12, height = 14, units = "in", res = 300)
 
 par(mfrow = c(5, 2), 
@@ -861,41 +909,40 @@ par(mfrow = c(5, 2),
     oma = c(0, 0, 3, 0))
 
 for (metric in METRICS) {
-  if (metric %in% names(ts_objects)) {
-    # Get rho1 value
-    rho1 <- acf(ts_objects[[metric]], lag.max = 1, plot = FALSE)$acf[2]
+  if (metric %in% names(ts_objects_anom)) {
+    ts_anom <- ts_objects_anom[[metric]]
     
-    # Get PACF lag-1 value
-    pacf_result <- pacf(ts_objects[[metric]], lag.max = 36, plot = FALSE)
-    pacf1 <- pacf_result$acf[1]
+    # Get rho1 values for annotation
+    rho1_anom <- acf(ts_anom, lag.max = 1, plot = FALSE)$acf[2]
+    pacf1_anom <- pacf(ts_anom, lag.max = 36, plot = FALSE)$acf[1]
     
     # ACF plot
-    acf(ts_objects[[metric]], lag.max = 36,
-        main = paste0("ACF: ", metric),
+    acf(ts_anom, lag.max = 36,
+        main = paste0("ACF: ", metric, " (anomalies)"),
         xlab = "Lag (months)",
         ylab = "Autocorrelation",
         col = metric_colors[metric],
         lwd = 2)
-    mtext(bquote(rho[1] == .(sprintf("%.3f", rho1))), 
+    mtext(bquote(rho[1] == .(sprintf("%.3f", rho1_anom))), 
           side = 3, line = -1.5, adj = 0.95, cex = 0.8)
     
     # PACF plot
-    pacf(ts_objects[[metric]], lag.max = 36,
-         main = paste0("PACF: ", metric),
+    pacf(ts_anom, lag.max = 36,
+         main = paste0("PACF: ", metric, " (anomalies)"),
          xlab = "Lag (months)",
          ylab = "Partial Autocorrelation",
          col = metric_colors[metric],
          lwd = 2)
-    mtext(bquote(phi[1] == .(sprintf("%.3f", pacf1))), 
+    mtext(bquote(phi[1] == .(sprintf("%.3f", pacf1_anom))), 
           side = 3, line = -1.5, adj = 0.95, cex = 0.8)
   }
 }
 
-mtext("Autocorrelation and Partial Autocorrelation Functions: Pan-Arctic Storminess Metrics (1958–2025)",
+mtext("Autocorrelation Functions: Deseasonalized Anomalies (1958–2025)",
       outer = TRUE, line = 1, cex = 1.2, font = 2)
 
 dev.off()
-cat("  ✓ Saved: Fig02_ACF_PACF_AllMetrics.png\n")
+cat("  ✓ Saved: Fig02_ACF_PACF_Anomalies.png\n")
 
 # ============================================================================
 # PLOT 3: SEASONAL BOXPLOTS
@@ -1636,7 +1683,7 @@ cat("\n", rep("=", 70), "\n\n")
 
 This phase examines the atmospheric kinetic energy budget to provide mechanistic context for interpreting storminess trends. Following the Reynolds decomposition framework (Lorenz 1955; Peixoto and Oort 1992), the total kinetic energy of the atmosphere can be partitioned into mean and eddy components:
 
-$$TKE = MKE + EKE$$
+$$\overline{TKE} = MKE + EKE$$
 
 where:
 - **TKE** (Total Kinetic Energy): Complete kinetic energy of the atmospheric flow
@@ -2021,6 +2068,472 @@ print(kable(energy_trends_df %>%
                           "p-value", "Significant"),
             format = "simple"))
 ```
+
+```{r}
+# ============================================================================
+# PHASE 2: DIAGNOSTIC PLOTS
+# Energy Budget Diagnostics
+# ============================================================================
+
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 2: DIAGNOSTIC PLOTS\n")
+cat(rep("=", 70), "\n\n")
+
+# Load Phase 2 results if not already in environment
+if (!exists("energy_df") || !exists("energy_annual")) {
+  load(PHASE2_OUTPUT)
+  cat("✓ Loaded Phase 2 results\n\n")
+}
+
+# Define color scheme for energy components
+energy_colors <- c(
+  "TKE" = "#1B9E77",
+  "MKE" = "#D95F02", 
+  "EKE" = "#7570B3"
+)
+
+# ============================================================================
+# PLOT 2.1: TIME SERIES OF ENERGY COMPONENTS (MONTHLY)
+# ============================================================================
+
+cat("--- Generating Plot 2.1: Energy Components Time Series ---\n")
+
+# Prepare long-format data
+energy_long <- energy_df %>%
+  select(date, tke, mke, eke_budget) %>%
+  pivot_longer(-date, names_to = "component", values_to = "value") %>%
+  mutate(
+    component = factor(component, 
+                       levels = c("tke", "mke", "eke_budget"),
+                       labels = c("TKE", "MKE", "EKE (budget)"))
+  )
+
+p2_1 <- ggplot(energy_long, aes(x = date, y = value, color = component)) +
+  geom_line(alpha = 0.4, linewidth = 0.3) +
+  geom_smooth(method = "loess", span = 0.1, se = FALSE, linewidth = 0.8) +
+  scale_color_manual(values = c("TKE" = "#1B9E77", "MKE" = "#D95F02", 
+                                "EKE (budget)" = "#7570B3"),
+                     name = "Component") +
+  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
+  labs(
+    title = "Atmospheric Kinetic Energy Budget Components",
+    subtitle = "Pan-Arctic (≥60°N) | Monthly values with LOESS smoother | 1958–2025",
+    x = NULL,
+    y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.1_Energy_Components_TimeSeries.png"),
+       p2_1, width = 12, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.1_Energy_Components_TimeSeries.png\n")
+
+# ============================================================================
+# PLOT 2.2: ANNUAL ENERGY COMPONENTS WITH TRENDS
+# ============================================================================
+
+cat("\n--- Generating Plot 2.2: Annual Energy with Trends ---\n")
+
+# Prepare annual long-format data
+energy_annual_long <- energy_annual %>%
+  select(year, tke, mke, eke_budget) %>%
+  pivot_longer(-year, names_to = "component", values_to = "value") %>%
+  mutate(
+    component = factor(component, 
+                       levels = c("tke", "mke", "eke_budget"),
+                       labels = c("TKE", "MKE", "EKE (budget)"))
+  )
+
+p2_2 <- ggplot(energy_annual_long, aes(x = year, y = value, color = component)) +
+  geom_point(alpha = 0.6, size = 1.5) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 1, alpha = 0.2) +
+  scale_color_manual(values = c("TKE" = "#1B9E77", "MKE" = "#D95F02", 
+                                "EKE (budget)" = "#7570B3"),
+                     name = "Component") +
+  labs(
+    title = "Annual Mean Kinetic Energy Components with Linear Trends",
+    subtitle = "Pan-Arctic (≥60°N) | 1958–2025 | Shading = 95% CI",
+    x = NULL,
+    y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.2_Energy_Annual_Trends.png"),
+       p2_2, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.2_Energy_Annual_Trends.png\n")
+
+# ============================================================================
+# PLOT 2.3: ENERGY BUDGET COMPOSITION (STACKED AREA)
+# ============================================================================
+
+cat("\n--- Generating Plot 2.3: Energy Budget Composition ---\n")
+
+# Annual data for cleaner visualization
+energy_stack <- energy_annual %>%
+  select(year, mke, eke_budget) %>%
+  pivot_longer(-year, names_to = "component", values_to = "value") %>%
+  mutate(
+    component = factor(component,
+                       levels = c("eke_budget", "mke"),
+                       labels = c("EKE (Transient Eddies)", "MKE (Mean Flow)"))
+  )
+
+p2_3 <- ggplot(energy_stack, aes(x = year, y = value, fill = component)) +
+  geom_area(alpha = 0.8) +
+  scale_fill_manual(values = c("EKE (Transient Eddies)" = "#7570B3", 
+                               "MKE (Mean Flow)" = "#D95F02"),
+                    name = NULL) +
+  labs(
+    title = "Partitioning of Total Kinetic Energy",
+    subtitle = "Pan-Arctic (≥60°N) | Annual means | TKE = MKE + EKE",
+    x = NULL,
+    y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.3_Energy_Budget_Composition.png"),
+       p2_3, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.3_Energy_Budget_Composition.png\n")
+
+# ============================================================================
+# PLOT 2.4: MKE/EKE RATIO TIME SERIES
+# ============================================================================
+
+cat("\n--- Generating Plot 2.4: MKE/EKE Ratio ---\n")
+
+# Get trend info for annotation
+ratio_trend <- energy_trends_df %>% filter(variable == "mke_eke_ratio")
+
+p2_4 <- ggplot(energy_annual, aes(x = year, y = mke_eke_ratio)) +
+  geom_line(color = "gray50", alpha = 0.5) +
+  geom_point(color = "#E7298A", size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "#E7298A", 
+              fill = "#E7298A", alpha = 0.2, linewidth = 1) +
+  geom_hline(yintercept = mean(energy_annual$mke_eke_ratio), 
+             linetype = "dashed", color = "gray30") +
+  annotate("text", x = 1965, y = max(energy_annual$mke_eke_ratio) * 0.98,
+           label = sprintf("Sen's slope: %.4f/yr\np = %.4f (%s)",
+                           ratio_trend$sens_slope,
+                           ratio_trend$p_value,
+                           ifelse(ratio_trend$significant, "significant", "n.s.")),
+           hjust = 0, size = 3.5, fontface = "italic") +
+  labs(
+    title = "Mean-to-Eddy Kinetic Energy Ratio",
+    subtitle = "Pan-Arctic (≥60°N) | Higher values = stronger mean flow relative to eddies",
+    x = NULL,
+    y = "MKE / EKE Ratio"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14)
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.4_MKE_EKE_Ratio.png"),
+       p2_4, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.4_MKE_EKE_Ratio.png\n")
+
+# ============================================================================
+# PLOT 2.5: EKE FRACTION OF TKE
+# ============================================================================
+
+cat("\n--- Generating Plot 2.5: EKE Fraction of TKE ---\n")
+
+p2_5 <- ggplot(energy_annual, aes(x = year, y = eke_fraction * 100)) +
+  geom_line(color = "gray50", alpha = 0.5) +
+  geom_point(color = "#7570B3", size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "#7570B3",
+              fill = "#7570B3", alpha = 0.2, linewidth = 1) +
+  geom_hline(yintercept = mean(energy_annual$eke_fraction) * 100,
+             linetype = "dashed", color = "gray30") +
+  labs(
+    title = "Eddy Kinetic Energy as Fraction of Total",
+    subtitle = "Pan-Arctic (≥60°N) | Higher values = more energy in transient eddies",
+    x = NULL,
+    y = "EKE / TKE (%)"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14)
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.5_EKE_Fraction.png"),
+       p2_5, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.5_EKE_Fraction.png\n")
+
+# ============================================================================
+# PLOT 2.6: SEASONAL CYCLE OF ENERGY COMPONENTS
+# ============================================================================
+
+cat("\n--- Generating Plot 2.6: Seasonal Cycle ---\n")
+
+energy_seasonal <- energy_df %>%
+  group_by(month) %>%
+  summarise(
+    tke_mean = mean(tke),
+    tke_sd = sd(tke),
+    mke_mean = mean(mke),
+    mke_sd = sd(mke),
+    eke_mean = mean(eke_budget),
+    eke_sd = sd(eke_budget),
+    .groups = "drop"
+  )
+
+# Long format for plotting
+seasonal_long <- energy_seasonal %>%
+  select(month, tke_mean, mke_mean, eke_mean) %>%
+  pivot_longer(-month, names_to = "component", values_to = "value") %>%
+  mutate(
+    component = factor(component,
+                       levels = c("tke_mean", "mke_mean", "eke_mean"),
+                       labels = c("TKE", "MKE", "EKE"))
+  )
+
+p2_6 <- ggplot(seasonal_long, aes(x = month, y = value, color = component)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_manual(values = c("TKE" = "#1B9E77", "MKE" = "#D95F02", 
+                                "EKE" = "#7570B3"),
+                     name = "Component") +
+  labs(
+    title = "Climatological Seasonal Cycle of Energy Components",
+    subtitle = "Pan-Arctic (≥60°N) | 1958–2025 mean",
+    x = NULL,
+    y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.6_Energy_Seasonal_Cycle.png"),
+       p2_6, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.6_Energy_Seasonal_Cycle.png\n")
+
+# ============================================================================
+# PLOT 2.7: SEASONAL MKE/EKE RATIO
+# ============================================================================
+
+cat("\n--- Generating Plot 2.7: Seasonal MKE/EKE Ratio ---\n")
+
+ratio_seasonal <- energy_df %>%
+  group_by(month) %>%
+  summarise(
+    ratio_mean = mean(mke_eke_ratio),
+    ratio_sd = sd(mke_eke_ratio),
+    .groups = "drop"
+  )
+
+p2_7 <- ggplot(ratio_seasonal, aes(x = month, y = ratio_mean)) +
+  geom_ribbon(aes(ymin = ratio_mean - ratio_sd, ymax = ratio_mean + ratio_sd),
+              fill = "#E7298A", alpha = 0.3) +
+  geom_line(color = "#E7298A", linewidth = 1.2) +
+  geom_point(color = "#E7298A", size = 3) +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  labs(
+    title = "Seasonal Cycle of MKE/EKE Ratio",
+    subtitle = "Pan-Arctic (≥60°N) | Mean ± 1 SD | Higher in summer = weaker relative eddy activity",
+    x = NULL,
+    y = "MKE / EKE Ratio"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14)
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.7_MKE_EKE_Ratio_Seasonal.png"),
+       p2_7, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.7_MKE_EKE_Ratio_Seasonal.png\n")
+
+# ============================================================================
+# PLOT 2.8: COMPARISON - EKE_BUDGET vs SYNOPTIC-SCALE EKE
+# ============================================================================
+
+cat("\n--- Generating Plot 2.8: EKE Budget vs Synoptic EKE ---\n")
+
+# Merge with storminess metrics from Phase 1
+comparison_df <- energy_df %>%
+  select(date, year, month, eke_budget) %>%
+  left_join(
+    storm_df %>% select(date, eke_mean),
+    by = "date"
+  ) %>%
+  rename(
+    eke_budget = eke_budget,
+    eke_synoptic = eke_mean
+  )
+
+# Correlation
+eke_cor <- cor(comparison_df$eke_budget, comparison_df$eke_synoptic, use = "complete.obs")
+
+# Scatter plot
+p2_8a <- ggplot(comparison_df, aes(x = eke_budget, y = eke_synoptic)) +
+  geom_point(alpha = 0.3, size = 1) +
+  geom_smooth(method = "lm", color = "#E41A1C", linewidth = 1) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +
+  annotate("text", 
+           x = min(comparison_df$eke_budget, na.rm = TRUE) * 1.1,
+           y = max(comparison_df$eke_synoptic, na.rm = TRUE) * 0.95,
+           label = sprintf("r = %.3f", eke_cor),
+           hjust = 0, size = 4, fontface = "bold") +
+  labs(
+    title = "(a) EKE Budget vs Synoptic-Scale EKE",
+    x = expression("EKE"["budget"]*" (all sub-monthly variance) [m"^2*"/s"^2*"]"),
+    y = expression("EKE"["synoptic"]*" (1.2–6 day bandpass) [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", size = 12))
+
+# Time series comparison (annual)
+comparison_annual <- comparison_df %>%
+  group_by(year) %>%
+  summarise(
+    eke_budget = mean(eke_budget),
+    eke_synoptic = mean(eke_synoptic),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(-year, names_to = "type", values_to = "value") %>%
+  mutate(
+    type = factor(type,
+                  levels = c("eke_budget", "eke_synoptic"),
+                  labels = c("EKE (budget, all sub-monthly)", 
+                             "EKE (synoptic, 1.2–6 day)"))
+  )
+
+p2_8b <- ggplot(comparison_annual, aes(x = year, y = value, color = type)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.5, alpha = 0.7) +
+  scale_color_manual(values = c("#7570B3", "#1B9E77"), name = NULL) +
+  labs(
+    title = "(b) Annual Mean Comparison",
+    x = NULL,
+    y = expression("EKE [m"^2*"/s"^2*"]")
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    legend.position = "bottom"
+  )
+
+p2_8_combined <- p2_8a + p2_8b +
+  plot_layout(ncol = 2, widths = c(1, 1.2)) +
+  plot_annotation(
+    title = "Comparison of EKE Definitions",
+    subtitle = "Budget EKE captures all variance; Synoptic EKE isolates 1.2–6 day storm band",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5)
+    )
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.8_EKE_Comparison.png"),
+       p2_8_combined, width = 14, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.8_EKE_Comparison.png\n")
+
+# ============================================================================
+# PLOT 2.9: DECADAL CHANGES IN ENERGY PARTITIONING
+# ============================================================================
+
+cat("\n--- Generating Plot 2.9: Decadal Energy Partitioning ---\n")
+
+energy_decadal <- energy_df %>%
+  mutate(
+    decade = case_when(
+      year >= 1958 & year < 1970 ~ "1958-1969",
+      year >= 1970 & year < 1980 ~ "1970-1979",
+      year >= 1980 & year < 1990 ~ "1980-1989",
+      year >= 1990 & year < 2000 ~ "1990-1999",
+      year >= 2000 & year < 2010 ~ "2000-2009",
+      year >= 2010 & year < 2020 ~ "2010-2019",
+      year >= 2020 ~ "2020-2025"
+    ),
+    decade = factor(decade)
+  ) %>%
+  group_by(decade) %>%
+  summarise(
+    mke_fraction = mean(mke_fraction) * 100,
+    eke_fraction = mean(eke_fraction) * 100,
+    mke_eke_ratio = mean(mke_eke_ratio),
+    .groups = "drop"
+  )
+
+p2_9 <- ggplot(energy_decadal, aes(x = decade)) +
+  geom_col(aes(y = mke_fraction, fill = "MKE"), width = 0.7) +
+  geom_col(aes(y = -eke_fraction, fill = "EKE"), width = 0.7) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
+  scale_fill_manual(values = c("MKE" = "#D95F02", "EKE" = "#7570B3"),
+                    name = "Component") +
+  scale_y_continuous(
+    labels = function(x) paste0(abs(x), "%"),
+    breaks = seq(-60, 60, by = 20)
+  ) +
+  labs(
+    title = "Decadal Changes in Energy Partitioning",
+    subtitle = "Pan-Arctic (≥60°N) | Fraction of TKE in each component",
+    x = NULL,
+    y = "Fraction of TKE"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+ggsave(file.path(FIG_DIR, "Fig2.9_Decadal_Partitioning.png"),
+       p2_9, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.9_Decadal_Partitioning.png\n")
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 2 DIAGNOSTIC PLOTS COMPLETE\n")
+cat(rep("=", 70), "\n\n")
+
+cat("Generated figures:\n")
+cat("  2.1  Energy Components Time Series (monthly)\n")
+cat("  2.2  Annual Energy with Linear Trends\n")
+cat("  2.3  Energy Budget Composition (stacked)\n")
+cat("  2.4  MKE/EKE Ratio Time Series\n")
+cat("  2.5  EKE Fraction of TKE\n")
+cat("  2.6  Seasonal Cycle of Energy Components\n")
+cat("  2.7  Seasonal MKE/EKE Ratio\n")
+cat("  2.8  EKE Budget vs Synoptic EKE Comparison\n")
+cat("  2.9  Decadal Changes in Energy Partitioning\n")
+
+cat(sprintf("\nAll figures saved to: %s\n", FIG_DIR))
+
+cat("\nKey findings:\n")
+cat(sprintf("  - EKE fraction of TKE: %.1f%% (mean)\n", 
+            mean(energy_df$eke_fraction) * 100))
+cat(sprintf("  - MKE fraction of TKE: %.1f%% (mean)\n", 
+            mean(energy_df$mke_fraction) * 100))
+cat(sprintf("  - Correlation EKE_budget vs EKE_synoptic: r = %.3f\n", eke_cor))
+cat(sprintf("  - MKE/EKE ratio trend: %s (p = %.4f)\n",
+            ifelse(ratio_trend$significant, "SIGNIFICANT", "not significant"),
+            ratio_trend$p_value))
+
+cat("\n", rep("=", 70), "\n\n")
+```
+
+
+
+
+
 
 # Phase 3
 
