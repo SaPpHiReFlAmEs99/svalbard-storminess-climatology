@@ -88,27 +88,19 @@ REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
 
     -   2.3 MKE/EKE ratio trends (mechanistic interpretation)
 
--   PHASE 3: Primary Storminess Analysis (Mean EKE)
+-   PHASE 3: Trend analysis
 
-    -   3.1 Pan-Arctic trend analysis (eke_mean)
+    -   3.1 Pan-Arctic trend analysis (all metrics simultaneously)
 
-    -   3.2 Spatial trend patterns + field significance
+    -   3.2 Seasonal decomposition (all metrics by DJF/MAM/JJA/SON)
 
-    -   3.3 Seasonal decomposition
+    -   3.3  Autumn intensification hypothesis test
 
-    -   3.4 Period comparison (pre- vs post-regime shift)
+    -   3.4 Spatial trend patterns + field significance
 
-    -   3.5 Autumn intensification hypothesis test
+    -   3.5 Period comparison (pre- vs. post-regime shift, if warranted by 3.1–3.3)
 
--   PHASE 4: Extreme Storm Analysis (Percentiles)
-
-    -   4.1 Extreme intensity trends (eke_p95, eke_p99)
-
-    -   4.2 Extreme frequency trends (exceed_p95_freq)
-
-    -   4.3 Spatial patterns of extreme changes
-
--   PHASE 5: Regional Sub-Analysis (apply full Phase 3-4 workflow to each region)
+-   PHASE 4: Regional Sub-Analysis (apply full Phase 3-4 workflow to each region)
 
     -   5.1 Fram Strait sector
 
@@ -116,7 +108,7 @@ REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
 
     -   5.3 East Svalbard sector (16°E–28°E, 76°N–81°N)
 
--   PHASE 6: Synthesis and hypothesis testing
+-   PHASE 5: Synthesis and hypothesis testing
 
     -   6.1 Summary of all trend results
 
@@ -248,7 +240,7 @@ The 60°N threshold was selected to:
 3.  Focus on the region where Arctic-specific feedback mechanisms (e.g., sea-ice loss amplification) are expected to be most pronounced
 
 ```{r}
-# ----------------------------------------------------------------------------zz
+# ----------------------------------------------------------------------------
 # SECTION 1.2: DIMENSION ORDERING AND TIME DECODING
 # ----------------------------------------------------------------------------
 # dim(storminess) = [360, 35, 804] so, [lon, lat, time] instead of the correct [lat, lon, time]
@@ -571,7 +563,7 @@ ts_objects_anom <- list(
 # Step 2: Calculate ACF on anomalies and compare with raw
 # ----------------------------------------------------------------------------
 
-acf_results_anom <- list()
+acf_results <- list()
 acf_comparison <- data.frame()
 
 for (metric in names(ts_objects)) {
@@ -586,7 +578,7 @@ for (metric in names(ts_objects)) {
   acf_anom <- acf(ts_anom, lag.max = 24, plot = FALSE)
   rho1_anom <- acf_anom$acf[2]
   
-  acf_results_anom[[metric]] <- acf_anom
+  acf_results[[metric]] <- acf_anom
   
   # Calculate effective sample size using ANOMALY autocorrelation
   N <- length(ts_anom)
@@ -727,17 +719,17 @@ The foundational analysis produced the following validated datasets for subseque
 
 | Metric          | Mean          | SD            | Lag-1 ACF |
 |-----------------|---------------|---------------|-----------|
-| eke_mean        | 12.27 m²/s²   | 2.80 m²/s²    | 0.648     |
-| eke_p90         | 29.47 m²/s²   | 6.72 m²/s²    | 0.649     |
-| eke_p95         | 40.74 m²/s²   | 9.18 m²/s²    | 0.658     |
-| eke_p99         | 66.38 m²/s²   | 14.82 m²/s²   | 0.664     |
-| exceed_p95_freq | 0.0504        | 0.0218        | 0.583     |
+| eke_mean        | 12.27 m²/s²   | 2.80 m²/s²    | 0.153     |
+| eke_p90         | 29.47 m²/s²   | 6.72 m²/s²    | 0.149     |
+| eke_p95         | 40.74 m²/s²   | 9.18 m²/s²    | 0.152     |
+| eke_p99         | 66.38 m²/s²   | 14.82 m²/s²   | 0.160     |
+| exceed_p95_freq | 0.0504        | 0.0218        | 0.125     |
 
 : Descriptive statistics for Pan-Arctic storminess metrics {#tbl-descriptive}
 
 - **Temporal coverage**: 816 months (January 1958 – December 2025)
 - **Spatial domain**: 60.00°N – 89.75°N (Core Arctic, excluding pole)
-- **Autocorrelation**: All metrics exhibit $\rho_1 \approx 0.6$, requiring 
+- **Autocorrelation**: All metrics exhibit $\rho_1>0.1$, requiring 
   autocorrelation-corrected statistical methods
 
 The formal characterization of the data's autocorrelation structure establishes the statistical foundation for all subsequent trend and hypothesis testing analyses. The multi-metric approach enables independent assessment of changes in average storminess (mean EKE), extreme storm intensity (percentiles), and extreme storm frequency (exceedance rate).
@@ -746,43 +738,41 @@ The formal characterization of the data's autocorrelation structure establishes 
 # ============================================================================
 # Section 1.6: SAVE PREPARED DATA
 # ============================================================================
-
 cat("\n", rep("-", 40), "\n")
 cat("Saving prepared data objects...\n")
 
 # Create output directory if needed
 output_dir <- file.path(DATA_DIRECTORY, "analysis_ready")
 if (!dir.exists(output_dir)) {
- dir.create(output_dir, recursive = TRUE)
+  dir.create(output_dir, recursive = TRUE)
 }
 
 # Save R objects for use in subsequent phases
+# NOTE: We do NOT save metrics_arctic
+#       Gridded data can be reloaded from NetCDF when needed for spatial analysis
 save(
- # Coordinate data
- lat, lon, lat_arctic, time_dates,
- 
- # Gridded data (Arctic subset)
- metrics_arctic,
- 
- # Area-weighted time series
- ts_weighted, ts_objects,
- 
- # Master data frame
- storm_df,
- 
- # ACF results
- acf_results,
- 
- # Summary statistics
- summary_stats,
- 
- # Climatological threshold (if available)
- eke_p95_clim,
- 
- # Configuration
- ARCTIC_LAT_THRESHOLD, REFERENCE_PERIOD,
- 
- file = file.path(output_dir, "Phase1_Prepared_Data.RData")
+  # Coordinate data
+  lat, lon, lat_arctic, time_dates,
+  
+  # Area-weighted time series (THIS IS WHAT WE NEED)
+  ts_weighted, ts_objects,
+  
+  # Master data frame
+  storm_df,
+  
+  # ACF results
+  acf_results,
+  
+  # Summary statistics
+  summary_stats,
+  
+  # Climatological threshold (2D, small)
+  eke_p95_clim,
+  
+  # Configuration
+  ARCTIC_LAT_THRESHOLD, REFERENCE_PERIOD,
+  
+  file = file.path(output_dir, "Phase1_Prepared_Data.RData")
 )
 
 cat(sprintf("  ✓ Saved to: %s\n", file.path(output_dir, "Phase1_Prepared_Data.RData")))
@@ -1679,6 +1669,7 @@ cat(sprintf("  - Metric correlations: eke_mean vs exceed_freq = %.3f\n",
 cat("\n", rep("=", 70), "\n\n")
 ```
 
+
 # Phase 2: Energy Budget Diagnostics
 
 This phase examines the atmospheric kinetic energy budget to provide mechanistic context for interpreting storminess trends. Following the Reynolds decomposition framework (Lorenz 1955; Peixoto and Oort 1992), the total kinetic energy of the atmosphere can be partitioned into mean and eddy components:
@@ -2530,61 +2521,4 @@ cat(sprintf("  - MKE/EKE ratio trend: %s (p = %.4f)\n",
 cat("\n", rep("=", 70), "\n\n")
 ```
 
-
-
-
-
-
-# Phase 3
-
-```{r}
-# Load prepared data from Phase 1
-data_file <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
-# This loads:
-#   - storm_df          : Master data frame with all metrics
-#   - ts_objects        : List of ts objects for each metric
-#   - metrics_arctic    : List of 3D arrays [time, lat, lon] for spatial analysis
-#   - acf_results       : ACF results for autocorrelation reference
-#   - lat_arctic, lon   : Coordinate vectors
-#   - time_dates        : Date vector
-#   - summary_stats     : Descriptive statistics table
-
-if (!file.exists(data_file)) {
-  stop(glue("
-    ERROR: Phase 1 data not found!
-    Expected: {data_file}
-    
-    Please run Phase 1 script first.
-  "))
-}
-
-load(data_file)
-cat("✓ Loaded Phase 1 prepared data\n\n")
-
-# Define output directories
-results_dir <- here::here("Data", "processed", "trend_results")
-fig_dir <- here::here("Figures", "Phase2_Trends")
-if (!dir.exists(results_dir)) dir.create(results_dir, recursive = TRUE)
-if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-# Metrics to analyze (in order of priority)
-METRICS_TO_ANALYZE <- c(
-  "eke_mean",         # PRIMARY
-  "eke_p95",          # Extreme intensity
-  "eke_p99",          # Extreme intensity (more extreme)
-  "exceed_p95_freq"   # Extreme frequency
-)
-
-# Bootstrap parameters
-N_BOOTSTRAP <- 5000
-BLOCK_LENGTH_MONTHLY <- 12  # For monthly data
-BLOCK_LENGTH_ANNUAL <- 3    # For annual data
-
-# Significance level
-ALPHA <- 0.05
-```
 

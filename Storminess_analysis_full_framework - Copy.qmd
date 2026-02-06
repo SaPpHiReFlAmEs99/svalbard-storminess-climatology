@@ -8627,3 +8627,74 @@ cat("\n", rep("=", 80), "\n")
 cat("DONE!\n")
 cat(rep("=", 80), "\n")
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+# Load prepared data from Phase 1
+data_file <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
+# This loads:
+#   - storm_df          : Master data frame with all metrics
+#   - ts_objects        : List of ts objects for each metric
+#   - metrics_arctic    : List of 3D arrays [time, lat, lon] for spatial analysis
+#   - acf_results       : ACF results for autocorrelation reference
+#   - lat_arctic, lon   : Coordinate vectors
+#   - time_dates        : Date vector
+#   - summary_stats     : Descriptive statistics table
+
+if (!file.exists(data_file)) {
+  stop(glue("
+    ERROR: Phase 1 data not found!
+    Expected: {data_file}
+    
+    Please run Phase 1 script first.
+  "))
+}
+
+load(data_file)
+cat("✓ Loaded Phase 1 prepared data\n\n")
+
+# Define output directories
+results_dir <- here::here("Data", "processed", "trend_results")
+fig_dir <- here::here("Figures", "Phase2_Trends")
+if (!dir.exists(results_dir)) dir.create(results_dir, recursive = TRUE)
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+# Metrics to analyze (in order of priority)
+METRICS_TO_ANALYZE <- c(
+  "eke_mean",         # PRIMARY
+  "eke_p95",          # Extreme intensity
+  "eke_p99",          # Extreme intensity (more extreme)
+  "exceed_p95_freq"   # Extreme frequency
+)
+
+# Bootstrap parameters
+N_BOOTSTRAP <- 5000
+BLOCK_LENGTH_MONTHLY <- 12  # For monthly data
+BLOCK_LENGTH_ANNUAL <- 3    # For annual data
+
+# Significance level
+ALPHA <- 0.05
+```
