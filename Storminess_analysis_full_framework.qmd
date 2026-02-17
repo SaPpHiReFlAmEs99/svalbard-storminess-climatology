@@ -78,43 +78,53 @@ REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
 
     -   1.3 Area-weighted time series derivation
 
-    -   1.4 Autocorrelation assessment and effective sample size calculation neff calculation
+    -   1.4 Energy budget closure verification
 
--   PHASE 2: Energy Budget Diagnostics
+    -   1.5 Diagnostic pipeline (applied uniformly to all variables):
 
-    -   2.1 TKE, MKE, EKE_budget calculation and verification
+        -   1.5.1 Deseasonalisation
 
-    -   2.2 Budget closure confirmation
+        -   1.5.2 Autocorrelation assessment (ACF/PACF)
 
-    -   2.3 MKE/EKE ratio trends (mechanistic interpretation)
+        -   1.5.3 Effective sample size (neff)
 
--   PHASE 3: Trend analysis
+        -   1.5.4 Variance decomposition (STL, primary metric only)
 
-    -   3.1 Pan-Arctic trend analysis (all metrics simultaneously)
+    -   1.6 Energy budget characterisation:
 
-    -   3.2 Seasonal decomposition (all metrics by DJF/MAM/JJA/SON)
+        -   1.6.1 Partitioning climatology (fEKE, MKE/EKE ratio)
 
-    -   3.3 Autumn intensification hypothesis test
+        -   1.6.2 Seasonal cycle of energy components
 
-    -   3.4 Spatial trend patterns + field significance
+        -   1.6.3 EKE definition comparison (budget vs synoptic, r = 0.885)
 
-    -   3.5 Period comparison (pre- vs. post-regime shift, if warranted by 3.1–3.3)
+-   PHASE 2: Trend analysis
 
--   PHASE 4: Regional Sub-Analysis (apply full Phase 3-4 workflow to each region)
+    -   2.1 Pan-Arctic trend analysis (all storminess metrics + energy components, simultaneously)
 
-    -   5.1 Fram Strait sector
+    -   2.2 Seasonal decomposition (all metrics by DJF/MAM/JJA/SON)
 
-    -   5.2 West Svalbard sector (10°E–16°E, 76°N–81°N)
+    -   2.3 Autumn intensification hypothesis test
 
-    -   5.3 East Svalbard sector (16°E–28°E, 76°N–81°N)
+    -   2.4 Spatial trend patterns + field significance
+
+    -   2.5 Period comparison (pre- vs. post-regime shift, if warranted by 2.1–2.3)
+
+-   PHASE 3: Regional Sub-Analysis (apply full Phase 3-4 workflow to each region)
+
+    -   3.1 Fram Strait sector
+
+    -   3.2 West Svalbard sector (10°E–16°E, 76°N–81°N)
+
+    -   3.3 East Svalbard sector (16°E–28°E, 76°N–81°N)
 
 -   PHASE 5: Synthesis and hypothesis testing
 
-    -   6.1 Summary of all trend results
+    -   4.1 Summary of all trend results
 
-    -   6.2 Autumn feedback loop hypothesis evaluation
+    -   4.2 Autumn feedback loop hypothesis evaluation
 
-    -   6.3 Comparison with sea-ice loss timelines
+    -   4.3 Comparison with sea-ice loss timelines
 
 # Phase 1: Foundational Analysis
 
@@ -700,7 +710,7 @@ if ("exceed_p95_freq" %in% names(storm_df)) {
 }
 ```
 
-## 1.6 Summary of Phase 1 Outputs
+## Intermediate Summary of Phase 1 Outputs
 
 The foundational analysis produced the following validated datasets for subsequent phases:
 
@@ -731,37 +741,187 @@ The foundational analysis produced the following validated datasets for subseque
 
 The formal characterization of the data's autocorrelation structure establishes the statistical foundation for all subsequent trend and hypothesis testing analyses. The multi-metric approach enables independent assessment of changes in average storminess (mean EKE), extreme storm intensity (percentiles), and extreme storm frequency (exceedance rate).
 
+## 1.6 Energy Budget
+
 ```{r}
 # ============================================================================
-# Section 1.6: SAVE PREPARED DATA
+# SECTION 1.6: ENERGY BUDGET INTEGRATION
+# ============================================================================
+#
+# PURPOSE:
+#   Load the TKE, MKE, and EKE_budget monthly fields (computed in the
+#   Python pipeline, Step 2), spatially aggregate them using the same
+#   cosine-latitude weighting as the storminess metrics, verify budget
+#   closure, and run the full diagnostic pipeline (deseasonalisation,
+#   ACF/PACF, n_eff) on the energy components.
+#
+# INPUTS:
+#   - ERA5_TKE_monthly.nc     
+#   - ERA5_MKE_monthly.nc       
+#   - ERA5_EKE_budget_monthly.nc 
+#   - lat_arctic, lon            
+#   - storm_df                   
+#   - deseasonalize()            
+#
+# OUTPUTS:
+#   - energy_df: monthly data frame with tke, mke, eke_budget, 
+#                mke_eke_ratio, eke_fraction
+#   - energy_annual: annual means of all energy components
+#   - acf_results_energy: ACF diagnostics for energy components
+#   - acf_comparison_energy: summary table (rho1, n_eff, DoF reduction)
+#   - 3 diagnostic figures 
+#
+# ============================================================================
+
+cat("\n", rep("=", 70), "\n")
+cat("SECTION 1.5: ENERGY BUDGET INTEGRATION\n")
+cat(rep("=", 70), "\n\n")
+
+
+# --------------------------------------------------------------------------
+# 1.5.1  Load and Spatially Aggregate Energy Components
+# --------------------------------------------------------------------------
+# Each NetCDF contains a single variable on the same lat/lon grid as the
+# storminess metrics. We apply the identical cosine-latitude weighting
+# (eq. 2.21–2.22 in the methodology) to produce Pan-Arctic time series.
+# --------------------------------------------------------------------------
+
+cat("--- 1.5.1 Loading Energy Budget Components ---\n\n")
+
+TKE_FILE        <- file.path(DATA_DIRECTORY, "ERA5_TKE_monthly.nc")
+MKE_FILE        <- file.path(DATA_DIRECTORY, "ERA5_MKE_monthly.nc")
+EKE_BUDGET_FILE <- file.path(DATA_DIRECTORY, "ERA5_EKE_budget_monthly.nc")
+
+# Check all three files exist before proceeding
+energy_files <- list(TKE = TKE_FILE, MKE = MKE_FILE, EKE_budget = EKE_BUDGET_FILE)
+for (name in names(energy_files)) {
+  if (!file.exists(energy_files[[name]])) {
+    stop(sprintf("Energy budget file not found: %s\n  Expected: %s", 
+                 name, energy_files[[name]]))
+  }
+  cat(sprintf("  ✓ Found: %s\n", basename(energy_files[[name]])))
+}
+
+# Function to load a single energy component NetCDF and return an
+# area-weighted Pan-Arctic (≥60°N) monthly time series.
+#
+# This replicates the exact same aggregation procedure used for the
+# storminess metrics in §1.3, ensuring that all variables entering the
+# diagnostic pipeline have been processed identically.
+
+load_energy_component <- function(filepath, varname, lat_threshold = 60) {
+  
+  nc <- nc_open(filepath)
+  data_raw <- ncvar_get(nc, varname)
+  lat_nc   <- ncvar_get(nc, "latitude")
+  lon_nc   <- ncvar_get(nc, "longitude")
+  nc_close(nc)
+  
+  # Handle dimension ordering: NetCDF may store as [lon, lat, time]
+  # We need [time, lat, lon] for consistent indexing
+  if (dim(data_raw)[1] == length(lon_nc) && dim(data_raw)[3] != length(lon_nc)) {
+    data_array <- aperm(data_raw, c(3, 2, 1))  # [time, lat, lon]
+  } else {
+    data_array <- data_raw
+  }
+  
+  # Subset to Arctic domain (≥ lat_threshold)
+  arctic_idx   <- which(lat_nc >= lat_threshold)
+  data_arctic  <- data_array[, arctic_idx, ]
+  lat_subset   <- lat_nc[arctic_idx]
+  
+  # Cosine-latitude weights (same as eq. 2.21 in methodology)
+  weights     <- cos(lat_subset * pi / 180)
+  weights_mat <- matrix(weights, nrow = length(lat_subset), ncol = length(lon_nc))
+  
+  # Area-weighted spatial mean for each month (eq. 2.22)
+  ts_weighted <- apply(data_arctic, 1, function(slice) {
+    weighted.mean(slice, weights_mat, na.rm = TRUE)
+  })
+  
+  return(ts_weighted)
+}
+
+# Load all three components
+tke_ts        <- load_energy_component(TKE_FILE, "tke")
+mke_ts        <- load_energy_component(MKE_FILE, "mke")
+eke_budget_ts <- load_energy_component(EKE_BUDGET_FILE, "eke_budget")
+
+cat(sprintf("\n  Loaded %d months of energy budget data\n", length(tke_ts)))
+
+# Verify temporal alignment with storminess data
+stopifnot(
+  "Energy budget length must match storminess data" = 
+    length(tke_ts) == nrow(storm_df)
+)
+cat("  ✓ Temporal alignment verified (both have 816 months)\n")
+```
+
+```{r}
+# --------------------------------------------------------------------------
+# 1.5.2  Budget Closure Verification
+# --------------------------------------------------------------------------
+# The Reynolds decomposition guarantees TKE = MKE + EKE exactly in theory.
+# In practice, numerical precision of the computation introduces a tiny
+# residual. We verify that |TKE - (MKE + EKE)| / TKE < 0.01%.
+# --------------------------------------------------------------------------
+
+cat("\n--- 1.5.2 Verifying Energy Budget Closure ---\n\n")
+
+budget_residual <- tke_ts - (mke_ts + eke_budget_ts)
+relative_error  <- mean(abs(budget_residual)) / mean(tke_ts) * 100
+
+cat(sprintf("  Mean TKE:         %.3f m²/s²\n", mean(tke_ts)))
+cat(sprintf("  Mean MKE:         %.3f m²/s²\n", mean(mke_ts)))
+cat(sprintf("  Mean EKE_budget:  %.3f m²/s²\n", mean(eke_budget_ts)))
+cat(sprintf("  Relative closure error: %.6f%%\n", relative_error))
+
+if (relative_error < 0.01) {
+  cat("  ✓ BUDGET CLOSURE VERIFIED (error < 0.01%)\n")
+} else {
+  cat("  ⚠ WARNING: Budget error exceeds tolerance\n")
+}
+```
+
+```{r}
+# ============================================================================
+# Section 1.5.3: SAVE PREPARED DATA
 # ============================================================================
 cat("\n", rep("-", 40), "\n")
 cat("Saving prepared data objects...\n")
 
-# Create output directory if needed
 output_dir <- file.path(DATA_DIRECTORY, "analysis_ready")
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
-# Save R objects for use in subsequent phases
-# NOTE: We do NOT save metrics_arctic
-#       Gridded data can be reloaded from NetCDF when needed for spatial analysis
 save(
   # Coordinate data
   lat, lon, lat_arctic, time_dates,
   
-  # Area-weighted time series (THIS IS WHAT WE NEED)
+  # Area-weighted time series (storminess metrics)
   ts_weighted, ts_objects,
   
-  # Master data frame
+  # Master data frame (includes storminess metrics + energy columns:
+  # tke, mke, eke_budget, eke_fraction, mke_eke_ratio, and _anom columns)
   storm_df,
   
-  # ACF results
+  # Annual means (energy + synoptic EKE)
+  energy_annual,
+  
+  # ACF diagnostics — storminess metrics
   acf_results,
+  acf_comparison,
+  
+  # ACF diagnostics — energy components
+  acf_results_energy,
+  acf_comparison_energy,
   
   # Summary statistics
   summary_stats,
+  
+  # Energy budget closure error (%)
+  relative_error,
   
   # Climatological threshold (2D, small)
   eke_p95_clim,
@@ -771,12 +931,106 @@ save(
   
   file = file.path(output_dir, "Phase1_Prepared_Data.RData")
 )
-
 cat(sprintf("  ✓ Saved to: %s\n", file.path(output_dir, "Phase1_Prepared_Data.RData")))
 
-# Also save storm_df as CSV for inspection
 write_csv(storm_df, file.path(output_dir, "storm_metrics_panarctic_monthly.csv"))
 cat(sprintf("  ✓ Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_monthly.csv")))
+```
+
+```{r}
+# --------------------------------------------------------------------------
+# 1.5.4  Diagnostic Pipeline: Energy Components
+# --------------------------------------------------------------------------
+# Apply the SAME diagnostic procedure used for storminess metrics in §1.4:
+#   1. Deseasonalise (subtract monthly climatology)
+#   2. Compute ACF/PACF on anomalies
+#   3. Calculate effective sample size (n_eff)
+#
+# This ensures that when Phase 2 applies trend tests to these variables,
+# the autocorrelation structure has been characterised and the tests can
+# be appropriately configured.
+#
+# NOTE: The deseasonalize() function was defined in §1.4 and is already
+# available in the environment.
+# --------------------------------------------------------------------------
+
+cat("\n--- 1.5.4 Diagnostic Pipeline: Energy Components ---\n\n")
+cat("Assessing temporal autocorrelation on DESEASONALIZED energy data...\n\n")
+
+# Energy metrics to diagnose
+ENERGY_METRICS <- c("tke", "mke", "eke_budget")
+
+# Step 1: Create deseasonalised anomalies
+storm_df <- storm_df %>%
+  mutate(
+    tke_anom        = deseasonalize(., "tke"),
+    mke_anom        = deseasonalize(., "mke"),
+    eke_budget_anom = deseasonalize(., "eke_budget")
+  )
+
+# Create ts objects for anomalies (needed for acf/pacf)
+ts_objects_energy_anom <- list(
+  tke        = ts(storm_df$tke_anom,        start = c(1958, 1), frequency = 12),
+  mke        = ts(storm_df$mke_anom,        start = c(1958, 1), frequency = 12),
+  eke_budget = ts(storm_df$eke_budget_anom, start = c(1958, 1), frequency = 12)
+)
+
+# Also create raw ts objects (for inflation factor comparison)
+ts_objects_energy_raw <- list(
+  tke        = ts(storm_df$tke,        start = c(1958, 1), frequency = 12),
+  mke        = ts(storm_df$mke,        start = c(1958, 1), frequency = 12),
+  eke_budget = ts(storm_df$eke_budget, start = c(1958, 1), frequency = 12)
+)
+
+# Step 2: ACF/PACF + n_eff (identical procedure to §1.4)
+acf_results_energy    <- list()
+acf_comparison_energy <- data.frame()
+
+for (metric in ENERGY_METRICS) {
+  
+  ts_raw  <- ts_objects_energy_raw[[metric]]
+  ts_anom <- ts_objects_energy_anom[[metric]]
+  
+  # ACF on raw data (for comparison — will show seasonal inflation)
+  acf_raw  <- acf(ts_raw, lag.max = 24, plot = FALSE)
+  rho1_raw <- acf_raw$acf[2]
+  
+  # ACF on deseasonalised anomalies (CORRECT approach)
+  acf_anom  <- acf(ts_anom, lag.max = 24, plot = FALSE)
+  rho1_anom <- acf_anom$acf[2]
+  
+  acf_results_energy[[metric]] <- acf_anom
+  
+  # Effective sample size (eq. 2.25 in methodology)
+  N     <- length(ts_anom)
+  rho_k <- acf_anom$acf[-1]           # All lags from 1 to 24
+  k     <- 1:length(rho_k)
+  neff  <- N / (1 + 2 * sum((1 - k/N) * pmax(rho_k, 0)))
+  
+  # Store results
+  acf_comparison_energy <- rbind(acf_comparison_energy, data.frame(
+    metric            = metric,
+    rho1_raw          = rho1_raw,
+    rho1_anomaly      = rho1_anom,
+    inflation_factor  = rho1_raw / rho1_anom,
+    N                 = N,
+    neff              = neff,
+    dof_reduction_pct = (1 - neff / N) * 100
+  ))
+  
+  cat(sprintf("--- %s ---\n", metric))
+  cat(sprintf("  ρ₁ (raw data):    %.3f  [INFLATED by seasonality]\n", rho1_raw))
+  cat(sprintf("  ρ₁ (anomalies):   %.3f  [TRUE atmospheric memory]\n", rho1_anom))
+  cat(sprintf("  Inflation factor: %.2fx\n", rho1_raw / rho1_anom))
+  cat(sprintf("  Effective sample size: %.1f (%.1f%% reduction)\n\n", 
+              neff, (1 - neff / N) * 100))
+}
+
+# Print summary table
+cat(rep("-", 40), "\n")
+cat("Energy Component Autocorrelation Diagnostics:\n")
+cat(rep("-", 40), "\n\n")
+print(knitr::kable(acf_comparison_energy, digits = 3, format = "simple"))
 ```
 
 ```{r}
@@ -1757,497 +2011,224 @@ cat(sprintf("  - Metric correlations: eke_mean vs exceed_freq = %.3f\n",
 cat("\n", rep("=", 70), "\n\n")
 ```
 
-# Phase 2: Energy Budget Diagnostics
+```{r}
+# --------------------------------------------------------------------------
+# 1.5.5  ACF/PACF Diagnostic Plot (Energy Components)
+# --------------------------------------------------------------------------
+# Mirrors Fig02 from storminess metrics: one row per variable,
+# ACF on left, PACF on right, computed on deseasonalised anomalies.
+# --------------------------------------------------------------------------
 
-This phase examines the atmospheric kinetic energy budget to provide mechanistic context for interpreting storminess trends. Following the Reynolds decomposition framework (Lorenz 1955; Peixoto and Oort 1992), the total kinetic energy of the atmosphere can be partitioned into mean and eddy components:
+fig_dir <- here::here("Figures", "Phase1_Diagnostics")
 
-$$\overline{TKE} = MKE + EKE$$
 
-where: - **TKE** (Total Kinetic Energy): Complete kinetic energy of the atmospheric flow - **MKE** (Mean Kinetic Energy): Energy in the time-mean circulation (jet streams, stationary waves) - **EKE** (Eddy Kinetic Energy): Energy in transient disturbances (cyclones, anticyclones)
+cat("\n--- Generating ACF/PACF Plot for Energy Components ---\n")
 
-This budget framework enables mechanistic interpretation of any observed storminess changes. An increase in EKE could result from:
+energy_metric_colors <- c(
+  "tke"        = "#1B9E77",
+  "mke"        = "#D95F02",
+  "eke_budget" = "#7570B3"
+)
 
-1.  **Overall atmospheric energization**: TKE increases, with energy distributed to both MKE and EKE
-2.  **Energy redistribution**: TKE remains stable but the mean flow becomes more unstable, converting MKE to EKE
-3.  **Decreased mean flow with stable eddies**: MKE decreases while EKE remains unchanged
+png(file.path(fig_dir, "Fig11_ACF_PACF_Energy_Anomalies.png"),
+    width = 12, height = 8, units = "in", res = 300)
+par(mfrow = c(3, 2),
+    mar = c(4, 4, 3, 1),
+    oma = c(0, 0, 3, 0))
 
-By analyzing all three components together, we can distinguish between these physically distinct mechanisms.
+for (metric in ENERGY_METRICS) {
+  ts_anom    <- ts_objects_energy_anom[[metric]]
+  rho1_anom  <- acf(ts_anom, lag.max = 1, plot = FALSE)$acf[2]
+  pacf1_anom <- pacf(ts_anom, lag.max = 36, plot = FALSE)$acf[1]
+  
+  # ACF plot
+  acf(ts_anom, lag.max = 36,
+      main = paste0("ACF: ", toupper(metric), " (anomalies)"),
+      xlab = "Lag (months)", ylab = "Autocorrelation",
+      col = energy_metric_colors[metric], lwd = 2)
+  mtext(bquote(rho[1] == .(sprintf("%.3f", rho1_anom))),
+        side = 3, line = -1.5, adj = 0.95, cex = 0.8)
+  
+  # PACF plot
+  pacf(ts_anom, lag.max = 36,
+       main = paste0("PACF: ", toupper(metric), " (anomalies)"),
+       xlab = "Lag (months)", ylab = "Partial Autocorrelation",
+       col = energy_metric_colors[metric], lwd = 2)
+  mtext(bquote(phi[1] == .(sprintf("%.3f", pacf1_anom))),
+        side = 3, line = -1.5, adj = 0.95, cex = 0.8)
+}
 
-**Note**: The EKE calculated for budget closure (EKE_budget) captures all sub-monthly variance, which differs from the bandpass-filtered synoptic-scale EKE (1.2–6 day periods) used as the primary storminess metric. Both quantities are physically meaningful but serve different analytical purposes.
+mtext("Autocorrelation Functions: Energy Components (Deseasonalized, 1958–2025)",
+      outer = TRUE, line = 1, cex = 1.2, font = 2)
+dev.off()
+cat("  ✓ Saved: Fig11_ACF_PACF_Energy_Anomalies.png\n")
+
+```
+
+```{r}
+# --------------------------------------------------------------------------
+# Section 1.5 Summary
+# --------------------------------------------------------------------------
+
+cat("\n", rep("-", 40), "\n")
+cat("Section 1.5 Summary\n")
+cat(rep("-", 40), "\n\n")
+
+cat("Energy Budget Integration:\n")
+cat(sprintf("  Mean TKE:         %.2f m²/s²\n", mean(storm_df$tke)))
+cat(sprintf("  Mean MKE:         %.2f m²/s²\n", mean(storm_df$mke)))
+cat(sprintf("  Mean EKE_budget:  %.2f m²/s²\n", mean(storm_df$eke_budget)))
+cat(sprintf("  Budget closure:   %.6f%%\n", relative_error))
+
+cat("\nAutocorrelation Diagnostics (Energy Components):\n")
+print(knitr::kable(
+  acf_comparison_energy %>%
+    select(metric, rho1_anomaly, neff, dof_reduction_pct),
+  digits = 3, format = "simple",
+  col.names = c("Metric", "Lag-1 ACF (ρ₁)", "n_eff", "DoF Reduction (%)")
+))
+
+cat("\nGenerated Figures:\n")
+cat("  Fig11: ACF/PACF for energy components (deseasonalised)\n")
+
+
+# ============================================================================
+# UPDATE: SAVE SECTION
+# ============================================================================
+# The existing save block should be updated to include the new energy 
+# budget objects. Add these to the save() call:
+#
+#   energy_annual,
+#   acf_results_energy,
+#   acf_comparison_energy,
+#   relative_error,        # budget closure error (%)
+#
+# storm_df now includes the energy columns: tke, mke, eke_budget,
+# eke_fraction, mke_eke_ratio, and the _anom columns.
+#
+# Phase 2 (Energy Budget Characterisation) loads this .RData file
+# and generates its own figures in a separate script.
+# ============================================================================
+
+```
+
+# Phase 2: Energy budget characterisation
 
 ```{r}
 # ============================================================================
-# PHASE 2: ENERGY BUDGET DIAGNOSTICS
+# PHASE 2: ENERGY BUDGET CHARACTERISATION
 # Arctic Storminess Climatology (1958-2025)
 # ============================================================================
+#
+# PURPOSE:
+#   Describe the climatological properties of the atmospheric kinetic
+#   energy budget: how total kinetic energy is partitioned between the
+#   mean flow and transient eddies, how this partitioning varies with
+#   season, and how the budget-derived EKE relates to the bandpass-
+#   filtered synoptic-scale EKE used as the primary storminess metric.
+#
+#   This phase is purely descriptive — no trend detection. It establishes
+#   the physical context needed to interpret the trend results in Phase 3.
+#
+# WHY A SEPARATE PHASE:
+#   Phase 1 prepares and validates all variables (storminess + energy).
+#   Phase 2 characterises what the energy budget *looks like*.
+#   Phase 3 asks whether it is *changing*.
+#   Each phase has a single, well-defined purpose.
+#
+# INPUT:
+#   Phase1_Prepared_Data.RData (which now includes energy components)
+#
+# OUTPUT:
+#   3 diagnostic figures:
+#     Fig2.1: Energy budget partitioning (stacked area)
+#     Fig2.2: Seasonal cycle of energy components
+#     Fig2.3: EKE definition comparison (scatter + time series)
+#   Summary statistics printed to console
+#
+# ============================================================================
+
 
 # ============================================================================
 # SETUP
 # ============================================================================
 
-# Define paths
-DATA_DIRECTORY <- here::here("Data", "processed")
-RESULTS_DIR <- here::here("Data", "processed", "analysis_ready")
-FIG_DIR <- here::here("Figures", "Phase2_EnergyBudget")
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 2: ENERGY BUDGET CHARACTERISATION\n")
+cat(rep("=", 70), "\n\n")
 
-# Create directories if needed
-if (!dir.exists(RESULTS_DIR)) dir.create(RESULTS_DIR, recursive = TRUE)
-if (!dir.exists(FIG_DIR)) dir.create(FIG_DIR, recursive = TRUE)
+# Load Phase 1 data
+data_file <- here::here("Data", "processed", "analysis_ready",
+                         "Phase1_Prepared_Data.RData")
 
-# Output file for Phase 2 results
-PHASE2_OUTPUT <- file.path(RESULTS_DIR, "Phase2_EnergyBudget_Results.RData")
-
-# ----------------------------------------------------------------------------
-# Load Phase 1 Prepared Data
-# ----------------------------------------------------------------------------
-
-phase1_file <- file.path(RESULTS_DIR, "Phase1_Prepared_Data.RData")
-
-if (!file.exists(phase1_file)) {
-  stop(glue("
-    ERROR: Phase 1 data not found!
-    Expected: {phase1_file}
-    Please run Phase 1 script first.
-  "))
+if (!file.exists(data_file)) {
+  stop("Phase 1 data not found. Run Phase 1 script first.")
 }
-
-load(phase1_file)
+load(data_file)
 cat("✓ Loaded Phase 1 prepared data\n")
-cat(sprintf("  - Time series: %d months (%d-%d)\n", 
-            length(time_dates), 
-            year(min(time_dates)), 
-            year(max(time_dates))))
 
-# ----------------------------------------------------------------------------
-# Check if Phase 2 already completed (skip if results exist)
-# ----------------------------------------------------------------------------
+# Verify energy columns are present (added in Phase 1 §1.5)
+required_cols <- c("tke", "mke", "eke_budget", "eke_fraction", "mke_eke_ratio")
+missing_cols  <- setdiff(required_cols, names(storm_df))
+if (length(missing_cols) > 0) {
+  stop(sprintf("Missing energy columns in storm_df: %s\n  Re-run Phase 1 with §1.5 extension.",
+               paste(missing_cols, collapse = ", ")))
+}
+cat("✓ Energy budget columns verified\n\n")
 
-if (file.exists(PHASE2_OUTPUT)) {
-  cat("\n✓ Phase 2 results already exist. Loading saved results...\n")
-  load(PHASE2_OUTPUT)
-  cat("  To re-run analysis, delete:", PHASE2_OUTPUT, "\n")
-} else {
-  
-  cat("\n", rep("=", 70), "\n")
-  cat("PHASE 2: ENERGY BUDGET DIAGNOSTICS\n")
-  cat(rep("=", 70), "\n\n")
+# Create output directory
+fig_dir <- here::here("Figures", "Phase2_Energy_Budget")
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
 
-  # ==========================================================================
-  # 2.1 Load Energy Budget Files
-  # ==========================================================================
-  
-  cat("--- 2.1 Loading Energy Budget Components ---\n\n")
-  
-  TKE_FILE <- file.path(DATA_DIRECTORY, "ERA5_TKE_monthly.nc")
-  MKE_FILE <- file.path(DATA_DIRECTORY, "ERA5_MKE_monthly.nc")
-  EKE_BUDGET_FILE <- file.path(DATA_DIRECTORY, "ERA5_EKE_budget_monthly.nc")
-  
-  # Check files exist
-  energy_files <- list(TKE = TKE_FILE, MKE = MKE_FILE, EKE_budget = EKE_BUDGET_FILE)
-  for (name in names(energy_files)) {
-    if (!file.exists(energy_files[[name]])) {
-      stop(sprintf("File not found: %s", energy_files[[name]]))
-    }
-    cat(sprintf("  ✓ Found: %s\n", basename(energy_files[[name]])))
-  }
-  
-  # Function to load and process energy component
-  load_energy_component <- function(filepath, varname, lat_arctic, lon) {
-    nc <- nc_open(filepath)
-    data_raw <- ncvar_get(nc, varname)
-    lat_nc <- ncvar_get(nc, "latitude")
-    lon_nc <- ncvar_get(nc, "longitude")
-    nc_close(nc)
-    
-    # Permute to [time, lat, lon] if needed
-    if (dim(data_raw)[1] == length(lon_nc) && dim(data_raw)[3] != length(lon_nc)) {
-      data_array <- aperm(data_raw, c(3, 2, 1))
-    } else {
-      data_array <- data_raw
-    }
-    
-    # Subset to Arctic (>= 60°N)
-    arctic_idx <- which(lat_nc >= 60)
-    data_arctic <- data_array[, arctic_idx, ]
-    lat_subset <- lat_nc[arctic_idx]
-    
-    # Area-weighted mean
-    weights <- cos(lat_subset * pi / 180)
-    weights_mat <- matrix(weights, nrow = length(lat_subset), ncol = length(lon_nc))
-    
-    ts_weighted <- apply(data_arctic, 1, function(slice) {
-      weighted.mean(slice, weights_mat, na.rm = TRUE)
-    })
-    
-    return(list(
-      ts = ts_weighted,
-      array = data_arctic,
-      lat = lat_subset
-    ))
-  }
-  
-  # Load all components
-  tke_data <- load_energy_component(TKE_FILE, "tke", lat_arctic, lon)
-  mke_data <- load_energy_component(MKE_FILE, "mke", lat_arctic, lon)
-  eke_budget_data <- load_energy_component(EKE_BUDGET_FILE, "eke_budget", lat_arctic, lon)
-  
-  cat(sprintf("\n  Loaded %d months of energy budget data\n", length(tke_data$ts)))
-  
-  # ==========================================================================
-  # 2.2 Budget Closure Verification
-  # ==========================================================================
-  
-  cat("\n--- 2.2 Verifying Energy Budget Closure ---\n\n")
-  
-  budget_residual <- tke_data$ts - (mke_data$ts + eke_budget_data$ts)
-  budget_closure <- list(
-    mean_tke = mean(tke_data$ts),
-    mean_mke = mean(mke_data$ts),
-    mean_eke_budget = mean(eke_budget_data$ts),
-    mean_residual = mean(abs(budget_residual)),
-    relative_error_pct = mean(abs(budget_residual)) / mean(tke_data$ts) * 100,
-    verified = mean(abs(budget_residual)) / mean(tke_data$ts) * 100 < 0.01
-  )
-  
-  cat(sprintf("  Mean TKE: %.3f m²/s²\n", budget_closure$mean_tke))
-  cat(sprintf("  Mean MKE: %.3f m²/s²\n", budget_closure$mean_mke))
-  cat(sprintf("  Mean EKE_budget: %.3f m²/s²\n", budget_closure$mean_eke_budget))
-  cat(sprintf("  Relative closure error: %.6f%%\n", budget_closure$relative_error_pct))
-  
-  if (budget_closure$verified) {
-    cat("  ✓ BUDGET CLOSURE VERIFIED\n")
-  } else {
-    cat("  ⚠ WARNING: Budget error exceeds tolerance\n")
-  }
-  
-  # ==========================================================================
-  # 2.3 Create Energy Budget Data Frame
-  # ==========================================================================
-  
-  cat("\n--- 2.3 Creating Energy Budget Data Frame ---\n")
-  
-  energy_df <- data.frame(
-    date = time_dates,
-    year = year(time_dates),
-    month = month(time_dates),
-    tke = tke_data$ts,
-    mke = mke_data$ts,
-    eke_budget = eke_budget_data$ts
-  ) %>%
-    mutate(
-      mke_eke_ratio = mke / eke_budget,
-      eke_fraction = eke_budget / tke,
-      mke_fraction = mke / tke,
-      season = case_when(
-        month %in% c(12, 1, 2) ~ "DJF",
-        month %in% c(3, 4, 5) ~ "MAM",
-        month %in% c(6, 7, 8) ~ "JJA",
-        month %in% c(9, 10, 11) ~ "SON"
-      )
-    )
-  
-  cat(sprintf("  ✓ Energy data frame: %d rows\n", nrow(energy_df)))
-  
-  # Summary statistics
-  energy_summary <- data.frame(
-    Component = c("TKE", "MKE", "EKE_budget", "MKE/EKE ratio"),
-    Mean = c(mean(energy_df$tke), mean(energy_df$mke), 
-             mean(energy_df$eke_budget), mean(energy_df$mke_eke_ratio)),
-    SD = c(sd(energy_df$tke), sd(energy_df$mke), 
-           sd(energy_df$eke_budget), sd(energy_df$mke_eke_ratio)),
-    Min = c(min(energy_df$tke), min(energy_df$mke), 
-            min(energy_df$eke_budget), min(energy_df$mke_eke_ratio)),
-    Max = c(max(energy_df$tke), max(energy_df$mke), 
-            max(energy_df$eke_budget), max(energy_df$mke_eke_ratio))
-  )
-  
-  cat("\n")
-  print(kable(energy_summary, digits = 3, format = "simple",
-              caption = "Energy Budget Components (Pan-Arctic ≥60°N)"))
-  
-  cat(sprintf("\n  Mean EKE fraction of TKE: %.1f%%\n", mean(energy_df$eke_fraction) * 100))
-  cat(sprintf("  Mean MKE fraction of TKE: %.1f%%\n", mean(energy_df$mke_fraction) * 100))
-  
-  # ==========================================================================
-  # 2.4 Annual Aggregation for Trend Analysis
-  # ==========================================================================
-  
-  cat("\n--- 2.4 Annual Aggregation ---\n")
-  
-  energy_annual <- energy_df %>%
+# Colour scheme (consistent with Phase 1 energy plots)
+energy_colors <- c(
+  "TKE" = "#1B9E77",
+  "MKE" = "#D95F02",
+  "EKE" = "#7570B3"
+)
+
+# Reconstruct annual means if not loaded
+# (energy_annual should be in the .RData, but this is a safety net)
+if (!exists("energy_annual")) {
+  energy_annual <- storm_df %>%
     group_by(year) %>%
     summarise(
-      tke = mean(tke),
-      mke = mean(mke),
-      eke_budget = mean(eke_budget),
+      tke           = mean(tke),
+      mke           = mean(mke),
+      eke_budget    = mean(eke_budget),
+      eke_mean      = mean(eke_mean),
       mke_eke_ratio = mean(mke_eke_ratio),
-      eke_fraction = mean(eke_fraction),
-      .groups = "drop"
+      eke_fraction  = mean(eke_fraction),
+      .groups       = "drop"
     )
-  
-  cat(sprintf("  ✓ Annual means: %d years\n", nrow(energy_annual)))
-  
-  # ==========================================================================
-  # 2.5 Trend Analysis of Energy Components
-  # ==========================================================================
-  
-  cat("\n--- 2.5 Energy Component Trends ---\n\n")
-  
-# Function to perform trend analysis and return results
-  analyze_trend <- function(data_vector, varname) {
-    # Ensure it's a numeric vector (not ts object)
-    x <- as.numeric(data_vector)
-    n <- length(x)
-    
-    # Pre-whitened Mann-Kendall test
-    # If this succeeds, it often returns a VECTOR, not a list
-    mk_result <- tryCatch({
-      mkttest(x)
-    }, error = function(e) {
-      # Fallback to standard MK if pre-whitened fails
-      # This returns a LIST (class "htest")
-      mk.test(x)
-    })
-    
-    # Sen's slope
-    sens_result <- sens.slope(x)
-    
-    # Calculate percent change over record
-    years <- length(x)
-    total_change <- sens_result$estimates * years
-    pct_change <- (total_change / mean(x)) * 100
-    
-    # --- FIX START: Extract Statistics Correctly ---
-    if (is.list(mk_result)) {
-      # It is a list (likely from mk.test fallback)
-      stat_val <- as.numeric(mk_result$statistic)
-      p_val <- as.numeric(mk_result$p.value)
-    } else {
-      # It is a vector (likely from modifiedmk::mkttest)
-      # Usually: [1] Z-value, [2] Sen's, [3] S, [4] Var, [5] P-value
-      # We attempt to extract by name, or fall back to indices
-      
-      # Extract Z (Statistic)
-      if ("Z-Value" %in% names(mk_result)) {
-        stat_val <- as.numeric(mk_result["Z-Value"])
-      } else if ("Corrected Z" %in% names(mk_result)) {
-        stat_val <- as.numeric(mk_result["Corrected Z"])
-      } else {
-        stat_val <- as.numeric(mk_result[1]) # Assume 1st element is Z
-      }
-      
-      # Extract P-value
-      if ("P-value" %in% names(mk_result)) {
-        p_val <- as.numeric(mk_result["P-value"])
-      } else {
-        # Often the last element or specific index 5 in modifiedmk
-        p_val <- as.numeric(mk_result[length(mk_result)]) 
-      }
-    }
-    
-    # Return Results List
-    list(
-      variable = varname,
-      n_years = n,
-      sens_slope = as.numeric(sens_result$estimates),
-      sens_slope_pct_per_decade = (as.numeric(sens_result$estimates) / mean(x)) * 100 * 10,
-      total_change = total_change,
-      pct_change = pct_change,
-      mk_statistic = stat_val,  
-      p_value = p_val,           
-      significant = p_val < 0.05
-    )
-  }
-  
-  # Analyze each component
-  trend_vars <- c("tke", "mke", "eke_budget", "mke_eke_ratio")
-  energy_trends <- list()
-  
-  for (varname in trend_vars) {
-    energy_trends[[varname]] <- analyze_trend(energy_annual[[varname]], varname)
-    
-    result <- energy_trends[[varname]]
-    cat(sprintf("%s:\n", toupper(varname)))
-    cat(sprintf("  Sen's slope: %.5f per year (%.3f%% per decade)\n", 
-                result$sens_slope, result$sens_slope_pct_per_decade))
-    cat(sprintf("  Total change (1958-2025): %.3f (%.1f%%)\n", 
-                result$total_change, result$pct_change))
-    cat(sprintf("  p-value: %.4f\n", result$p_value))
-    cat(sprintf("  Trend: %s\n\n", 
-                ifelse(result$significant, "SIGNIFICANT", "not significant")))
-  }
-  
-  # Convert to data frame for easy table generation
-  energy_trends_df <- bind_rows(lapply(energy_trends, as.data.frame))
-  
-  # ==========================================================================
-  # 2.6 Save Phase 2 Results
-  # ==========================================================================
-  
-  cat("\n--- 2.6 Saving Phase 2 Results ---\n")
-  
-  # Compile all results
-  phase2_results <- list(
-    # Data frames
-    energy_df = energy_df,
-    energy_annual = energy_annual,
-    energy_summary = energy_summary,
-    
-    # Trend analysis
-    energy_trends = energy_trends,
-    energy_trends_df = energy_trends_df,
-    
-    # Budget verification
-    budget_closure = budget_closure,
-    
-    # Metadata
-    metadata = list(
-      created = Sys.time(),
-      n_months = nrow(energy_df),
-      n_years = nrow(energy_annual),
-      period = c(min(energy_df$year), max(energy_df$year))
-    )
-  )
-  
-  save(phase2_results, energy_df, energy_annual, energy_trends_df,
-       file = PHASE2_OUTPUT)
-  
-  cat(sprintf("  ✓ Saved: %s\n", PHASE2_OUTPUT))
-  
-  cat("\n", rep("=", 70), "\n")
-  cat("PHASE 2 COMPLETE\n")
-  cat(rep("=", 70), "\n")
-
-}  # End of if-else for checking existing results
-
-# ============================================================================
-# SUMMARY TABLE (always runs, using loaded or computed results)
-# ============================================================================
-
-cat("\n--- Phase 2 Summary ---\n\n")
-
-cat("Energy Budget Trends (Pan-Arctic ≥60°N, 1958-2025):\n\n")
-print(kable(energy_trends_df %>%
-              select(variable, sens_slope, sens_slope_pct_per_decade, 
-                     p_value, significant) %>%
-              mutate(
-                sens_slope = sprintf("%.5f", sens_slope),
-                sens_slope_pct_per_decade = sprintf("%.3f%%", sens_slope_pct_per_decade),
-                p_value = sprintf("%.4f", p_value),
-                significant = ifelse(significant, "Yes", "No")
-              ),
-            col.names = c("Variable", "Sen's Slope [/yr]", "Change [%/decade]", 
-                          "p-value", "Significant"),
-            format = "simple"))
+}
 ```
 
 ```{r}
 # ============================================================================
-# PHASE 2: DIAGNOSTIC PLOTS
-# Energy Budget Diagnostics
+# 2.1  ENERGY PARTITIONING
+# ============================================================================
+# Key question: how is TKE split between mean flow (MKE) and transient
+# eddies (EKE_budget), and is this split stable over 68 years?
+#
+# A stacked area chart shows three things simultaneously:
+#   1. Absolute TKE level (~46 m²/s²)
+#   2. The approximate 80/20 EKE/MKE split
+#   3. The temporal stability of the partitioning
 # ============================================================================
 
-cat("\n", rep("=", 70), "\n")
-cat("PHASE 2: DIAGNOSTIC PLOTS\n")
-cat(rep("=", 70), "\n\n")
+cat("--- 2.1 Energy Partitioning Climatology ---\n\n")
 
-# Load Phase 2 results if not already in environment
-if (!exists("energy_df") || !exists("energy_annual")) {
-  load(PHASE2_OUTPUT)
-  cat("✓ Loaded Phase 2 results\n\n")
-}
+# Report key values
+cat(sprintf("  Climatological eddy fraction (f_EKE):  %.1f%%\n",
+            mean(storm_df$eke_fraction) * 100))
+cat(sprintf("  Climatological MKE/EKE ratio:          %.3f\n",
+            mean(storm_df$mke_eke_ratio)))
+cat(sprintf("  Range of annual f_EKE:                 %.1f%% – %.1f%%\n",
+            min(energy_annual$eke_fraction) * 100,
+            max(energy_annual$eke_fraction) * 100))
 
-# Define color scheme for energy components
-energy_colors <- c(
-  "TKE" = "#1B9E77",
-  "MKE" = "#D95F02", 
-  "EKE" = "#7570B3"
-)
-
-# ============================================================================
-# PLOT 2.1: TIME SERIES OF ENERGY COMPONENTS (MONTHLY)
-# ============================================================================
-
-cat("--- Generating Plot 2.1: Energy Components Time Series ---\n")
-
-# Prepare long-format data
-energy_long <- energy_df %>%
-  select(date, tke, mke, eke_budget) %>%
-  pivot_longer(-date, names_to = "component", values_to = "value") %>%
-  mutate(
-    component = factor(component, 
-                       levels = c("tke", "mke", "eke_budget"),
-                       labels = c("TKE", "MKE", "EKE (budget)"))
-  )
-
-p2_1 <- ggplot(energy_long, aes(x = date, y = value, color = component)) +
-  geom_line(alpha = 0.4, linewidth = 0.3) +
-  geom_smooth(method = "loess", span = 0.1, se = FALSE, linewidth = 0.8) +
-  scale_color_manual(values = c("TKE" = "#1B9E77", "MKE" = "#D95F02", 
-                                "EKE (budget)" = "#7570B3"),
-                     name = "Component") +
-  scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
-  labs(
-    title = "Atmospheric Kinetic Energy Budget Components",
-    subtitle = "Pan-Arctic (≥60°N) | Monthly values with LOESS smoother | 1958–2025",
-    x = NULL,
-    y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14),
-    legend.position = "bottom"
-  )
-
-ggsave(file.path(FIG_DIR, "Fig2.1_Energy_Components_TimeSeries.png"),
-       p2_1, width = 12, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.1_Energy_Components_TimeSeries.png\n")
-
-# ============================================================================
-# PLOT 2.2: ANNUAL ENERGY COMPONENTS WITH TRENDS
-# ============================================================================
-
-cat("\n--- Generating Plot 2.2: Annual Energy with Trends ---\n")
-
-# Prepare annual long-format data
-energy_annual_long <- energy_annual %>%
-  select(year, tke, mke, eke_budget) %>%
-  pivot_longer(-year, names_to = "component", values_to = "value") %>%
-  mutate(
-    component = factor(component, 
-                       levels = c("tke", "mke", "eke_budget"),
-                       labels = c("TKE", "MKE", "EKE (budget)"))
-  )
-
-p2_2 <- ggplot(energy_annual_long, aes(x = year, y = value, color = component)) +
-  geom_point(alpha = 0.6, size = 1.5) +
-  geom_smooth(method = "lm", se = TRUE, linewidth = 1, alpha = 0.2) +
-  scale_color_manual(values = c("TKE" = "#1B9E77", "MKE" = "#D95F02", 
-                                "EKE (budget)" = "#7570B3"),
-                     name = "Component") +
-  labs(
-    title = "Annual Mean Kinetic Energy Components with Linear Trends",
-    subtitle = "Pan-Arctic (≥60°N) | 1958–2025 | Shading = 95% CI",
-    x = NULL,
-    y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14),
-    legend.position = "bottom"
-  )
-
-ggsave(file.path(FIG_DIR, "Fig2.2_Energy_Annual_Trends.png"),
-       p2_2, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.2_Energy_Annual_Trends.png\n")
-
-# ============================================================================
-# PLOT 2.3: ENERGY BUDGET COMPOSITION (STACKED AREA)
-# ============================================================================
-
-cat("\n--- Generating Plot 2.3: Energy Budget Composition ---\n")
-
-# Annual data for cleaner visualization
+# --- Figure 2.1: Stacked Area ---
 energy_stack <- energy_annual %>%
   select(year, mke, eke_budget) %>%
   pivot_longer(-year, names_to = "component", values_to = "value") %>%
@@ -2257,207 +2238,140 @@ energy_stack <- energy_annual %>%
                        labels = c("EKE (Transient Eddies)", "MKE (Mean Flow)"))
   )
 
-p2_3 <- ggplot(energy_stack, aes(x = year, y = value, fill = component)) +
+p2_1 <- ggplot(energy_stack, aes(x = year, y = value, fill = component)) +
   geom_area(alpha = 0.8) +
-  scale_fill_manual(values = c("EKE (Transient Eddies)" = "#7570B3", 
-                               "MKE (Mean Flow)" = "#D95F02"),
-                    name = NULL) +
+  scale_fill_manual(
+    values = c("EKE (Transient Eddies)" = "#7570B3",
+               "MKE (Mean Flow)"        = "#D95F02"),
+    name = NULL
+  ) +
   labs(
-    title = "Partitioning of Total Kinetic Energy",
+    title    = "Partitioning of Total Kinetic Energy",
     subtitle = "Pan-Arctic (≥60°N) | Annual means | TKE = MKE + EKE",
     x = NULL,
     y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
   ) +
   theme_bw(base_size = 12) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title    = element_text(face = "bold", size = 14),
     legend.position = "bottom"
   )
 
-ggsave(file.path(FIG_DIR, "Fig2.3_Energy_Budget_Composition.png"),
-       p2_3, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.3_Energy_Budget_Composition.png\n")
+ggsave(file.path(fig_dir, "Fig2.1_Energy_Budget_Partitioning.png"),
+       p2_1, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.1_Energy_Budget_Partitioning.png\n\n")
+```
 
+```{r}
 # ============================================================================
-# PLOT 2.4: MKE/EKE RATIO TIME SERIES
+# 2.2  SEASONAL CYCLE OF ENERGY COMPONENTS
 # ============================================================================
-
-cat("\n--- Generating Plot 2.4: MKE/EKE Ratio ---\n")
-
-# Get trend info for annotation
-ratio_trend <- energy_trends_df %>% filter(variable == "mke_eke_ratio")
-
-p2_4 <- ggplot(energy_annual, aes(x = year, y = mke_eke_ratio)) +
-  geom_line(color = "gray50", alpha = 0.5) +
-  geom_point(color = "#E7298A", size = 2, alpha = 0.7) +
-  geom_smooth(method = "lm", se = TRUE, color = "#E7298A", 
-              fill = "#E7298A", alpha = 0.2, linewidth = 1) +
-  geom_hline(yintercept = mean(energy_annual$mke_eke_ratio), 
-             linetype = "dashed", color = "gray30") +
-  annotate("text", x = 1965, y = max(energy_annual$mke_eke_ratio) * 0.98,
-           label = sprintf("Sen's slope: %.4f/yr\np = %.4f (%s)",
-                           ratio_trend$sens_slope,
-                           ratio_trend$p_value,
-                           ifelse(ratio_trend$significant, "significant", "n.s.")),
-           hjust = 0, size = 3.5, fontface = "italic") +
-  labs(
-    title = "Mean-to-Eddy Kinetic Energy Ratio",
-    subtitle = "Pan-Arctic (≥60°N) | Higher values = stronger mean flow relative to eddies",
-    x = NULL,
-    y = "MKE / EKE Ratio"
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14)
-  )
-
-ggsave(file.path(FIG_DIR, "Fig2.4_MKE_EKE_Ratio.png"),
-       p2_4, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.4_MKE_EKE_Ratio.png\n")
-
-# ============================================================================
-# PLOT 2.5: EKE FRACTION OF TKE
+# Key question: how does the energy budget vary by month?
+#
+# This reveals:
+#   - TKE and EKE peak in winter (DJF), trough in summer (JJA)
+#   - MKE has a much flatter seasonal cycle
+#   - Winter EKE is roughly 1.5–2× summer EKE
+#   - MKE seasonal amplitude is much smaller than EKE's
 # ============================================================================
 
-cat("\n--- Generating Plot 2.5: EKE Fraction of TKE ---\n")
+cat("--- 2.2 Seasonal Cycle of Energy Components ---\n\n")
 
-p2_5 <- ggplot(energy_annual, aes(x = year, y = eke_fraction * 100)) +
-  geom_line(color = "gray50", alpha = 0.5) +
-  geom_point(color = "#7570B3", size = 2, alpha = 0.7) +
-  geom_smooth(method = "lm", se = TRUE, color = "#7570B3",
-              fill = "#7570B3", alpha = 0.2, linewidth = 1) +
-  geom_hline(yintercept = mean(energy_annual$eke_fraction) * 100,
-             linetype = "dashed", color = "gray30") +
-  labs(
-    title = "Eddy Kinetic Energy as Fraction of Total",
-    subtitle = "Pan-Arctic (≥60°N) | Higher values = more energy in transient eddies",
-    x = NULL,
-    y = "EKE / TKE (%)"
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14)
-  )
-
-ggsave(file.path(FIG_DIR, "Fig2.5_EKE_Fraction.png"),
-       p2_5, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.5_EKE_Fraction.png\n")
-
-# ============================================================================
-# PLOT 2.6: SEASONAL CYCLE OF ENERGY COMPONENTS
-# ============================================================================
-
-cat("\n--- Generating Plot 2.6: Seasonal Cycle ---\n")
-
-energy_seasonal <- energy_df %>%
+energy_seasonal <- storm_df %>%
   group_by(month) %>%
   summarise(
-    tke_mean = mean(tke),
-    tke_sd = sd(tke),
-    mke_mean = mean(mke),
-    mke_sd = sd(mke),
-    eke_mean = mean(eke_budget),
-    eke_sd = sd(eke_budget),
-    .groups = "drop"
+    tke_mean        = mean(tke),
+    mke_mean        = mean(mke),
+    eke_mean_budget = mean(eke_budget),
+    .groups         = "drop"
   )
+
+# Report winter/summer contrast
+winter_eke <- mean(energy_seasonal$eke_mean_budget[energy_seasonal$month %in% c(12, 1, 2)])
+summer_eke <- mean(energy_seasonal$eke_mean_budget[energy_seasonal$month %in% c(6, 7, 8)])
+winter_mke <- mean(energy_seasonal$mke_mean[energy_seasonal$month %in% c(12, 1, 2)])
+summer_mke <- mean(energy_seasonal$mke_mean[energy_seasonal$month %in% c(6, 7, 8)])
+
+cat(sprintf("  EKE_budget: winter = %.1f, summer = %.1f m²/s² (ratio: %.2f)\n",
+            winter_eke, summer_eke, winter_eke / summer_eke))
+cat(sprintf("  MKE:        winter = %.1f, summer = %.1f m²/s² (ratio: %.2f)\n",
+            winter_mke, summer_mke, winter_mke / summer_mke))
 
 # Long format for plotting
 seasonal_long <- energy_seasonal %>%
-  select(month, tke_mean, mke_mean, eke_mean) %>%
+  select(month, tke_mean, mke_mean, eke_mean_budget) %>%
   pivot_longer(-month, names_to = "component", values_to = "value") %>%
   mutate(
     component = factor(component,
-                       levels = c("tke_mean", "mke_mean", "eke_mean"),
+                       levels = c("tke_mean", "mke_mean", "eke_mean_budget"),
                        labels = c("TKE", "MKE", "EKE"))
   )
 
-p2_6 <- ggplot(seasonal_long, aes(x = month, y = value, color = component)) +
+p2_2 <- ggplot(seasonal_long, aes(x = month, y = value, color = component)) +
   geom_line(linewidth = 1.2) +
   geom_point(size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  scale_color_manual(values = c("TKE" = "#1B9E77", "MKE" = "#D95F02", 
-                                "EKE" = "#7570B3"),
-                     name = "Component") +
+  scale_color_manual(values = energy_colors, name = "Component") +
   labs(
-    title = "Climatological Seasonal Cycle of Energy Components",
+    title    = "Climatological Seasonal Cycle of Energy Components",
     subtitle = "Pan-Arctic (≥60°N) | 1958–2025 mean",
     x = NULL,
     y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
   ) +
   theme_bw(base_size = 12) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title    = element_text(face = "bold", size = 14),
     legend.position = "bottom"
   )
 
-ggsave(file.path(FIG_DIR, "Fig2.6_Energy_Seasonal_Cycle.png"),
-       p2_6, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.6_Energy_Seasonal_Cycle.png\n")
+ggsave(file.path(fig_dir, "Fig2.2_Energy_Seasonal_Cycle.png"),
+       p2_2, width = 10, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.2_Energy_Seasonal_Cycle.png\n\n")
+```
 
+```{r}
 # ============================================================================
-# PLOT 2.7: SEASONAL MKE/EKE RATIO
+# 2.3  EKE DEFINITION COMPARISON
 # ============================================================================
-
-cat("\n--- Generating Plot 2.7: Seasonal MKE/EKE Ratio ---\n")
-
-ratio_seasonal <- energy_df %>%
-  group_by(month) %>%
-  summarise(
-    ratio_mean = mean(mke_eke_ratio),
-    ratio_sd = sd(mke_eke_ratio),
-    .groups = "drop"
-  )
-
-p2_7 <- ggplot(ratio_seasonal, aes(x = month, y = ratio_mean)) +
-  geom_ribbon(aes(ymin = ratio_mean - ratio_sd, ymax = ratio_mean + ratio_sd),
-              fill = "#E7298A", alpha = 0.3) +
-  geom_line(color = "#E7298A", linewidth = 1.2) +
-  geom_point(color = "#E7298A", size = 3) +
-  scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(
-    title = "Seasonal Cycle of MKE/EKE Ratio",
-    subtitle = "Pan-Arctic (≥60°N) | Mean ± 1 SD | Higher in summer = weaker relative eddy activity",
-    x = NULL,
-    y = "MKE / EKE Ratio"
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14)
-  )
-
-ggsave(file.path(FIG_DIR, "Fig2.7_MKE_EKE_Ratio_Seasonal.png"),
-       p2_7, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.7_MKE_EKE_Ratio_Seasonal.png\n")
-
-# ============================================================================
-# PLOT 2.8: COMPARISON - EKE_BUDGET vs SYNOPTIC-SCALE EKE
+# Key question: how does the bandpass-filtered synoptic-scale EKE (our
+# primary storminess metric) relate to the broader budget EKE (all
+# sub-monthly variance)?
+#
+# A high correlation and stable synoptic fraction (f_synoptic) indicate
+# that trends in the bandpass-filtered metric are representative of the
+# broader eddy field. If f_synoptic varies substantially over time,
+# the two EKE measures could show divergent trends.
+#
+# Two-panel figure:
+#   (a) Scatter plot: monthly EKE_budget vs EKE_synoptic with r
+#   (b) Annual time series of both, showing co-variation
 # ============================================================================
 
-cat("\n--- Generating Plot 2.8: EKE Budget vs Synoptic EKE ---\n")
+cat("--- 2.3 EKE Definition Comparison ---\n\n")
 
-# Merge with storminess metrics from Phase 1
-comparison_df <- energy_df %>%
-  select(date, year, month, eke_budget) %>%
-  left_join(
-    storm_df %>% select(date, eke_mean),
-    by = "date"
-  ) %>%
-  rename(
-    eke_budget = eke_budget,
-    eke_synoptic = eke_mean
-  )
+# Compute correlation
+eke_cor <- cor(storm_df$eke_budget, storm_df$eke_mean, use = "complete.obs")
+cat(sprintf("  Pearson r (monthly): %.3f\n", eke_cor))
 
-# Correlation
-eke_cor <- cor(comparison_df$eke_budget, comparison_df$eke_synoptic, use = "complete.obs")
+# Compute synoptic fraction
+storm_df <- storm_df %>%
+  mutate(f_synoptic = eke_mean / eke_budget)
 
-# Scatter plot
-p2_8a <- ggplot(comparison_df, aes(x = eke_budget, y = eke_synoptic)) +
+cat(sprintf("  Mean synoptic fraction (f_synoptic): %.3f (%.1f%%)\n",
+            mean(storm_df$f_synoptic, na.rm = TRUE),
+            mean(storm_df$f_synoptic, na.rm = TRUE) * 100))
+cat(sprintf("  Range: %.3f – %.3f\n",
+            min(storm_df$f_synoptic, na.rm = TRUE),
+            max(storm_df$f_synoptic, na.rm = TRUE)))
+
+# Panel (a): Scatter
+p_scatter <- ggplot(storm_df, aes(x = eke_budget, y = eke_mean)) +
   geom_point(alpha = 0.3, size = 1) +
   geom_smooth(method = "lm", color = "#E41A1C", linewidth = 1) +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +
-  annotate("text", 
-           x = min(comparison_df$eke_budget, na.rm = TRUE) * 1.1,
-           y = max(comparison_df$eke_synoptic, na.rm = TRUE) * 0.95,
+  annotate("text",
+           x = min(storm_df$eke_budget, na.rm = TRUE) * 1.1,
+           y = max(storm_df$eke_mean, na.rm = TRUE) * 0.95,
            label = sprintf("r = %.3f", eke_cor),
            hjust = 0, size = 4, fontface = "bold") +
   labs(
@@ -2468,23 +2382,18 @@ p2_8a <- ggplot(comparison_df, aes(x = eke_budget, y = eke_synoptic)) +
   theme_bw(base_size = 11) +
   theme(plot.title = element_text(face = "bold", size = 12))
 
-# Time series comparison (annual)
-comparison_annual <- comparison_df %>%
-  group_by(year) %>%
-  summarise(
-    eke_budget = mean(eke_budget),
-    eke_synoptic = mean(eke_synoptic),
-    .groups = "drop"
-  ) %>%
+# Panel (b): Annual time series
+comparison_annual <- energy_annual %>%
+  select(year, eke_budget, eke_mean) %>%
   pivot_longer(-year, names_to = "type", values_to = "value") %>%
   mutate(
     type = factor(type,
-                  levels = c("eke_budget", "eke_synoptic"),
-                  labels = c("EKE (budget, all sub-monthly)", 
+                  levels = c("eke_budget", "eke_mean"),
+                  labels = c("EKE (budget, all sub-monthly)",
                              "EKE (synoptic, 1.2–6 day)"))
   )
 
-p2_8b <- ggplot(comparison_annual, aes(x = year, y = value, color = type)) +
+p_ts <- ggplot(comparison_annual, aes(x = year, y = value, color = type)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 1.5, alpha = 0.7) +
   scale_color_manual(values = c("#7570B3", "#1B9E77"), name = NULL) +
@@ -2495,112 +2404,71 @@ p2_8b <- ggplot(comparison_annual, aes(x = year, y = value, color = type)) +
   ) +
   theme_bw(base_size = 11) +
   theme(
-    plot.title = element_text(face = "bold", size = 12),
+    plot.title    = element_text(face = "bold", size = 12),
     legend.position = "bottom"
   )
 
-p2_8_combined <- p2_8a + p2_8b +
+# Combine
+p2_3 <- p_scatter + p_ts +
   plot_layout(ncol = 2, widths = c(1, 1.2)) +
   plot_annotation(
-    title = "Comparison of EKE Definitions",
+    title    = "Comparison of EKE Definitions",
     subtitle = "Budget EKE captures all variance; Synoptic EKE isolates 1.2–6 day storm band",
     theme = theme(
-      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.title    = element_text(size = 14, face = "bold", hjust = 0.5),
       plot.subtitle = element_text(size = 11, hjust = 0.5)
     )
   )
 
-ggsave(file.path(FIG_DIR, "Fig2.8_EKE_Comparison.png"),
-       p2_8_combined, width = 14, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.8_EKE_Comparison.png\n")
+ggsave(file.path(fig_dir, "Fig2.3_EKE_Comparison.png"),
+       p2_3, width = 14, height = 6, dpi = 300)
+cat("  ✓ Saved: Fig2.3_EKE_Comparison.png\n")
+```
 
+```{r}
 # ============================================================================
-# PLOT 2.9: DECADAL CHANGES IN ENERGY PARTITIONING
-# ============================================================================
-
-cat("\n--- Generating Plot 2.9: Decadal Energy Partitioning ---\n")
-
-energy_decadal <- energy_df %>%
-  mutate(
-    decade = case_when(
-      year >= 1958 & year < 1970 ~ "1958-1969",
-      year >= 1970 & year < 1980 ~ "1970-1979",
-      year >= 1980 & year < 1990 ~ "1980-1989",
-      year >= 1990 & year < 2000 ~ "1990-1999",
-      year >= 2000 & year < 2010 ~ "2000-2009",
-      year >= 2010 & year < 2020 ~ "2010-2019",
-      year >= 2020 ~ "2020-2025"
-    ),
-    decade = factor(decade)
-  ) %>%
-  group_by(decade) %>%
-  summarise(
-    mke_fraction = mean(mke_fraction) * 100,
-    eke_fraction = mean(eke_fraction) * 100,
-    mke_eke_ratio = mean(mke_eke_ratio),
-    .groups = "drop"
-  )
-
-p2_9 <- ggplot(energy_decadal, aes(x = decade)) +
-  geom_col(aes(y = mke_fraction, fill = "MKE"), width = 0.7) +
-  geom_col(aes(y = -eke_fraction, fill = "EKE"), width = 0.7) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
-  scale_fill_manual(values = c("MKE" = "#D95F02", "EKE" = "#7570B3"),
-                    name = "Component") +
-  scale_y_continuous(
-    labels = function(x) paste0(abs(x), "%"),
-    breaks = seq(-60, 60, by = 20)
-  ) +
-  labs(
-    title = "Decadal Changes in Energy Partitioning",
-    subtitle = "Pan-Arctic (≥60°N) | Fraction of TKE in each component",
-    x = NULL,
-    y = "Fraction of TKE"
-  ) +
-  theme_bw(base_size = 12) +
-  theme(
-    plot.title = element_text(face = "bold", size = 14),
-    legend.position = "bottom",
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
-
-ggsave(file.path(FIG_DIR, "Fig2.9_Decadal_Partitioning.png"),
-       p2_9, width = 10, height = 6, dpi = 300)
-cat("  ✓ Saved: Fig2.9_Decadal_Partitioning.png\n")
-
-# ============================================================================
-# SUMMARY
+# PHASE 2 SUMMARY
 # ============================================================================
 
 cat("\n", rep("=", 70), "\n")
-cat("PHASE 2 DIAGNOSTIC PLOTS COMPLETE\n")
+cat("PHASE 2 COMPLETE: ENERGY BUDGET CHARACTERISATION\n")
 cat(rep("=", 70), "\n\n")
 
-cat("Generated figures:\n")
-cat("  2.1  Energy Components Time Series (monthly)\n")
-cat("  2.2  Annual Energy with Linear Trends\n")
-cat("  2.3  Energy Budget Composition (stacked)\n")
-cat("  2.4  MKE/EKE Ratio Time Series\n")
-cat("  2.5  EKE Fraction of TKE\n")
-cat("  2.6  Seasonal Cycle of Energy Components\n")
-cat("  2.7  Seasonal MKE/EKE Ratio\n")
-cat("  2.8  EKE Budget vs Synoptic EKE Comparison\n")
-cat("  2.9  Decadal Changes in Energy Partitioning\n")
+cat("Key Findings:\n")
+cat(sprintf("  1. Energy partitioning is stable: EKE accounts for ~%.0f%% of TKE\n",
+            mean(storm_df$eke_fraction) * 100))
+cat(sprintf("     across all decades, with annual f_EKE ranging %.1f%%–%.1f%%.\n",
+            min(energy_annual$eke_fraction) * 100,
+            max(energy_annual$eke_fraction) * 100))
+cat(sprintf("  2. Strong seasonality: winter EKE is %.1fx summer EKE.\n",
+            winter_eke / summer_eke))
+cat(sprintf("     MKE seasonality is weaker (winter/summer ratio: %.1f).\n",
+            winter_mke / summer_mke))
+cat(sprintf("  3. Budget and synoptic EKE are well-correlated (r = %.3f),\n",
+            eke_cor))
+cat(sprintf("     with synoptic storms accounting for ~%.0f%% of total eddy energy.\n",
+            mean(storm_df$f_synoptic, na.rm = TRUE) * 100))
 
-cat(sprintf("\nAll figures saved to: %s\n", FIG_DIR))
-
-cat("\nKey findings:\n")
-cat(sprintf("  - EKE fraction of TKE: %.1f%% (mean)\n", 
-            mean(energy_df$eke_fraction) * 100))
-cat(sprintf("  - MKE fraction of TKE: %.1f%% (mean)\n", 
-            mean(energy_df$mke_fraction) * 100))
-cat(sprintf("  - Correlation EKE_budget vs EKE_synoptic: r = %.3f\n", eke_cor))
-cat(sprintf("  - MKE/EKE ratio trend: %s (p = %.4f)\n",
-            ifelse(ratio_trend$significant, "SIGNIFICANT", "not significant"),
-            ratio_trend$p_value))
-
-cat("\n", rep("=", 70), "\n\n")
+cat("\nGenerated Figures:\n")
+cat("  Fig2.1: Energy budget partitioning (stacked area)\n")
+cat("  Fig2.2: Seasonal cycle of energy components\n")
+cat("  Fig2.3: EKE definition comparison (scatter + time series)\n")
+cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
