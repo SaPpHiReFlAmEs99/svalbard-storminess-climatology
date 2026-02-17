@@ -89,42 +89,42 @@ REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
         -   1.5.3 Effective sample size (neff)
 
         -   1.5.4 Variance decomposition (STL, primary metric only)
+        
+-   PHASE 2: Energy budget characterisation
 
-    -   1.6 Energy budget characterisation:
+    -   2.1 Partitioning climatology (fEKE, MKE/EKE ratio)
 
-        -   1.6.1 Partitioning climatology (fEKE, MKE/EKE ratio)
+    -   2.2 Seasonal cycle of energy components
 
-        -   1.6.2 Seasonal cycle of energy components
+    -   2.3 EKE definition comparison (budget vs synoptic, r = 0.885)
+    
+-   PHASE 3: Trend analysis
 
-        -   1.6.3 EKE definition comparison (budget vs synoptic, r = 0.885)
+    -   3.1 Pan-Arctic trend analysis (all storminess metrics + energy components, simultaneously)
 
--   PHASE 2: Trend analysis
+    -   3.2 Seasonal decomposition (all metrics by DJF/MAM/JJA/SON)
 
-    -   2.1 Pan-Arctic trend analysis (all storminess metrics + energy components, simultaneously)
+    -   3.3 Autumn intensification hypothesis test
 
-    -   2.2 Seasonal decomposition (all metrics by DJF/MAM/JJA/SON)
+    -   3.4 Spatial trend patterns + field significance
 
-    -   2.3 Autumn intensification hypothesis test
+    -   3.5 Period comparison (pre- vs. post-regime shift, if warranted by 2.1–2.3)
 
-    -   2.4 Spatial trend patterns + field significance
+-   PHASE 4: Regional Sub-Analysis (apply full Phase 3-4 workflow to each region)
 
-    -   2.5 Period comparison (pre- vs. post-regime shift, if warranted by 2.1–2.3)
+    -   4.1 Fram Strait sector
 
--   PHASE 3: Regional Sub-Analysis (apply full Phase 3-4 workflow to each region)
+    -   4.2 West Svalbard sector (10°E–16°E, 76°N–81°N)
 
-    -   3.1 Fram Strait sector
-
-    -   3.2 West Svalbard sector (10°E–16°E, 76°N–81°N)
-
-    -   3.3 East Svalbard sector (16°E–28°E, 76°N–81°N)
+    -   4.3 East Svalbard sector (16°E–28°E, 76°N–81°N)
 
 -   PHASE 5: Synthesis and hypothesis testing
 
-    -   4.1 Summary of all trend results
+    -   5.1 Summary of all trend results
 
-    -   4.2 Autumn feedback loop hypothesis evaluation
+    -   5.2 Autumn feedback loop hypothesis evaluation
 
-    -   4.3 Comparison with sea-ice loss timelines
+    -   5.3 Comparison with sea-ice loss timelines
 
 # Phase 1: Foundational Analysis
 
@@ -779,7 +779,7 @@ cat(rep("=", 70), "\n\n")
 
 
 # --------------------------------------------------------------------------
-# 1.5.1  Load and Spatially Aggregate Energy Components
+# 1.6.1  Load and Spatially Aggregate Energy Components
 # --------------------------------------------------------------------------
 # Each NetCDF contains a single variable on the same lat/lon grid as the
 # storminess metrics. We apply the identical cosine-latitude weighting
@@ -859,7 +859,7 @@ cat("  ✓ Temporal alignment verified (both have 816 months)\n")
 
 ```{r}
 # --------------------------------------------------------------------------
-# 1.5.2  Budget Closure Verification
+# 1.6.2  Budget Closure Verification
 # --------------------------------------------------------------------------
 # The Reynolds decomposition guarantees TKE = MKE + EKE exactly in theory.
 # In practice, numerical precision of the computation introduces a tiny
@@ -884,62 +884,51 @@ if (relative_error < 0.01) {
 ```
 
 ```{r}
-# ============================================================================
-# Section 1.5.3: SAVE PREPARED DATA
-# ============================================================================
-cat("\n", rep("-", 40), "\n")
-cat("Saving prepared data objects...\n")
+# --------------------------------------------------------------------------
+# 1.6.3  Merge Energy Components into Master Data Frame
+# --------------------------------------------------------------------------
+# We add TKE, MKE, EKE_budget and two derived partitioning metrics to
+# storm_df, so that all variables are in a single data frame for
+# subsequent analysis.
+#
+# Derived metrics:
+#   f_EKE       = EKE_budget / TKE     (eddy fraction, eq. 2.X in methodology)
+#   mke_eke_ratio = MKE / EKE_budget   (mean-to-eddy ratio)
+# --------------------------------------------------------------------------
 
-output_dir <- file.path(DATA_DIRECTORY, "analysis_ready")
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
-}
+cat("\n--- 1.5.3 Merging into Master Data Frame ---\n")
 
-save(
-  # Coordinate data
-  lat, lon, lat_arctic, time_dates,
-  
-  # Area-weighted time series (storminess metrics)
-  ts_weighted, ts_objects,
-  
-  # Master data frame (includes storminess metrics + energy columns:
-  # tke, mke, eke_budget, eke_fraction, mke_eke_ratio, and _anom columns)
-  storm_df,
-  
-  # Annual means (energy + synoptic EKE)
-  energy_annual,
-  
-  # ACF diagnostics — storminess metrics
-  acf_results,
-  acf_comparison,
-  
-  # ACF diagnostics — energy components
-  acf_results_energy,
-  acf_comparison_energy,
-  
-  # Summary statistics
-  summary_stats,
-  
-  # Energy budget closure error (%)
-  relative_error,
-  
-  # Climatological threshold (2D, small)
-  eke_p95_clim,
-  
-  # Configuration
-  ARCTIC_LAT_THRESHOLD, REFERENCE_PERIOD,
-  
-  file = file.path(output_dir, "Phase1_Prepared_Data.RData")
-)
-cat(sprintf("  ✓ Saved to: %s\n", file.path(output_dir, "Phase1_Prepared_Data.RData")))
+storm_df <- storm_df %>%
+  mutate(
+    tke           = tke_ts,
+    mke           = mke_ts,
+    eke_budget    = eke_budget_ts,
+    eke_fraction  = eke_budget_ts / tke_ts,
+    mke_eke_ratio = mke_ts / eke_budget_ts
+  )
 
-write_csv(storm_df, file.path(output_dir, "storm_metrics_panarctic_monthly.csv"))
-cat(sprintf("  ✓ Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_monthly.csv")))
+cat(sprintf("  ✓ storm_df now has %d columns\n", ncol(storm_df)))
+cat(sprintf("  New columns: tke, mke, eke_budget, eke_fraction, mke_eke_ratio\n"))
+
+# Also create annual means (needed for some diagnostics and later for Phase 2)
+energy_annual <- storm_df %>%
+  group_by(year) %>%
+  summarise(
+    tke           = mean(tke),
+    mke           = mean(mke),
+    eke_budget    = mean(eke_budget),
+    eke_mean      = mean(eke_mean),    # synoptic EKE for comparison
+    mke_eke_ratio = mean(mke_eke_ratio),
+    eke_fraction  = mean(eke_fraction),
+    .groups       = "drop"
+  )
+
+cat(sprintf("  ✓ energy_annual: %d years\n", nrow(energy_annual)))
 ```
 
 ```{r}
 # --------------------------------------------------------------------------
-# 1.5.4  Diagnostic Pipeline: Energy Components
+# 1.6.4  Diagnostic Pipeline: Energy Components
 # --------------------------------------------------------------------------
 # Apply the SAME diagnostic procedure used for storminess metrics in §1.4:
 #   1. Deseasonalise (subtract monthly climatology)
@@ -1031,6 +1020,60 @@ cat(rep("-", 40), "\n")
 cat("Energy Component Autocorrelation Diagnostics:\n")
 cat(rep("-", 40), "\n\n")
 print(knitr::kable(acf_comparison_energy, digits = 3, format = "simple"))
+```
+
+```{r}
+# ============================================================================
+# Section 1.6.5: SAVE PREPARED DATA
+# ============================================================================
+cat("\n", rep("-", 40), "\n")
+cat("Saving prepared data objects...\n")
+
+output_dir <- file.path(DATA_DIRECTORY, "analysis_ready")
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+save(
+  # Coordinate data
+  lat, lon, lat_arctic, time_dates,
+  
+  # Area-weighted time series (storminess metrics)
+  ts_weighted, ts_objects,
+  
+  # Master data frame (includes storminess metrics + energy columns:
+  # tke, mke, eke_budget, eke_fraction, mke_eke_ratio, and _anom columns)
+  storm_df,
+  
+  # Annual means (energy + synoptic EKE)
+  energy_annual,
+  
+  # ACF diagnostics — storminess metrics
+  acf_results,
+  acf_comparison,
+  
+  # ACF diagnostics — energy components
+  acf_results_energy,
+  acf_comparison_energy,
+  
+  # Summary statistics
+  summary_stats,
+  
+  # Energy budget closure error (%)
+  relative_error,
+  
+  # Climatological threshold (2D, small)
+  eke_p95_clim,
+  
+  # Configuration
+  ARCTIC_LAT_THRESHOLD, REFERENCE_PERIOD,
+  
+  file = file.path(output_dir, "Phase1_Prepared_Data.RData")
+)
+cat(sprintf("  ✓ Saved to: %s\n", file.path(output_dir, "Phase1_Prepared_Data.RData")))
+
+write_csv(storm_df, file.path(output_dir, "storm_metrics_panarctic_monthly.csv"))
+cat(sprintf("  ✓ Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_monthly.csv")))
 ```
 
 ```{r}
@@ -2090,26 +2133,6 @@ print(knitr::kable(
 
 cat("\nGenerated Figures:\n")
 cat("  Fig11: ACF/PACF for energy components (deseasonalised)\n")
-
-
-# ============================================================================
-# UPDATE: SAVE SECTION
-# ============================================================================
-# The existing save block should be updated to include the new energy 
-# budget objects. Add these to the save() call:
-#
-#   energy_annual,
-#   acf_results_energy,
-#   acf_comparison_energy,
-#   relative_error,        # budget closure error (%)
-#
-# storm_df now includes the energy columns: tke, mke, eke_budget,
-# eke_fraction, mke_eke_ratio, and the _anom columns.
-#
-# Phase 2 (Energy Budget Characterisation) loads this .RData file
-# and generates its own figures in a separate script.
-# ============================================================================
-
 ```
 
 # Phase 2: Energy budget characterisation
@@ -2455,20 +2478,3 @@ cat("  Fig2.2: Seasonal cycle of energy components\n")
 cat("  Fig2.3: EKE definition comparison (scatter + time series)\n")
 cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
