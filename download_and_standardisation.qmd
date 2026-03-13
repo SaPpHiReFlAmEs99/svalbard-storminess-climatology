@@ -189,7 +189,7 @@ print("Starting batch download process (one file per month)...")
 # Outer loop for each year
 for year in YEARS_TO_DOWNLOAD:
     # Inner loop for each month (from 1 to 12)
-    for month in [12]:
+    for month in [11, 12]:
         # Format the month with a leading zero (e.g., 1 -> "01", 10 -> "10")
         month_str = f"{month:02d}"
         

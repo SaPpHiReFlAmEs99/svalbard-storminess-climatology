@@ -181,8 +181,38 @@ else:
 # ==============================================================================
 # 2. CREATE 1957 BUFFER FILE (December only)
 # ==============================================================================
+#print("\n" + "=" * 60)
+#print("2. Creating ERA5_panarctic_1957.nc (December only, for start buffer)")
+#print("=" * 60)
+
+#output_1957 = os.path.join(PROCESSED_DIR, "ERA5_panarctic_1957.nc")
+
+#if os.path.exists(output_1957):
+    #print(f"File already exists: {output_1957}")
+    #print("Delete it first if you want to recreate it.")
+#else:
+    # Find December 1957 file
+    #file_1957 = os.path.join(RAW_DIR, "era5_850hpa_panarctic_1957-12.nc")
+    
+    #if os.path.exists(file_1957):
+        #create_yearly_file(1957, [file_1957], output_1957)
+    #else:
+        #print(f"  ERROR: December 1957 file not found")
+        #print(f"  Looking for: {file_1957}")
+        
+# ==============================================================================
+# 2. CREATE 1957 BUFFER FILE (November + December, for start buffer)
+# ==============================================================================
+# CHANGE FROM PREVIOUS VERSION:
+#   Previously: December 1957 only (buffer for January 1958)
+#   Now:        November + December 1957
+#               November 1957 = filter initialisation buffer (discarded)
+#               December 1957 = first analytical month (included in results)
+#               This allows DJF 1958 to be a complete season.
+# ==============================================================================
+
 print("\n" + "=" * 60)
-print("2. Creating ERA5_panarctic_1957.nc (December only, for start buffer)")
+print("2. Creating ERA5_panarctic_1957.nc (November + December)")
 print("=" * 60)
 
 output_1957 = os.path.join(PROCESSED_DIR, "ERA5_panarctic_1957.nc")
@@ -191,15 +221,22 @@ if os.path.exists(output_1957):
     print(f"File already exists: {output_1957}")
     print("Delete it first if you want to recreate it.")
 else:
-    # Find December 1957 file
-    file_1957 = os.path.join(RAW_DIR, "era5_850hpa_panarctic_1957-12.nc")
-    
-    if os.path.exists(file_1957):
-        create_yearly_file(1957, [file_1957], output_1957)
-    else:
-        print(f"  ERROR: December 1957 file not found")
-        print(f"  Looking for: {file_1957}")
+    files_1957 = []
+    for month in ["11", "12"]:
+        f = os.path.join(RAW_DIR, f"era5_850hpa_panarctic_1957-{month}.nc")
+        if os.path.exists(f):
+            files_1957.append(f)
+        else:
+            print(f"  WARNING: Expected file not found: {f}")
 
+    if len(files_1957) == 2:
+        create_yearly_file(1957, files_1957, output_1957)
+    elif len(files_1957) == 1:
+        print(f"  ERROR: Only one of two required 1957 files found.")
+        print(f"  Cannot proceed — both November and December 1957 are required.")
+        print(f"  Found: {files_1957[0]}")
+    else:
+        print(f"  ERROR: No 1957 files found in {RAW_DIR}")        
 
 # ==============================================================================
 # 3. CREATE 2026 BUFFER FILE (January 1-15 only)
@@ -249,8 +286,6 @@ yearly_files = sorted(glob(os.path.join(PROCESSED_DIR, "ERA5_panarctic_*.nc")))
 print(f"Total: {len(yearly_files)} files")
 print(f"Range: {os.path.basename(yearly_files[0])} to {os.path.basename(yearly_files[-1])}")
 ```
-
-
 
 ```{python}
 """
@@ -437,13 +472,13 @@ STORMINESS_METRICS_PATH = os.path.join(OUTPUT_DIR, "ERA5_storminess_metrics_mont
 # ------------------------------------------------------------------------------
 
 # Analysis period (68 years)
-ANALYSIS_START = '1958-01-01'
+ANALYSIS_START = '1957-12-01'
 ANALYSIS_END = '2025-12-31'
 
 # Buffer periods for edge overlap (data outside analysis period for filter edges)
 # December 1957 provides ~31 days of buffer at the start
 # January 1-15, 2026 provides ~15 days of buffer at the end
-BUFFER_START = '1957-12-01'
+BUFFER_START = '1957-11-01'
 BUFFER_END = '2026-01-16'
 
 # Climatological reference period (pre-Arctic Amplification baseline)
@@ -1470,7 +1505,6 @@ NEXT STEPS
 log_message("=" * 70)
 ```
 
-
 ```{python}
 import os
 path = "E:/ERA5_data/processed/output/ERA5_eddy_components_1958-2025.nc"
@@ -1493,11 +1527,7 @@ print(f"Total timesteps: {len(ds.time)}")
 ds.close()
 ```
 
-
-
-
-
-############### OLD ####################
+############### OLD
 
 ```{python}
 # ============================================================================
