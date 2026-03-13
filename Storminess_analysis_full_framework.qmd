@@ -89,7 +89,7 @@ REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
         -   1.5.3 Effective sample size (neff)
 
         -   1.5.4 Variance decomposition (STL, primary metric only)
-        
+
 -   PHASE 2: Energy budget characterisation
 
     -   2.1 Partitioning climatology (fEKE, MKE/EKE ratio)
@@ -97,7 +97,7 @@ REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
     -   2.2 Seasonal cycle of energy components
 
     -   2.3 EKE definition comparison (budget vs synoptic, r = 0.885)
-    
+
 -   PHASE 3: Trend analysis
 
     -   3.1 Pan-Arctic trend analysis (all storminess metrics + energy components, simultaneously)
@@ -163,7 +163,7 @@ This multi-metric approach allows detection of changes in the storm intensity di
 ```{r}
 # ============================================================================
 # PHASE 1: DATA LOADING AND EXPLORATORY ANALYSIS
-# Arctic Storminess Climatology (1958-2025)
+# Arctic Storminess Climatology (1957-12 to 2025-12)
 # ============================================================================
 cat("\n", rep("=", 70), "\n")
 cat("PHASE 1: FOUNDATIONAL ANALYSIS (Corrected Metrics)\n")
@@ -171,13 +171,13 @@ cat(rep("=", 70), "\n\n")
 
 # --- Check if file exists ---
 if (!file.exists(METRICS_FILE)) {
- stop(glue("
-   ERROR: Metrics file not found!
-   Expected: {METRICS_FILE}
-   
-   Please run the corrected Step 3 Python script first:
-   Step3_Storminess_Metrics_Corrected.py
- "))
+  stop(glue("
+    ERROR: Metrics file not found!
+    Expected: {METRICS_FILE}
+    
+    Please run the corrected Step 3 Python script first:
+    Step3_Storminess_Metrics_Corrected.py
+  "))
 }
 
 cat("Loading storminess metrics file:\n")
@@ -192,46 +192,80 @@ cat(rep("-", 40), "\n")
 # Print dimensions
 cat("\nDimensions:\n")
 for (dim_name in names(nc$dim)) {
- cat(sprintf("  %s: %d\n", dim_name, nc$dim[[dim_name]]$len))
+  cat(sprintf("  %s: %d\n", dim_name, nc$dim[[dim_name]]$len))
 }
 
 # Print variables
 cat("\nVariables:\n")
 for (var_name in names(nc$var)) {
- var_units <- ncatt_get(nc, var_name, "units")$value
- if (is.null(var_units) || var_units == "") var_units <- "dimensionless"
- cat(sprintf("  %s [%s]\n", var_name, var_units))
+  var_units <- ncatt_get(nc, var_name, "units")$value
+  if (is.null(var_units) || var_units == "") var_units <- "dimensionless"
+  cat(sprintf("  %s [%s]\n", var_name, var_units))
 }
 
 # --- Extract coordinate variables ---
-time_raw <- ncvar_get(nc, "time")
-lat <- ncvar_get(nc, "latitude")
-lon <- ncvar_get(nc, "longitude")
+time_raw  <- ncvar_get(nc, "time")
+lat       <- ncvar_get(nc, "latitude")
+lon       <- ncvar_get(nc, "longitude")
 
-# Get time units for decoding
+# Report the raw time units string for transparency
 time_units <- ncatt_get(nc, "time", "units")$value
-cat(sprintf("\nTime units: %s\n", time_units))
+cat(sprintf("\nTime units (raw): %s\n", time_units))
+
+# ── TIME COORDINATE RECONSTRUCTION ──────────────────────────────────────────
+# The NetCDF time units string contains a floating-point encoding artefact
+# produced by xarray's pandas-based timestamp encoding:
+#   "days since 1957-12-31 23:59:59.999999999"
+# R cannot parse sub-nanosecond origin strings reliably via ncdf4. The time
+# coordinate is therefore reconstructed analytically from first principles:
+# 817 monthly steps beginning December 1957.
+#
+# Verification: seq from 1957-12-01 by month for 817 steps ends 2025-12-01.
+# ( 1957-12 → 2025-12 = 68 years × 12 months + 1 = 817 months ) ✓
+# ----------------------------------------------------------------------------
+
+N_MONTHS_EXPECTED <- nc$dim$time$len   # Read directly from file (=817)
+
+dates <- seq.Date(
+  from       = as.Date("1957-12-01"),
+  by         = "month",
+  length.out = N_MONTHS_EXPECTED
+)
+
+# Sanity check
+cat(sprintf("\nTime coordinate reconstructed analytically (%d months):\n",
+            length(dates)))
+cat(sprintf("  First: %s\n", format(dates[1])))
+cat(sprintf("  Last:  %s\n", format(dates[length(dates)])))
+
+if (format(dates[length(dates)]) != "2025-12-01") {
+  stop(sprintf(
+    "ERROR: Final date is %s, expected 2025-12-01.\n%s",
+    format(dates[length(dates)]),
+    "Check N_MONTHS_EXPECTED and the analysis start date."
+  ))
+}
+cat("  ✓ Date sequence verified\n")
 
 # --- Extract all metric arrays ---
 cat("\nLoading metric arrays...\n")
-
 metrics_list <- list()
 for (metric in METRIC_NAMES) {
- if (metric %in% names(nc$var)) {
-   metrics_list[[metric]] <- ncvar_get(nc, metric)
-   cat(sprintf("  ✓ %s: dim = [%s]\n", 
-               metric, 
-               paste(dim(metrics_list[[metric]]), collapse = " x ")))
- } else {
-   cat(sprintf("  ✗ %s: NOT FOUND in file\n", metric))
- }
+  if (metric %in% names(nc$var)) {
+    metrics_list[[metric]] <- ncvar_get(nc, metric)
+    cat(sprintf("  ✓ %s: dim = [%s]\n",
+                metric,
+                paste(dim(metrics_list[[metric]]), collapse = " x ")))
+  } else {
+    cat(sprintf("  ✗ %s: NOT FOUND in file\n", metric))
+  }
 }
 
 # Also load climatological threshold if present
 if ("eke_p95_climatology" %in% names(nc$var)) {
- eke_p95_clim <- ncvar_get(nc, "eke_p95_climatology")
- cat(sprintf("  ✓ eke_p95_climatology: dim = [%s]\n",
-             paste(dim(eke_p95_clim), collapse = " x ")))
+  eke_p95_clim <- ncvar_get(nc, "eke_p95_climatology")
+  cat(sprintf("  ✓ eke_p95_climatology: dim = [%s]\n",
+              paste(dim(eke_p95_clim), collapse = " x ")))
 }
 
 nc_close(nc)
@@ -239,7 +273,7 @@ nc_close(nc)
 
 ## 1.2 Domain Refinement to the Core Arctic
 
-The original dataset extended south to 55°N latitude. To focus the analysis specifically on the high-Arctic and minimize the influence of mid-latitude dynamics, the spatial domain was refined to include only latitudes greater than or equal to 60°N. This resulted in refined metric arrays with dimensions of \[816, 120, 1440\] (time × latitude × longitude), covering a latitude range from 60.00°N to 89.75°N. The 90°N grid point was excluded during the initial data processing due to documented ECMWF issues with spherical harmonic interpolation at the pole singularity, which produces erroneous near-zero wind values in the native ERA5 grid. All subsequent analyses were performed on this core Arctic domain.
+The original dataset extended south to 55°N latitude. To focus the analysis specifically on the high-Arctic and minimize the influence of mid-latitude dynamics, the spatial domain was refined to include only latitudes greater than or equal to 60°N. This resulted in refined metric arrays with dimensions of \[817, 120, 1440\] (time × latitude × longitude), covering a latitude range from 60.00°N to 89.75°N. The 90°N grid point was excluded during the initial data processing due to documented ECMWF issues with spherical harmonic interpolation at the pole singularity, which produces erroneous near-zero wind values in the native ERA5 grid. All subsequent analyses were performed on this core Arctic domain.
 
 The 60°N threshold was selected to:
 
