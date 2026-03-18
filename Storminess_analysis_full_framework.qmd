@@ -10,64 +10,293 @@ toc: true
 ---
 
 ```{r setup-environment}
-# Load R Libraries
-library(reticulate)
-library(tidyverse)
-library(terra)
-library(sf)
-library(rnaturalearth)
-library(glue)
-library(future)
-library(furrr)
-library(progressr)
-library(tictoc)
-library(ncdf4)
-library(glue)
-library(lubridate)
-library(trend)
-library(ggplot2)
-library(viridis)
-library(patchwork)
-library(modifiedmk)
-library(fields)
-library(RColorBrewer)
-library(dplyr)
-library(zoo)
-library(foreach)
-library(doParallel)
-library(pbapply)
-library(stars)        
-library(modifiedmk) 
-library(nlme)
-library(ncmeta)
-library(abind)
-library(knitr)
-library(boot)
-library(here)
-library(corrplot)
-library(ggcorrplot)
+# ============================================================================
+# SETUP: ENVIRONMENT, LIBRARIES, PATHS, AND GLOBAL PARAMETERS
+# Arctic Storminess Climatology | University of Bern
+# ============================================================================
+#
+# PURPOSE:
+#   Single source-of-truth configuration block for all analytical phases.
+#   Every path, variable name, colour, and statistical parameter used
+#   downstream is defined here exactly once.
+#
+# USAGE:
+#   Run this chunk first in every session, before any phase-specific chunks.
+#
+# ============================================================================
 
-# Configure Python Environment
+# ── 1. LIBRARIES ─────────────────────────────────────────────────────────────
+# Core infrastructure
+library(here)          # Portable file paths relative to project root
+library(tidyverse)     # dplyr, ggplot2, tidyr, purrr, readr, stringr, forcats
+library(glue)          # String interpolation for diagnostic messages
+library(lubridate)     # Date/time manipulation
+
+# NetCDF and spatial data
+library(ncdf4)         # Read/write NetCDF files
+library(ncmeta)        # NetCDF metadata inspection
+library(stars)         # Spatio-temporal arrays (NetCDF → R)
+library(terra)         # Raster/vector spatial operations
+library(sf)            # Simple features (vector geometry)
+library(rnaturalearth) # Natural Earth coastlines and boundaries
+library(abind)         # Array binding across dimensions
+
+# Time series and statistics
+library(zoo)           # Rolling window functions, irregular time series
+library(boot)          # tsboot() — Moving Blocks Bootstrap
+library(zyp)           # Pre-Whitened Mann-Kendall + Sen's slope
+library(blocklength)   # pwsd() — adaptive MBB block length selection
+library(trend)         # Additional trend tests (Spearman, Pettitt)
+library(modifiedmk)    # Modified Mann-Kendall variants (for reference)
+library(nlme)          # Generalised Least Squares (GLS) with AR errors
+
+# Visualisation
+library(ggplot2)       # Core plotting (loaded via tidyverse, explicit for clarity)
+library(patchwork)     # Multi-panel figure composition
+library(viridis)       # Perceptually uniform colour scales
+library(RColorBrewer)  # Categorical and sequential colour palettes
+library(corrplot)      # Correlation matrix visualisation
+library(ggcorrplot)    # ggplot2-based correlation matrices
+library(fields)        # Colour image plots (spatial diagnostics)
+
+
+# Parallelisation and progress
+library(future)        # Parallel backend declaration
+library(furrr)         # Parallel map functions (purrr + future)
+library(foreach)       # For-each parallel loops
+library(doParallel)    # Parallel backend for foreach
+library(progressr)     # Progress bars compatible with future/furrr
+library(pbapply)       # Progress-bar apply functions
+library(tictoc)        # Execution time measurement
+
+# Reporting
+library(knitr)         # kable() tables in Quarto/RMarkdown output
+
+# Python interoperability
+library(reticulate)    # R–Python bridge
+
+
+# ── 2. PYTHON ENVIRONMENT ─────────────────────────────────────────────────────
+# The Python pipeline (Steps 1–3) was executed in the 'arctic-env' virtual
+# environment. Reticulate is configured to use the same environment for any
+# downstream Python calls (e.g., reading NetCDF metadata via xarray).
 use_virtualenv("arctic-env", required = TRUE)
 
-# Define paths - UPDATE THESE FOR YOUR SYSTEM
-DATA_DIRECTORY <- here::here("Data", "processed")
 
-# Input file (from corrected Step 3 Python script)
-METRICS_FILE <- file.path(DATA_DIRECTORY, "ERA5_storminess_metrics_monthly.nc")
+# ── 3. FILE PATHS ─────────────────────────────────────────────────────────────
+# All paths are constructed relative to the project root via here::here().
+# Update DATA_DIRECTORY if the processed data folder is located elsewhere.
 
-# Define which metrics to analyze
+# Root directories
+DATA_DIRECTORY  <- here::here("Data", "processed")
+OUTPUT_DATA_DIR <- here::here("Data", "processed", "analysis_ready")
+FIGURES_DIR     <- here::here("Figures")
+
+# ---- Input NetCDF files (from Python pipeline) ----
+METRICS_FILE    <- file.path(DATA_DIRECTORY,
+                             "ERA5_storminess_metrics_monthly.nc")
+TKE_FILE        <- file.path(DATA_DIRECTORY, "ERA5_TKE_monthly.nc")
+MKE_FILE        <- file.path(DATA_DIRECTORY, "ERA5_MKE_monthly.nc")
+EKE_BUDGET_FILE <- file.path(DATA_DIRECTORY, "ERA5_EKE_budget_monthly.nc")
+
+# ---- Prepared R data (from Phase 1) ----
+PHASE1_DATA     <- file.path(OUTPUT_DATA_DIR, "Phase1_Prepared_Data.RData")
+
+# ---- Phase-specific figure directories (created on demand) ----
+FIG_PHASE1 <- file.path(FIGURES_DIR, "Phase1_Diagnostics")
+FIG_PHASE2 <- file.path(FIGURES_DIR, "Phase2_Energy_Budget")
+FIG_PHASE3 <- file.path(FIGURES_DIR, "Phase3_Trends")
+FIG_PHASE4 <- file.path(FIGURES_DIR, "Phase4_Regional")
+FIG_PHASE5 <- file.path(FIGURES_DIR, "Phase5_Synthesis")
+
+for (d in c(OUTPUT_DATA_DIR,
+            FIG_PHASE1, FIG_PHASE2, FIG_PHASE3,
+            FIG_PHASE4, FIG_PHASE5)) {
+  if (!dir.exists(d)) dir.create(d, recursive = TRUE)
+}
+
+
+# ── 4. VARIABLE DEFINITIONS ───────────────────────────────────────────────────
+# These names must match the NetCDF variable names exactly (post-rename).
+# eke_mean was renamed to eke_synoptic_mean to reflect its physical meaning:
+# the monthly mean of the 1.2-6 day bandpass-filtered EKE (EKE_synoptic_bar,
+# eq. 2.12 in the thesis), distinct from eke_budget (eq. 2.9).
+
 METRIC_NAMES <- c(
- "eke_synoptic_mean",         # PRIMARY: Monthly mean synoptic-scale EKE
- "eke_p90",          # 90th percentile of monthly EKE
- "eke_p95",          # 95th percentile of monthly EKE  
- "eke_p99",          # 99th percentile of monthly EKE
- "exceed_p95_freq"   # Fraction exceeding climatological P95
+  "eke_synoptic_mean",  # PRIMARY: Monthly mean synoptic-scale EKE (eq. 2.12)
+  "eke_p90",            # 90th percentile of 6-hourly EKE within each month
+  "eke_p95",            # 95th percentile
+  "eke_p99",            # 99th percentile (extreme storm intensity)
+  "exceed_p95_freq"     # Fraction of timesteps exceeding 1961-1990 P95 threshold
 )
 
-# Analysis parameters
-ARCTIC_LAT_THRESHOLD <- 60  # Core Arctic domain (>= 60°N)
-REFERENCE_PERIOD <- c(1961, 1990)  # WMO climatological baseline
+ENERGY_VARS <- c(
+  "tke",                # Total Kinetic Energy (eq. 2.7)
+  "mke",                # Mean Kinetic Energy  (eq. 2.8)
+  "eke_budget"          # Budget-derived EKE, all sub-monthly variance (eq. 2.9)
+)
+
+ALL_VARS <- c(METRIC_NAMES, ENERGY_VARS)
+
+# Labels for figures (native plotmath)
+VAR_LABELS <- c(
+  "eke_synoptic_mean" = "Mean~EKE[synoptic]~(m^2/s^2)",
+  "eke_p90"           = "P90~EKE~(m^2/s^2)",
+  "eke_p95"           = "P95~EKE~(m^2/s^2)",
+  "eke_p99"           = "P99~EKE~(m^2/s^2)",
+  "exceed_p95_freq"   = "P95~Exceedance~Frequency",
+  "tke"               = "TKE~(m^2/s^2)",
+  "mke"               = "MKE~(m^2/s^2)",
+  "eke_budget"        = "EKE[budget]~(m^2/s^2)"
+)
+
+# Simple labels for table output (plain text, no Unicode superscripts)
+VAR_LABELS_PLAIN <- c(
+  "eke_synoptic_mean" = "Mean EKE_synoptic",
+  "eke_p90"           = "P90 EKE",
+  "eke_p95"           = "P95 EKE",
+  "eke_p99"           = "P99 EKE",
+  "exceed_p95_freq"   = "P95 Exceedance Freq.",
+  "tke"               = "TKE",
+  "mke"               = "MKE",
+  "eke_budget"        = "EKE_budget"
+)
+
+
+# ── 5. ANALYSIS PARAMETERS ────────────────────────────────────────────────────
+
+# Spatial domain
+ARCTIC_LAT_THRESHOLD <- 60    # Core Arctic domain: >= 60°N
+
+# Temporal boundaries
+ANALYSIS_START_YEAR  <- 1957  # December 1957 is first monthly observation
+ANALYSIS_END_YEAR    <- 2025
+ANNUAL_START_YEAR    <- 1958  # Annual means start 1958 (full calendar years only)
+                               # See Phase 1 §1.6.3 boundary note
+
+# Reference period for climatological thresholds (exceedance frequency)
+# Chosen to precede onset of Arctic Amplification (Overland et al. 2004;
+# Chylek et al. 2022) and rapid sea-ice decline (Stroeve & Notz 2018).
+REFERENCE_PERIOD <- c(1961, 1990)
+
+# Seasons (DJF attribution: December of year N → DJF of year N+1)
+SEASONS      <- c("DJF", "MAM", "JJA", "SON")
+SEASON_NAMES <- c(
+  "DJF" = "Winter (DJF)",
+  "MAM" = "Spring (MAM)",
+  "JJA" = "Summer (JJA)",
+  "SON" = "Autumn (SON)"
+)
+
+# Statistical parameters (Phase 3)
+ALPHA      <- 0.05    # Significance level for all hypothesis tests
+N_BOOT     <- 2000    # MBB bootstrap replicates (2000 balances precision/speed)
+DECADES    <- 10      # Slope conversion factor: per year → per decade
+B_FALLBACK <- 3L      # MBB block length fallback when pwsd() returns b < 1
+                      # b = 3 exceeds typical annual ACF decorrelation time
+                      # while preserving ~23 non-overlapping blocks (N/b, N=68)
+
+
+# ── 6. COLOUR PALETTES ────────────────────────────────────────────────────────
+# Colour-blind safe palette (Wong 2011, Nature Methods).
+# Storminess metrics: blue family. Energy components: warm family.
+
+METRIC_COLORS <- c(
+  "eke_synoptic_mean" = "#0072B2",  # Blue
+  "eke_p90"           = "#56B4E9",  # Sky blue
+  "eke_p95"           = "#009E73",  # Teal green
+  "eke_p99"           = "#9467BD",  # Purple
+  "exceed_p95_freq"   = "#D55E00"   # Vermillion
+)
+
+ENERGY_COLORS <- c(
+  "tke"        = "#1B9E77",   # Green
+  "mke"        = "#D95F02",   # Orange
+  "eke_budget" = "#7570B3"    # Periwinkle
+)
+
+ALL_COLORS <- c(METRIC_COLORS, ENERGY_COLORS)
+
+SEASON_COLORS <- c(
+  "DJF" = "#4575B4",  # Blue   — winter
+  "MAM" = "#91CF60",  # Green  — spring
+  "JJA" = "#FC8D59",  # Orange — summer
+  "SON" = "#D73027"   # Red    — autumn (hypothesis season)
+)
+
+
+# ── 7. REGIONAL DOMAIN DEFINITIONS ───────────────────────────────────────────
+# Sub-regions for Phase 4 analysis. Defined as named lists for easy indexing.
+# Coordinate convention: (lon_min, lon_max, lat_min, lat_max)
+
+REGIONS <- list(
+  PanArctic = list(
+    label   = "Pan-Arctic (\u226560\u00b0N)",
+    lat_min = 60,  lat_max = 90,
+    lon_min = -180, lon_max = 180
+  ),
+  FramStrait = list(
+    label   = "Fram Strait (76\u00b0N\u201381\u00b0N)",
+    lat_min = 76,  lat_max = 81,
+    lon_min = -10,  lon_max = 20
+  ),
+  WestSvalbard = list(
+    label   = "West Svalbard (10\u00b0E\u201316\u00b0E, 76\u00b0N\u201381\u00b0N)",
+    lat_min = 76,  lat_max = 81,
+    lon_min = 10,   lon_max = 16
+  ),
+  EastSvalbard = list(
+    label   = "East Svalbard (16\u00b0E\u201328\u00b0E, 76\u00b0N\u201381\u00b0N)",
+    lat_min = 76,  lat_max = 81,
+    lon_min = 16,   lon_max = 28
+  )
+)
+
+
+# ── 8. VERIFICATION ───────────────────────────────────────────────────────────
+# Confirm that all required input files exist before any phase is run.
+# This prevents cryptic downstream errors from missing files.
+
+required_files <- list(
+  "Storminess metrics NetCDF" = METRICS_FILE,
+  "TKE monthly NetCDF"        = TKE_FILE,
+  "MKE monthly NetCDF"        = MKE_FILE,
+  "EKE budget monthly NetCDF" = EKE_BUDGET_FILE,
+  "Phase 1 prepared RData"    = PHASE1_DATA
+)
+
+cat("Checking required input files:\n")
+all_ok <- TRUE
+for (desc in names(required_files)) {
+  path   <- required_files[[desc]]
+  exists <- file.exists(path)
+  cat(sprintf("  %s  %s\n",
+              ifelse(exists, "\u2713", "\u2717"),
+              desc))
+  if (!exists) all_ok <- FALSE
+}
+
+if (!all_ok) {
+  warning(paste(
+    "\nOne or more required files are missing.",
+    "Run the Python pipeline (Steps 1-3) and Phase 1 before proceeding.",
+    sep = "\n"
+  ))
+} else {
+  cat("\n\u2713 All input files present. Environment ready.\n")
+}
+
+cat(sprintf("\nProject root:     %s\n", here::here()))
+cat(sprintf("Data directory:   %s\n", DATA_DIRECTORY))
+cat(sprintf("Figures root:     %s\n", FIGURES_DIR))
+cat(sprintf("Analysis period:  Dec %d – Dec %d (817 months)\n",
+            ANALYSIS_START_YEAR, ANALYSIS_END_YEAR))
+cat(sprintf("Annual trends:    %d – %d (N = %d years)\n",
+            ANNUAL_START_YEAR, ANALYSIS_END_YEAR,
+            ANALYSIS_END_YEAR - ANNUAL_START_YEAR + 1))
+cat(sprintf("Reference period: %d – %d\n",
+            REFERENCE_PERIOD[1], REFERENCE_PERIOD[2]))
+cat(sprintf("Significance:     \u03b1 = %.2f\n", ALPHA))
 ```
 
 -   PHASE 1: Data Preparation & Validation
@@ -1136,11 +1365,11 @@ cat(sprintf("Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_mo
 # ============================================================================
 
 # Load Phase 1 data
-data_file <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
-if (!file.exists(data_file)) {
+DATA_DIRECTORY <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
+if (!file.exists(DATA_DIRECTORY)) {
   stop("Phase 1 data not found. Run Phase 1 script first.")
 }
-load(data_file)
+load(DATA_DIRECTORY)
 
 cat("Loaded Phase 1 prepared data\n")
 
@@ -2197,13 +2426,13 @@ cat("PHASE 2: ENERGY BUDGET CHARACTERISATION\n")
 cat(rep("=", 70), "\n\n")
 
 # Load Phase 1 data
-data_file <- here::here("Data", "processed", "analysis_ready",
+DATA_DIRECTORY <- here::here("Data", "processed", "analysis_ready",
                          "Phase1_Prepared_Data.RData")
 
-if (!file.exists(data_file)) {
+if (!file.exists(DATA_DIRECTORY)) {
   stop("Phase 1 data not found. Run Phase 1 script first.")
 }
-load(data_file)
+load(DATA_DIRECTORY)
 cat("✓ Loaded Phase 1 prepared data\n")
 
 # Verify energy columns are present (added in Phase 1 §1.5)
@@ -2492,3 +2721,440 @@ cat("  Fig2.2: Seasonal cycle of energy components\n")
 cat("  Fig2.3: EKE definition comparison (scatter + time series)\n")
 cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 ```
+
+# Phase 3: Trend analysis
+
+```{r}
+# ============================================================================
+# PHASE 3.1: PAN-ARCTIC ANNUAL TREND ANALYSIS
+# ============================================================================
+#
+# DEPENDS ON: setup-environment chunk (run first in every session)
+#
+# PURPOSE:
+#   Detect and quantify monotonic long-term trends in the eight Pan-Arctic
+#   variables (5 storminess metrics + 3 energy components) using annual
+#   mean time series over 1958–2025 (N = 68 years).
+#
+# STATISTICAL FRAMEWORK (grounded in Statistics in Climate Sciences, Ch. 12):
+#
+#   Step 1 — Temporal aggregation (monthly → annual means)
+#     Aggregating to annual means removes the seasonal cycle and substantially
+#     reduces autocorrelation, since atmospheric persistence does not carry
+#     across year boundaries. The filter year >= ANNUAL_START_YEAR is
+#     mandatory: December 1957 must be excluded because a single-month
+#     "annual mean" for 1957 is not physically representative.
+#     See Phase 1 §1.6.3 boundary note.
+#
+#   Step 2 — Pre-Whitened Mann-Kendall (PWMK) test [zyp.zhang()]
+#     Non-parametric rank test for monotonic trend (Mann 1945; Kendall 1975).
+#     Pre-whitening follows Zhang et al. (2000): the trend is removed before
+#     AR(1) fitting, preventing the autoregressive coefficient from absorbing
+#     real trend signal. This is essential because standard MK assumes
+#     independence; residual autocorrelation inflates Type I error.
+#     H0: no monotonic trend. H1: monotonic trend exists.
+#     Significance level: ALPHA (defined in setup chunk).
+#
+#   Step 3 — Sen's slope estimator (Theil-Sen)
+#     Median of all n(n-1)/2 pairwise slopes. Robust to outliers and
+#     non-Gaussian residuals; the non-parametric complement to OLS slope.
+#     Reported in [metric units] per decade (× DECADES).
+#
+#   Step 4 — Moving Blocks Bootstrap (MBB) 95% confidence intervals
+#     Resamples contiguous blocks to preserve residual autocorrelation
+#     structure (Künsch 1989). Block length selected data-adaptively via
+#     the PWSD plug-in estimator (Politis & White 2004; Patton et al. 2009)
+#     using pwsd() from the blocklength package. Fallback B_FALLBACK applied
+#     when pwsd() returns b < 1 (near-white-noise series).
+#
+# KEY REFERENCES:
+#   Mann (1945); Kendall (1975) — rank correlation for trend
+#   Zhang et al. (2000) — pre-whitening (implemented in zyp)
+#   Sen (1968) — slope estimator
+#   Künsch (1989) — Moving Blocks Bootstrap
+#   Politis & White (2004) + Patton et al. (2009) — optimal block length
+#
+# INPUT:  PHASE1_DATA (storm_df with energy columns; defined in setup chunk)
+# OUTPUT: results_annual, Fig3.1_Annual_Trends.png, Fig3.2_Annual_Forest.png,
+#         Phase3_1_Annual_Results.RData
+#
+# ============================================================================
+
+cat("\n", rep("=", 70), "\n")
+cat("PHASE 3.1: PAN-ARCTIC ANNUAL TREND ANALYSIS\n")
+cat(rep("=", 70), "\n\n")
+
+# ── Load Phase 1 data ─────────────────────────────────────────────────────
+if (!file.exists(PHASE1_DATA)) {
+  stop(glue("Phase 1 data not found at: {PHASE1_DATA}\n  Run Phase 1 first."))
+}
+load(PHASE1_DATA)
+cat(sprintf("Phase 1 data loaded: %d rows × %d columns\n\n",
+            nrow(storm_df), ncol(storm_df)))
+
+# Verify all required variables are present
+missing_vars <- setdiff(ALL_VARS, names(storm_df))
+if (length(missing_vars) > 0) {
+  stop(glue(
+    "Missing variables in storm_df: {paste(missing_vars, collapse = ', ')}\n",
+    "  Check that Phase 1 §1.5 (energy budget integration) was run."
+  ))
+}
+cat(sprintf("All %d variables present\n\n", length(ALL_VARS)))
+```
+
+```{r}
+# ============================================================================
+# STEP 1: ANNUAL AGGREGATION
+# ============================================================================
+cat(rep("-", 70), "\n")
+cat("STEP 1: ANNUAL AGGREGATION\n")
+cat(rep("-", 70), "\n\n")
+
+# ANNUAL_START_YEAR = 1958 (set in setup chunk).
+annual_df <- storm_df %>%
+  filter(year >= ANNUAL_START_YEAR) %>%
+  group_by(year) %>%
+  filter(n() == 12) %>%
+  summarise(
+    across(all_of(ALL_VARS), \(x) mean(x, na.rm = TRUE)),
+    .groups = "drop"
+  ) %>%
+  arrange(year)
+
+cat(sprintf("Annual series: N = %d years (%d–%d)\n\n",
+            nrow(annual_df),
+            min(annual_df$year),
+            max(annual_df$year)))
+
+# Sanity check: N must equal 68
+expected_n <- ANALYSIS_END_YEAR - ANNUAL_START_YEAR + 1L
+if (nrow(annual_df) != expected_n) {
+  warning(glue(
+    "Expected {expected_n} annual rows, got {nrow(annual_df)}.\n",
+    "  Check for gaps in storm_df."
+  ))
+}
+```
+
+```{r}
+# ============================================================================
+# STEP 2: STATISTICAL FUNCTIONS
+# ============================================================================
+cat(rep("-", 70), "\n")
+cat("STEP 2: STATISTICAL FUNCTIONS\n")
+cat(rep("-", 70), "\n\n")
+
+# ── Sen's slope (Theil-Sen estimator) ─────────────────────────────────────
+# Median of all n(n-1)/2 pairwise slopes.
+# Implemented directly so the MBB bootstrap uses the identical estimator
+# as the point estimate, mixing two implementations would be incoherent.
+# Returns slope per time unit (year); multiply by DECADES for per-decade.
+sen_slope <- function(x) {
+  n      <- length(x)
+  k      <- 0L
+  slopes <- numeric(n * (n - 1L) / 2L)
+  for (i in seq_len(n - 1L)) {
+    for (j in seq(i + 1L, n)) {
+      k         <- k + 1L
+      slopes[k] <- (x[j] - x[i]) / (j - i)
+    }
+  }
+  median(slopes)
+}
+
+# ── Data-adaptive block length (Politis & White 2004, Patton et al. 2009) ─
+# pwsd() selects the optimal MBB block length from the spectral density
+# of the series autocorrelation. Superior to a fixed block length because
+# the optimal b depends on the specific autocorrelation structure.
+# B_FALLBACK (= 3, from setup chunk) is used when pwsd() fails or returns
+# b < 1 (near-white-noise series where no dependence structure is detected).
+get_block_length <- function(x) {
+  tryCatch({
+    b_res <- pwsd(x, round = TRUE, correlogram = FALSE)
+
+    # $BlockLength is a 1×2 matrix with columns "b_Stationary" and "b_Circular".
+    # "b_Circular" is the correct block length for the Moving Blocks Bootstrap
+    # (MBB and circular block bootstrap share the same optimal b).
+    b <- as.integer(b_res$BlockLength[1, "b_Circular"])
+
+    if (is.na(b) || b < 1L) {
+      message(glue(
+        "    pwsd() returned b = {b}; using fallback b = {B_FALLBACK}"
+      ))
+      B_FALLBACK
+    } else {
+      b
+    }
+  }, error = function(e) {
+    message(glue(
+      "    pwsd() failed ({conditionMessage(e)}); using fallback b = {B_FALLBACK}"
+    ))
+    B_FALLBACK
+  })
+}
+
+# ── Moving Blocks Bootstrap 95% CI on Sen's slope ─────────────────────────
+# tsboot() (boot package) resamples fixed-length contiguous blocks, preserving
+# within-block autocorrelation structure (Künsch 1989).
+# Percentile CI from empirical bootstrap distribution: no normality assumed.
+# N_BOOT and ALPHA are defined in the setup chunk.
+mbb_ci <- function(x, b) {
+  set.seed(42)   # reproducibility
+  boot_res <- tsboot(
+    tseries   = x,
+    statistic = function(d, ...) sen_slope(d),
+    R         = N_BOOT,
+    l         = b,
+    sim       = "fixed"
+  )
+  ci <- quantile(boot_res$t,
+                 probs = c(ALPHA / 2, 1 - ALPHA / 2),
+                 na.rm = TRUE)
+  list(
+    lower     = unname(ci[1]),
+    upper     = unname(ci[2]),
+    b_used    = b,
+    boot_dist = as.vector(boot_res$t)
+  )
+}
+```
+
+```{r}
+# ============================================================================
+# STEP 3: TREND ANALYSIS
+# ============================================================================
+cat(rep("-", 70), "\n")
+cat("STEP 3: TREND ANALYSIS\n")
+cat(rep("-", 70), "\n\n")
+
+results_list <- vector("list", length(ALL_VARS))
+names(results_list) <- ALL_VARS
+
+for (var in ALL_VARS) {
+
+  x     <- annual_df[[var]]
+  years <- annual_df$year
+  cat(sprintf("  [%s]  N = %d\n", var, length(x)))
+
+  # ── Pre-Whitened Mann-Kendall ────────────────────────────────────────
+  # zyp.zhang() implements the Zhang et al. (2000) algorithm:
+  #   1. Estimate Sen's slope on the original series
+  #   2. Remove slope → detrended series (critical: prevents AR(1) from
+  #      absorbing real trend signal during pre-whitening)
+  #   3. Fit AR(1) to detrended series → φ̂₁
+  #   4. Pre-whiten: x'_t = x_t − φ̂₁ · x_{t−1}
+  #   5. Re-add slope; apply standard MK to pre-whitened series
+  mk_res   <- zyp.zhang(y = x, x = seq_along(x))
+  tau      <- unname(mk_res["tau"])
+  p_value  <- unname(mk_res["sig"])
+  slope_yr <- unname(mk_res["linear"])   # Sen's slope per year
+  ar1      <- unname(mk_res["autocor"])  # AR(1) coefficient removed
+
+  # ── Adaptive block length ───────────────────────────────────────────
+  cat(sprintf("    Block length via pwsd()... "))
+  b_opt <- get_block_length(x)
+  cat(sprintf("b = %d years\n", b_opt))
+
+  # ── MBB confidence interval ─────────────────────────────────────────
+  cat(sprintf("    MBB CI (R = %d, b = %d)... ", N_BOOT, b_opt))
+  ci <- mbb_ci(x, b = b_opt)
+  cat("done\n")
+
+  # ── Derived statistics ──────────────────────────────────────────────
+  mean_val <- mean(x, na.rm = TRUE)
+  total_ch <- slope_yr * (max(years) - min(years))
+  pct_ch   <- (total_ch / mean_val) * 100
+
+  results_list[[var]] <- data.frame(
+    variable    = var,
+    label       = unname(VAR_LABELS_PLAIN[var]),
+    group       = ifelse(var %in% METRIC_NAMES, "Storminess", "Energy"),
+    n           = length(x),
+    mean_val    = round(mean_val,       4),
+    slope_dec   = round(slope_yr  * DECADES, 5),
+    ci_lower    = round(ci$lower  * DECADES, 5),
+    ci_upper    = round(ci$upper  * DECADES, 5),
+    tau         = round(tau,            4),
+    p_value     = round(p_value,        4),
+    ar1_removed = round(ar1,            4),
+    significant = p_value < ALPHA,
+    pct_change  = round(pct_ch,         2),
+    b_length    = ci$b_used,
+    stringsAsFactors = FALSE
+  )
+
+  cat(sprintf(
+    "    → slope = %+.4f/dec | p = %.3f | CI [%+.4f, %+.4f] %s\n\n",
+    slope_yr * DECADES, p_value,
+    ci$lower  * DECADES, ci$upper * DECADES,
+    ifelse(p_value < ALPHA, "✓ SIGNIFICANT", "")
+  ))
+}
+
+results_annual <- bind_rows(results_list)
+
+# ── Print summary ─────────────────────────────────────────────────────────
+cat(rep("=", 70), "\n")
+cat("ANNUAL TREND SUMMARY\n")
+cat(rep("=", 70), "\n\n")
+
+print(
+  results_annual %>%
+    select(label, group, mean_val, slope_dec, ci_lower, ci_upper,
+           p_value, significant, pct_change, b_length),
+  digits = 4, row.names = FALSE
+)
+
+cat(sprintf(
+  "\nSignificant trends (α = %.2f):  storminess %d/%d  |  energy %d/%d\n",
+  ALPHA,
+  sum(results_annual$significant & results_annual$group == "Storminess"),
+  sum(results_annual$group == "Storminess"),
+  sum(results_annual$significant & results_annual$group == "Energy"),
+  sum(results_annual$group == "Energy")
+))
+```
+
+```{r}
+# ============================================================================
+# STEP 4: FIGURES
+# ============================================================================
+cat("\n", rep("-", 70), "\n")
+cat("STEP 4: FIGURES\n")
+cat(rep("-", 70), "\n\n")
+
+# Midpoint of the annual series: used to anchor Sen's slope lines.
+# Intercept = mean_val − slope_per_year × midpoint_year keeps lines
+# visually centred and numerically stable (avoids large extrapolated values).
+mid_year <- mean(annual_df$year)
+
+slope_lines <- results_annual %>%
+  mutate(
+    slope_yr  = slope_dec / DECADES,
+    intercept = mean_val - slope_yr * mid_year,
+    label_fig = factor(unname(VAR_LABELS[variable]),
+                       levels = unname(VAR_LABELS[ALL_VARS]))
+  )
+
+annual_long <- annual_df %>%
+  pivot_longer(all_of(ALL_VARS),
+               names_to  = "variable",
+               values_to = "value") %>%
+  mutate(
+    label_fig = factor(unname(VAR_LABELS[variable]),
+                       levels = unname(VAR_LABELS[ALL_VARS])),
+    group     = ifelse(variable %in% METRIC_NAMES,
+                       "Storminess metrics", "Energy components")
+  )
+
+# ── Figure 3.1: Annual time series ──────────────────────────────────────
+
+p_annual <- ggplot(annual_long, aes(x = year, y = value)) +
+  geom_line(aes(colour = variable),
+            linewidth = 0.6, alpha = 0.8) +
+  geom_point(aes(colour = variable),
+             size = 0.9, alpha = 0.5) +
+  geom_smooth(method = "loess", span = 0.4, se = FALSE,
+              colour = "grey40", linewidth = 0.7, linetype = "dashed") +
+  geom_abline(
+    data      = slope_lines,
+    aes(intercept = intercept, slope = slope_yr,
+        linetype  = significant),
+    colour    = "#D73027",
+    linewidth = 0.9
+  ) +
+  scale_colour_manual(values = ALL_COLORS, guide = "none") +
+  scale_linetype_manual(
+    values = c("FALSE" = "dotted", "TRUE" = "solid"),
+    labels = c("FALSE" = glue("Not significant (\u03b1 = {ALPHA})"),
+               "TRUE"  = glue("Significant (\u03b1 = {ALPHA})")),
+    name   = "Sen's slope"
+  ) +
+  facet_wrap(~ label_fig, ncol = 2, scales = "free_y", labeller = label_parsed) + 
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  labs(
+    title    = "Pan-Arctic Storminess and Energy: Annual Trends (1958\u20132025)",
+    subtitle = glue(
+      "Pre-Whitened Mann\u2013Kendall | Sen\u2019s slope (red) | ",
+      "LOESS smoother (grey dashed) | N = {nrow(annual_df)} years"
+    ),
+    x = NULL,
+    y = "Annual mean value"
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(size = 9, colour = "grey40"),
+    legend.position  = "bottom",
+    strip.text = element_text(face = "bold", size = 9),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(file.path(FIG_PHASE3, "Fig3.1_Annual_Trends.png"),
+       p_annual, width = 12, height = 14, dpi = 300)
+
+# ── Figure 3.2: Forest plot ──────────────────────────────────────────────
+
+forest_df <- results_annual %>%
+  mutate(
+    label_fig = factor(unname(VAR_LABELS[variable]),
+                       levels = rev(unname(VAR_LABELS[ALL_VARS]))),
+    group     = factor(group, levels = c("Storminess", "Energy"))
+  )
+
+p_forest <- ggplot(forest_df,
+                   aes(x = slope_dec, y = label_fig,
+                       colour = significant, shape = group)) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             colour = "grey40", linewidth = 0.6) +
+  geom_errorbarh(aes(xmin = ci_lower, xmax = ci_upper),
+                 height = 0.3, linewidth = 0.9) +
+  geom_point(size = 4) +
+  geom_text(
+    aes(label = sprintf("p = %.3f", p_value),
+        x     = pmax(ci_upper, slope_dec) + 0.002),
+    hjust = 0, size = 3, colour = "grey30"
+  ) +
+  scale_colour_manual(
+    values = c("FALSE" = "grey55", "TRUE" = "#D73027"),
+    labels = c("FALSE" = glue("p \u2265 {ALPHA}"),
+               "TRUE"  = glue("p < {ALPHA}")),
+    name   = "Significance"
+  ) +
+  scale_shape_manual(
+    values = c("Storminess" = 16, "Energy" = 17),
+    name   = "Variable group"
+  ) +
+  labs(
+    title    = "Pan-Arctic Annual Trends: Sen\u2019s Slope with 95% MBB CI",
+    subtitle = glue(
+      "Pre-Whitened Mann\u2013Kendall | Adaptive block length ",
+      "(Politis & White 2004) | {min(annual_df$year)}\u2013{max(annual_df$year)}"
+    ),
+    x = "Sen\u2019s slope [units per decade]",
+    y = NULL
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(size = 9, colour = "grey40"),
+    legend.position  = "bottom",
+    panel.grid.minor = element_blank()
+  ) +
+  scale_y_discrete(
+    labels = function(x) parse(text = x)   # parse plotmath on the fly
+  )
+
+ggsave(file.path(FIG_PHASE3, "Fig3.2_Annual_Forest.png"),
+       p_forest, width = 11, height = 7, dpi = 300)
+
+
+# ============================================================================
+# STEP 5: SAVE RESULTS
+# ============================================================================
+save(results_annual, annual_df,
+     file = file.path(OUTPUT_DATA_DIR, "Phase3_1_Annual_Results.RData"))
+```
+```
+
