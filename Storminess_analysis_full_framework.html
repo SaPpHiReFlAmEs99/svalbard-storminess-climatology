@@ -210,7 +210,7 @@ window.Quarto = {
 <span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a><span class="co"># Define which metrics to analyze</span></span>
 <span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>METRIC_NAMES <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
-<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a> <span class="st">"eke_mean"</span>,         <span class="co"># PRIMARY: Monthly mean synoptic-scale EKE</span></span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a> <span class="st">"eke_synoptic_mean"</span>,         <span class="co"># PRIMARY: Monthly mean synoptic-scale EKE</span></span>
 <span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a> <span class="st">"eke_p90"</span>,          <span class="co"># 90th percentile of monthly EKE</span></span>
 <span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a> <span class="st">"eke_p95"</span>,          <span class="co"># 95th percentile of monthly EKE  </span></span>
 <span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a> <span class="st">"eke_p99"</span>,          <span class="co"># 99th percentile of monthly EKE</span></span>
@@ -271,7 +271,7 @@ window.Quarto = {
 <p>The analysis commenced with the <code>ERA5_storminess_metrics_monthly.nc</code> file, a NetCDF dataset containing five complementary storminess metrics derived from the bandpass-filtered synoptic-scale Eddy Kinetic Energy (EKE) calculated in Section 2.5 of the Methodology. Initial inspection revealed the data arrays were structured with dimensions of <code>[longitude, latitude, time]</code>, an unconventional ordering for climatological time series analysis.</p>
 <p>The dataset contains the following variables:</p>
 <pre><code>Variables:
-  eke_mean [m²/s²]              - Monthly mean synoptic-scale EKE (PRIMARY)
+  eke_synoptic_mean [m²/s²]              - Monthly mean synoptic-scale EKE (PRIMARY)
   eke_p90 [m²/s²]               - Monthly 90th percentile EKE
   eke_p95 [m²/s²]               - Monthly 95th percentile EKE
   eke_p99 [m²/s²]               - Monthly 99th percentile EKE
@@ -373,9 +373,9 @@ Dimensions:</code></pre>
 <span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  %s: %d</span><span class="sc">\n</span><span class="st">"</span>, dim_name, nc<span class="sc">$</span>dim[[dim_name]]<span class="sc">$</span>len))</span>
 <span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  latitude: 140
-  longitude: 1440
-  time: 817</code></pre>
+<pre><code>  time: 817
+  latitude: 140
+  longitude: 1440</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Print variables</span></span>
 <span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Variables:</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -389,7 +389,7 @@ Variables:</code></pre>
 <span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  %s [%s]</span><span class="sc">\n</span><span class="st">"</span>, var_name, var_units))</span>
 <span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  eke_mean [m^2/s^2]
+<pre><code>  eke_synoptic_mean [m^2/s^2]
   eke_p90 [m^2/s^2]
   eke_p95 [m^2/s^2]
   eke_p99 [m^2/s^2]
@@ -407,7 +407,7 @@ Variables:</code></pre>
 <span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Time units (raw): %s</span><span class="sc">\n</span><span class="st">"</span>, time_units))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
-Time units (raw): days since 1957-12-31 23:59:59.999999999</code></pre>
+Time units (raw): days since 1957-12-31T23:59:59.999999999</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── TIME COORDINATE RECONSTRUCTION ──────────────────────────────────────────</span></span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co"># The NetCDF time units string contains a floating-point encoding artefact</span></span>
@@ -473,7 +473,7 @@ Loading metric arrays...</code></pre>
 <span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>eke_mean: dim = [1440 x 140 x 817]
+<pre><code>eke_synoptic_mean: dim = [1440 x 140 x 817]
 eke_p90: dim = [1440 x 140 x 817]
 eke_p95: dim = [1440 x 140 x 817]
 eke_p99: dim = [1440 x 140 x 817]
@@ -713,7 +713,7 @@ Decoding time coordinate...</code></pre>
 <span id="cb80-32"><a href="#cb80-32" aria-hidden="true" tabindex="-1"></a>             metric, <span class="fu">mean</span>(ts_weighted[[metric]]), bias))</span>
 <span id="cb80-33"><a href="#cb80-33" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  eke_mean: weighted mean = 12.2739, bias = 0.6259
+<pre><code>  eke_synoptic_mean: weighted mean = 12.2739, bias = 0.6259
   eke_p90: weighted mean = 29.4768, bias = 1.5402
   eke_p95: weighted mean = 40.7511, bias = 2.0897
   eke_p99: weighted mean = 66.3999, bias = 3.3280
@@ -836,7 +836,7 @@ Decoding time coordinate...</code></pre>
 <span id="cb96-14"><a href="#cb96-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Create anomalies for all metrics</span></span>
 <span id="cb96-15"><a href="#cb96-15" aria-hidden="true" tabindex="-1"></a>storm_df_anom <span class="ot">&lt;-</span> storm_df <span class="sc">%&gt;%</span></span>
 <span id="cb96-16"><a href="#cb96-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb96-17"><a href="#cb96-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_anom =</span> <span class="fu">deseasonalize</span>(., <span class="st">"eke_mean"</span>),</span>
+<span id="cb96-17"><a href="#cb96-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_anom =</span> <span class="fu">deseasonalize</span>(., <span class="st">"eke_synoptic_mean"</span>),</span>
 <span id="cb96-18"><a href="#cb96-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_p90_anom =</span> <span class="fu">deseasonalize</span>(., <span class="st">"eke_p90"</span>),</span>
 <span id="cb96-19"><a href="#cb96-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_p95_anom =</span> <span class="fu">deseasonalize</span>(., <span class="st">"eke_p95"</span>),</span>
 <span id="cb96-20"><a href="#cb96-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_p99_anom =</span> <span class="fu">deseasonalize</span>(., <span class="st">"eke_p99"</span>),</span>
@@ -845,7 +845,7 @@ Decoding time coordinate...</code></pre>
 <span id="cb96-23"><a href="#cb96-23" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb96-24"><a href="#cb96-24" aria-hidden="true" tabindex="-1"></a><span class="co"># Create ts objects for anomalies</span></span>
 <span id="cb96-25"><a href="#cb96-25" aria-hidden="true" tabindex="-1"></a>ts_objects_anom <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb96-26"><a href="#cb96-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_mean =</span> <span class="fu">ts</span>(storm_df_anom<span class="sc">$</span>eke_mean_anom, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1958</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>),</span>
+<span id="cb96-26"><a href="#cb96-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_synoptic_mean =</span> <span class="fu">ts</span>(storm_df_anom<span class="sc">$</span>eke_synoptic_mean_anom, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1958</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>),</span>
 <span id="cb96-27"><a href="#cb96-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p90 =</span> <span class="fu">ts</span>(storm_df_anom<span class="sc">$</span>eke_p90_anom, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1958</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>),</span>
 <span id="cb96-28"><a href="#cb96-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p95 =</span> <span class="fu">ts</span>(storm_df_anom<span class="sc">$</span>eke_p95_anom, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1958</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>),</span>
 <span id="cb96-29"><a href="#cb96-29" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p99 =</span> <span class="fu">ts</span>(storm_df_anom<span class="sc">$</span>eke_p99_anom, <span class="at">start =</span> <span class="fu">c</span>(<span class="dv">1958</span>, <span class="dv">1</span>), <span class="at">frequency =</span> <span class="dv">12</span>),</span>
@@ -898,7 +898,7 @@ Decoding time coordinate...</code></pre>
 <span id="cb96-76"><a href="#cb96-76" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
 <span id="cb96-77"><a href="#cb96-77" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>--- eke_mean ---
+<pre><code>--- eke_synoptic_mean ---
   ρ₁ (raw data):        0.649  [INFLATED by seasonality]
   ρ₁ (anomalies):       0.153  [TRUE atmospheric memory]
   Inflation factor:     4.25x
@@ -932,13 +932,13 @@ Decoding time coordinate...</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 
-metric             rho1_raw   rho1_anomaly   inflation_factor     N      neff   dof_reduction_pct
-----------------  ---------  -------------  -----------------  ----  --------  ------------------
-eke_mean              0.649          0.153              4.250   817   313.617              61.614
-eke_p90               0.650          0.149              4.364   817   316.283              61.287
-eke_p95               0.659          0.152              4.341   817   308.820              62.201
-eke_p99               0.665          0.159              4.171   817   313.716              61.601
-exceed_p95_freq       0.583          0.125              4.659   817   330.113              59.594</code></pre>
+metric               rho1_raw   rho1_anomaly   inflation_factor     N      neff   dof_reduction_pct
+------------------  ---------  -------------  -----------------  ----  --------  ------------------
+eke_synoptic_mean       0.649          0.153              4.250   817   313.617              61.614
+eke_p90                 0.650          0.149              4.364   817   316.283              61.287
+eke_p95                 0.659          0.152              4.341   817   308.820              62.201
+eke_p99                 0.665          0.159              4.171   817   313.716              61.601
+exceed_p95_freq         0.583          0.125              4.659   817   330.113              59.594</code></pre>
 </div>
 </div>
 <div class="cell">
@@ -996,13 +996,13 @@ exceed_p95_freq       0.583          0.125              4.659   817   330.113   
 <div class="cell-output cell-output-stdout">
 <pre><code>
 
-Metric            Units                Mean        SD       Min        Max   Lag1_ACF
-----------------  ---------------  --------  --------  --------  ---------  ---------
-eke_mean          m²/s²             12.2739    2.7996    7.2150    20.2137     0.1527
-eke_p90           m²/s²             29.4768    6.7163   17.2837    48.1416     0.1489
-eke_p95           m²/s²             40.7511    9.1738   23.6949    66.1209     0.1517
-eke_p99           m²/s²             66.3999   14.8238   37.6490   105.8559     0.1594
-exceed_p95_freq   fraction (0-1)     0.0504    0.0218    0.0138     0.1230     0.1252</code></pre>
+Metric              Units                Mean        SD       Min        Max   Lag1_ACF
+------------------  ---------------  --------  --------  --------  ---------  ---------
+eke_synoptic_mean   m²/s²             12.2739    2.7996    7.2150    20.2137     0.1527
+eke_p90             m²/s²             29.4768    6.7163   17.2837    48.1416     0.1489
+eke_p95             m²/s²             40.7511    9.1738   23.6949    66.1209     0.1517
+eke_p99             m²/s²             66.3999   14.8238   37.6490   105.8559     0.1594
+exceed_p95_freq     fraction (0-1)     0.0504    0.0218    0.0138     0.1230     0.1252</code></pre>
 </div>
 </div>
 </section>
@@ -1129,7 +1129,7 @@ Table&nbsp;2: Descriptive statistics for Pan-Arctic storminess metrics
 </thead>
 <tbody>
 <tr class="odd">
-<td>eke_mean</td>
+<td>eke_synoptic_mean</td>
 <td>12.27 m²/s²</td>
 <td>2.80 m²/s²</td>
 <td>0.153</td>
@@ -1389,7 +1389,7 @@ Found: ERA5_EKE_budget_monthly.nc</code></pre>
 <span id="cb149-5"><a href="#cb149-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">tke           =</span> <span class="fu">mean</span>(tke),</span>
 <span id="cb149-6"><a href="#cb149-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">mke           =</span> <span class="fu">mean</span>(mke),</span>
 <span id="cb149-7"><a href="#cb149-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_budget    =</span> <span class="fu">mean</span>(eke_budget),</span>
-<span id="cb149-8"><a href="#cb149-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean      =</span> <span class="fu">mean</span>(eke_mean),</span>
+<span id="cb149-8"><a href="#cb149-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean      =</span> <span class="fu">mean</span>(eke_synoptic_mean),</span>
 <span id="cb149-9"><a href="#cb149-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">mke_eke_ratio =</span> <span class="fu">mean</span>(mke_eke_ratio),</span>
 <span id="cb149-10"><a href="#cb149-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_fraction  =</span> <span class="fu">mean</span>(eke_fraction),</span>
 <span id="cb149-11"><a href="#cb149-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups       =</span> <span class="st">"drop"</span></span>
@@ -1645,7 +1645,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb175-4"><a href="#cb175-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb175-5"><a href="#cb175-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Define color schemes</span></span>
 <span id="cb175-6"><a href="#cb175-6" aria-hidden="true" tabindex="-1"></a>metric_colors <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
-<span id="cb175-7"><a href="#cb175-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_mean"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,</span>
+<span id="cb175-7"><a href="#cb175-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_synoptic_mean"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,</span>
 <span id="cb175-8"><a href="#cb175-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p90"</span> <span class="ot">=</span> <span class="st">"#56B4E9"</span>, </span>
 <span id="cb175-9"><a href="#cb175-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p95"</span> <span class="ot">=</span> <span class="st">"#009E73"</span>,</span>
 <span id="cb175-10"><a href="#cb175-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p99"</span> <span class="ot">=</span> <span class="st">"#9467BD"</span>,</span>
@@ -1660,7 +1660,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb175-19"><a href="#cb175-19" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb175-20"><a href="#cb175-20" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb175-21"><a href="#cb175-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Metrics to plot</span></span>
-<span id="cb175-22"><a href="#cb175-22" aria-hidden="true" tabindex="-1"></a>METRICS <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"eke_mean"</span>, <span class="st">"eke_p90"</span>, <span class="st">"eke_p95"</span>, <span class="st">"eke_p99"</span>, <span class="st">"exceed_p95_freq"</span>)</span>
+<span id="cb175-22"><a href="#cb175-22" aria-hidden="true" tabindex="-1"></a>METRICS <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"eke_synoptic_mean"</span>, <span class="st">"eke_p90"</span>, <span class="st">"eke_p95"</span>, <span class="st">"eke_p99"</span>, <span class="st">"exceed_p95_freq"</span>)</span>
 <span id="cb175-23"><a href="#cb175-23" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb175-24"><a href="#cb175-24" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
 <span id="cb175-25"><a href="#cb175-25" aria-hidden="true" tabindex="-1"></a><span class="co"># PLOT 1: TIME SERIES OVERVIEW (ALL METRICS)</span></span>
@@ -1678,7 +1678,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb177-5"><a href="#cb177-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb177-6"><a href="#cb177-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">metric =</span> <span class="fu">factor</span>(metric, <span class="at">levels =</span> METRICS),</span>
 <span id="cb177-7"><a href="#cb177-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">metric_label =</span> <span class="fu">case_when</span>(</span>
-<span id="cb177-8"><a href="#cb177-8" aria-hidden="true" tabindex="-1"></a>      metric <span class="sc">==</span> <span class="st">"eke_mean"</span> <span class="sc">~</span> <span class="st">"Mean EKE [m²/s²]"</span>,</span>
+<span id="cb177-8"><a href="#cb177-8" aria-hidden="true" tabindex="-1"></a>      metric <span class="sc">==</span> <span class="st">"eke_synoptic_mean"</span> <span class="sc">~</span> <span class="st">"Mean EKE [m²/s²]"</span>,</span>
 <span id="cb177-9"><a href="#cb177-9" aria-hidden="true" tabindex="-1"></a>      metric <span class="sc">==</span> <span class="st">"eke_p90"</span> <span class="sc">~</span> <span class="st">"P90 EKE [m²/s²]"</span>,</span>
 <span id="cb177-10"><a href="#cb177-10" aria-hidden="true" tabindex="-1"></a>      metric <span class="sc">==</span> <span class="st">"eke_p95"</span> <span class="sc">~</span> <span class="st">"P95 EKE [m²/s²]"</span>,</span>
 <span id="cb177-11"><a href="#cb177-11" aria-hidden="true" tabindex="-1"></a>      metric <span class="sc">==</span> <span class="st">"eke_p99"</span> <span class="sc">~</span> <span class="st">"P99 EKE [m²/s²]"</span>,</span>
@@ -1777,7 +1777,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb183-3"><a href="#cb183-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">season =</span> <span class="fu">factor</span>(season, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"DJF"</span>, <span class="st">"MAM"</span>, <span class="st">"JJA"</span>, <span class="st">"SON"</span>)))</span>
 <span id="cb183-4"><a href="#cb183-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb183-5"><a href="#cb183-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Create boxplots for primary metrics</span></span>
-<span id="cb183-6"><a href="#cb183-6" aria-hidden="true" tabindex="-1"></a>p3a <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(storm_df_season, <span class="fu">aes</span>(<span class="at">x =</span> season, <span class="at">y =</span> eke_mean, <span class="at">fill =</span> season)) <span class="sc">+</span></span>
+<span id="cb183-6"><a href="#cb183-6" aria-hidden="true" tabindex="-1"></a>p3a <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(storm_df_season, <span class="fu">aes</span>(<span class="at">x =</span> season, <span class="at">y =</span> eke_synoptic_mean, <span class="at">fill =</span> season)) <span class="sc">+</span></span>
 <span id="cb183-7"><a href="#cb183-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_boxplot</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>, <span class="at">outlier.size =</span> <span class="fl">0.8</span>, <span class="at">outlier.alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
 <span id="cb183-8"><a href="#cb183-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> season_colors, <span class="at">guide =</span> <span class="st">"none"</span>) <span class="sc">+</span></span>
 <span id="cb183-9"><a href="#cb183-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Mean EKE"</span>, <span class="at">y =</span> <span class="fu">expression</span>(<span class="st">"m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span>), <span class="at">x =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
@@ -1832,8 +1832,8 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb185-2"><a href="#cb185-2" aria-hidden="true" tabindex="-1"></a>monthly_clim <span class="ot">&lt;-</span> storm_df <span class="sc">%&gt;%</span></span>
 <span id="cb185-3"><a href="#cb185-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(month) <span class="sc">%&gt;%</span></span>
 <span id="cb185-4"><a href="#cb185-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb185-5"><a href="#cb185-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_avg =</span> <span class="fu">mean</span>(eke_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb185-6"><a href="#cb185-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_sd =</span> <span class="fu">sd</span>(eke_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb185-5"><a href="#cb185-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_avg =</span> <span class="fu">mean</span>(eke_synoptic_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb185-6"><a href="#cb185-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_sd =</span> <span class="fu">sd</span>(eke_synoptic_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb185-7"><a href="#cb185-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_p95_avg =</span> <span class="fu">mean</span>(eke_p95, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb185-8"><a href="#cb185-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_p95_sd =</span> <span class="fu">sd</span>(eke_p95, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb185-9"><a href="#cb185-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">exceed_freq_avg =</span> <span class="fu">mean</span>(exceed_p95_freq, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
@@ -1844,11 +1844,11 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb185-14"><a href="#cb185-14" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb185-15"><a href="#cb185-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot for Mean EKE</span></span>
 <span id="cb185-16"><a href="#cb185-16" aria-hidden="true" tabindex="-1"></a>p4a <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(monthly_clim, <span class="fu">aes</span>(<span class="at">x =</span> month)) <span class="sc">+</span></span>
-<span id="cb185-17"><a href="#cb185-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> eke_mean_avg <span class="sc">-</span> eke_mean_sd, </span>
-<span id="cb185-18"><a href="#cb185-18" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ymax =</span> eke_mean_avg <span class="sc">+</span> eke_mean_sd),</span>
+<span id="cb185-17"><a href="#cb185-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(<span class="fu">aes</span>(<span class="at">ymin =</span> eke_synoptic_mean_avg <span class="sc">-</span> eke_synoptic_mean_sd, </span>
+<span id="cb185-18"><a href="#cb185-18" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ymax =</span> eke_synoptic_mean_avg <span class="sc">+</span> eke_synoptic_mean_sd),</span>
 <span id="cb185-19"><a href="#cb185-19" aria-hidden="true" tabindex="-1"></a>              <span class="at">fill =</span> <span class="st">"#0072B2"</span>, <span class="at">alpha =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
-<span id="cb185-20"><a href="#cb185-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">y =</span> eke_mean_avg), <span class="at">color =</span> <span class="st">"#0072B2"</span>, <span class="at">linewidth =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
-<span id="cb185-21"><a href="#cb185-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">y =</span> eke_mean_avg), <span class="at">color =</span> <span class="st">"#0072B2"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb185-20"><a href="#cb185-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="fu">aes</span>(<span class="at">y =</span> eke_synoptic_mean_avg), <span class="at">color =</span> <span class="st">"#0072B2"</span>, <span class="at">linewidth =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb185-21"><a href="#cb185-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">y =</span> eke_synoptic_mean_avg), <span class="at">color =</span> <span class="st">"#0072B2"</span>, <span class="at">size =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
 <span id="cb185-22"><a href="#cb185-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">12</span>, <span class="at">labels =</span> month.abb) <span class="sc">+</span></span>
 <span id="cb185-23"><a href="#cb185-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Mean EKE"</span>, </span>
 <span id="cb185-24"><a href="#cb185-24" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="fu">expression</span>(<span class="st">"m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span>),</span>
@@ -1907,13 +1907,13 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <pre><code>
 --- Generating Plot 5: STL Decomposition ---</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb187"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb187-1"><a href="#cb187-1" aria-hidden="true" tabindex="-1"></a><span class="co"># STL decomposition for primary metric (eke_mean)</span></span>
-<span id="cb187-2"><a href="#cb187-2" aria-hidden="true" tabindex="-1"></a>stl_result <span class="ot">&lt;-</span> <span class="fu">stl</span>(ts_objects<span class="sc">$</span>eke_mean, <span class="at">s.window =</span> <span class="st">"periodic"</span>)</span>
+<div class="sourceCode cell-code" id="cb187"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb187-1"><a href="#cb187-1" aria-hidden="true" tabindex="-1"></a><span class="co"># STL decomposition for primary metric (eke_synoptic_mean)</span></span>
+<span id="cb187-2"><a href="#cb187-2" aria-hidden="true" tabindex="-1"></a>stl_result <span class="ot">&lt;-</span> <span class="fu">stl</span>(ts_objects<span class="sc">$</span>eke_synoptic_mean, <span class="at">s.window =</span> <span class="st">"periodic"</span>)</span>
 <span id="cb187-3"><a href="#cb187-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb187-4"><a href="#cb187-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract components</span></span>
 <span id="cb187-5"><a href="#cb187-5" aria-hidden="true" tabindex="-1"></a>stl_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
 <span id="cb187-6"><a href="#cb187-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">date =</span> time_dates,</span>
-<span id="cb187-7"><a href="#cb187-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">observed =</span> <span class="fu">as.vector</span>(ts_objects<span class="sc">$</span>eke_mean),</span>
+<span id="cb187-7"><a href="#cb187-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">observed =</span> <span class="fu">as.vector</span>(ts_objects<span class="sc">$</span>eke_synoptic_mean),</span>
 <span id="cb187-8"><a href="#cb187-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">seasonal =</span> <span class="fu">as.vector</span>(stl_result<span class="sc">$</span>time.series[, <span class="st">"seasonal"</span>]),</span>
 <span id="cb187-9"><a href="#cb187-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">trend =</span> <span class="fu">as.vector</span>(stl_result<span class="sc">$</span>time.series[, <span class="st">"trend"</span>]),</span>
 <span id="cb187-10"><a href="#cb187-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">remainder =</span> <span class="fu">as.vector</span>(stl_result<span class="sc">$</span>time.series[, <span class="st">"remainder"</span>])</span>
@@ -1994,7 +1994,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb195-47"><a href="#cb195-47" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb195-48"><a href="#cb195-48" aria-hidden="true" tabindex="-1"></a><span class="co"># Store for later use</span></span>
 <span id="cb195-49"><a href="#cb195-49" aria-hidden="true" tabindex="-1"></a>stl_results <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb195-50"><a href="#cb195-50" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_mean =</span> stl_result,</span>
+<span id="cb195-50"><a href="#cb195-50" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_synoptic_mean =</span> stl_result,</span>
 <span id="cb195-51"><a href="#cb195-51" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p95 =</span> stl_p95</span>
 <span id="cb195-52"><a href="#cb195-52" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb195-53"><a href="#cb195-53" aria-hidden="true" tabindex="-1"></a></span>
@@ -2014,7 +2014,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb197-2"><a href="#cb197-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Use FULL domain (metrics_list) not Arctic subset (metrics_arctic)</span></span>
 <span id="cb197-3"><a href="#cb197-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Result: [lat, lon] matrices</span></span>
 <span id="cb197-4"><a href="#cb197-4" aria-hidden="true" tabindex="-1"></a>climatology_maps_full <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
-<span id="cb197-5"><a href="#cb197-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (metric <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"eke_mean"</span>, <span class="st">"eke_p95"</span>, <span class="st">"exceed_p95_freq"</span>)) {</span>
+<span id="cb197-5"><a href="#cb197-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (metric <span class="cf">in</span> <span class="fu">c</span>(<span class="st">"eke_synoptic_mean"</span>, <span class="st">"eke_p95"</span>, <span class="st">"exceed_p95_freq"</span>)) {</span>
 <span id="cb197-6"><a href="#cb197-6" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (metric <span class="sc">%in%</span> <span class="fu">names</span>(metrics_list)) {</span>
 <span id="cb197-7"><a href="#cb197-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Apply mean across time dimension (dim 1) - using FULL dataset</span></span>
 <span id="cb197-8"><a href="#cb197-8" aria-hidden="true" tabindex="-1"></a>    climatology_maps_full[[metric]] <span class="ot">&lt;-</span> <span class="fu">apply</span>(metrics_list[[metric]], <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>), mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
@@ -2059,7 +2059,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb201-13"><a href="#cb201-13" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Create Wrapped Data List</span></span>
 <span id="cb201-14"><a href="#cb201-14" aria-hidden="true" tabindex="-1"></a><span class="co"># ----------------------------------------------------------------------------</span></span>
 <span id="cb201-15"><a href="#cb201-15" aria-hidden="true" tabindex="-1"></a>data_list_plot <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
-<span id="cb201-16"><a href="#cb201-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_mean    =</span> <span class="fu">wrap_data</span>(climatology_maps_full<span class="sc">$</span>eke_mean),</span>
+<span id="cb201-16"><a href="#cb201-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_synoptic_mean    =</span> <span class="fu">wrap_data</span>(climatology_maps_full<span class="sc">$</span>eke_synoptic_mean),</span>
 <span id="cb201-17"><a href="#cb201-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p95     =</span> <span class="fu">wrap_data</span>(climatology_maps_full<span class="sc">$</span>eke_p95),</span>
 <span id="cb201-18"><a href="#cb201-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">exceed_freq =</span> <span class="fu">wrap_data</span>(climatology_maps_full<span class="sc">$</span>exceed_p95_freq)</span>
 <span id="cb201-19"><a href="#cb201-19" aria-hidden="true" tabindex="-1"></a>)</span>
@@ -2154,7 +2154,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb207-5"><a href="#cb207-5" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 0a. Shared colour limits for Mean EKE and P95 EKE ---</span></span>
 <span id="cb207-6"><a href="#cb207-6" aria-hidden="true" tabindex="-1"></a>shared_max <span class="ot">&lt;-</span> <span class="fu">max</span>(</span>
 <span id="cb207-7"><a href="#cb207-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">max</span>(clim_polar_masked[[<span class="st">"eke_p95"</span>]],  <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb207-8"><a href="#cb207-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">max</span>(clim_polar_masked[[<span class="st">"eke_mean"</span>]], <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb207-8"><a href="#cb207-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">max</span>(clim_polar_masked[[<span class="st">"eke_synoptic_mean"</span>]], <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb207-9"><a href="#cb207-9" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb207-10"><a href="#cb207-10" aria-hidden="true" tabindex="-1"></a>shared_max_round <span class="ot">&lt;-</span> <span class="fu">ceiling</span>(shared_max <span class="sc">/</span> <span class="dv">10</span>) <span class="sc">*</span> <span class="dv">10</span></span>
 <span id="cb207-11"><a href="#cb207-11" aria-hidden="true" tabindex="-1"></a>shared_breaks    <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, shared_max_round, <span class="at">length.out =</span> <span class="dv">5</span>)</span>
@@ -2169,7 +2169,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 </div>
 <div class="sourceCode cell-code" id="cb211"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb211-1"><a href="#cb211-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- 0b. Compute P95/Mean ratio and rebuild stars object ---</span></span>
 <span id="cb211-2"><a href="#cb211-2" aria-hidden="true" tabindex="-1"></a>climatology_maps_full[[<span class="st">"p95_mean_ratio"</span>]] <span class="ot">&lt;-</span></span>
-<span id="cb211-3"><a href="#cb211-3" aria-hidden="true" tabindex="-1"></a>  climatology_maps_full<span class="sc">$</span>eke_p95 <span class="sc">/</span> climatology_maps_full<span class="sc">$</span>eke_mean</span>
+<span id="cb211-3"><a href="#cb211-3" aria-hidden="true" tabindex="-1"></a>  climatology_maps_full<span class="sc">$</span>eke_p95 <span class="sc">/</span> climatology_maps_full<span class="sc">$</span>eke_synoptic_mean</span>
 <span id="cb211-4"><a href="#cb211-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb211-5"><a href="#cb211-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Add wrapped ratio to data list</span></span>
 <span id="cb211-6"><a href="#cb211-6" aria-hidden="true" tabindex="-1"></a>data_list_plot[[<span class="st">"p95_mean_ratio"</span>]] <span class="ot">&lt;-</span> <span class="fu">wrap_data</span>(climatology_maps_full<span class="sc">$</span>p95_mean_ratio)</span>
@@ -2199,7 +2199,7 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 </div>
 <div class="sourceCode cell-code" id="cb215"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb215-1"><a href="#cb215-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Panel (a): Mean EKE ---</span></span>
 <span id="cb215-2"><a href="#cb215-2" aria-hidden="true" tabindex="-1"></a>p6a_mean <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
-<span id="cb215-3"><a href="#cb215-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_stars</span>(<span class="at">data =</span> clim_polar_masked, <span class="fu">aes</span>(<span class="at">fill =</span> eke_mean), <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb215-3"><a href="#cb215-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_stars</span>(<span class="at">data =</span> clim_polar_masked, <span class="fu">aes</span>(<span class="at">fill =</span> eke_synoptic_mean), <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
 <span id="cb215-4"><a href="#cb215-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_viridis</span>(</span>
 <span id="cb215-5"><a href="#cb215-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="fu">expression</span>(<span class="fu">atop</span>(<span class="st">"EKE"</span>, <span class="st">"[m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"]"</span>)),</span>
 <span id="cb215-6"><a href="#cb215-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">option =</span> <span class="st">"C"</span>,</span>
@@ -2489,14 +2489,14 @@ Exceed. Freq.    0.984   0.985   0.983   0.969         1.000</code></pre>
 <span id="cb231-2"><a href="#cb231-2" aria-hidden="true" tabindex="-1"></a>storm_df_anom <span class="ot">&lt;-</span> storm_df <span class="sc">%&gt;%</span></span>
 <span id="cb231-3"><a href="#cb231-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(month) <span class="sc">%&gt;%</span></span>
 <span id="cb231-4"><a href="#cb231-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb231-5"><a href="#cb231-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_anom =</span> eke_mean <span class="sc">-</span> <span class="fu">mean</span>(eke_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb231-5"><a href="#cb231-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_anom =</span> eke_synoptic_mean <span class="sc">-</span> <span class="fu">mean</span>(eke_synoptic_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb231-6"><a href="#cb231-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_p95_anom =</span> eke_p95 <span class="sc">-</span> <span class="fu">mean</span>(eke_p95, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb231-7"><a href="#cb231-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">exceed_freq_anom =</span> exceed_p95_freq <span class="sc">-</span> <span class="fu">mean</span>(exceed_p95_freq, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb231-8"><a href="#cb231-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
 <span id="cb231-9"><a href="#cb231-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ungroup</span>()</span>
 <span id="cb231-10"><a href="#cb231-10" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb231-11"><a href="#cb231-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot anomalies</span></span>
-<span id="cb231-12"><a href="#cb231-12" aria-hidden="true" tabindex="-1"></a>p9a <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(storm_df_anom, <span class="fu">aes</span>(<span class="at">x =</span> date, <span class="at">y =</span> eke_mean_anom)) <span class="sc">+</span></span>
+<span id="cb231-12"><a href="#cb231-12" aria-hidden="true" tabindex="-1"></a>p9a <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(storm_df_anom, <span class="fu">aes</span>(<span class="at">x =</span> date, <span class="at">y =</span> eke_synoptic_mean_anom)) <span class="sc">+</span></span>
 <span id="cb231-13"><a href="#cb231-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>, <span class="at">color =</span> <span class="st">"gray50"</span>) <span class="sc">+</span></span>
 <span id="cb231-14"><a href="#cb231-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">"#0072B2"</span>, <span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">linewidth =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
 <span id="cb231-15"><a href="#cb231-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"loess"</span>, <span class="at">span =</span> <span class="fl">0.1</span>, <span class="at">color =</span> <span class="st">"#D55E00"</span>, <span class="at">se =</span> <span class="cn">FALSE</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
@@ -2564,13 +2564,13 @@ Exceed. Freq.    0.984   0.985   0.983   0.969         1.000</code></pre>
 <span id="cb233-17"><a href="#cb233-17" aria-hidden="true" tabindex="-1"></a>seasonal_by_decade <span class="ot">&lt;-</span> storm_df_decade <span class="sc">%&gt;%</span></span>
 <span id="cb233-18"><a href="#cb233-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(decade, month) <span class="sc">%&gt;%</span></span>
 <span id="cb233-19"><a href="#cb233-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
-<span id="cb233-20"><a href="#cb233-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_avg =</span> <span class="fu">mean</span>(eke_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
-<span id="cb233-21"><a href="#cb233-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_se =</span> <span class="fu">sd</span>(eke_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="fu">n</span>()),</span>
+<span id="cb233-20"><a href="#cb233-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_avg =</span> <span class="fu">mean</span>(eke_synoptic_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb233-21"><a href="#cb233-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_se =</span> <span class="fu">sd</span>(eke_synoptic_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">/</span> <span class="fu">sqrt</span>(<span class="fu">n</span>()),</span>
 <span id="cb233-22"><a href="#cb233-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
 <span id="cb233-23"><a href="#cb233-23" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb233-24"><a href="#cb233-24" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb233-25"><a href="#cb233-25" aria-hidden="true" tabindex="-1"></a><span class="co"># We will use the built-in viridis scale inside the plot.</span></span>
-<span id="cb233-26"><a href="#cb233-26" aria-hidden="true" tabindex="-1"></a>p10 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(seasonal_by_decade, <span class="fu">aes</span>(<span class="at">x =</span> month, <span class="at">y =</span> eke_mean_avg, </span>
+<span id="cb233-26"><a href="#cb233-26" aria-hidden="true" tabindex="-1"></a>p10 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(seasonal_by_decade, <span class="fu">aes</span>(<span class="at">x =</span> month, <span class="at">y =</span> eke_synoptic_mean_avg, </span>
 <span id="cb233-27"><a href="#cb233-27" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">color =</span> decade, <span class="at">group =</span> decade)) <span class="sc">+</span></span>
 <span id="cb233-28"><a href="#cb233-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
 <span id="cb233-29"><a href="#cb233-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
@@ -2707,15 +2707,15 @@ Key findings from diagnostic plots:</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>  - STL variance decomposition: Seasonal=71.0%, Trend=4.0%, Residual=24.1%</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb269"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb269-1"><a href="#cb269-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  - Metric correlations: eke_mean vs eke_p95 = %.3f</span><span class="sc">\n</span><span class="st">"</span>, </span>
+<div class="sourceCode cell-code" id="cb269"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb269-1"><a href="#cb269-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  - Metric correlations: eke_synoptic_mean vs eke_p95 = %.3f</span><span class="sc">\n</span><span class="st">"</span>, </span>
 <span id="cb269-2"><a href="#cb269-2" aria-hidden="true" tabindex="-1"></a>            cor_matrix[<span class="st">"Mean EKE"</span>, <span class="st">"P95 EKE"</span>]))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  - Metric correlations: eke_mean vs eke_p95 = 0.995</code></pre>
+<pre><code>  - Metric correlations: eke_synoptic_mean vs eke_p95 = 0.995</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb271"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb271-1"><a href="#cb271-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  - Metric correlations: eke_mean vs exceed_freq = %.3f</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<div class="sourceCode cell-code" id="cb271"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb271-1"><a href="#cb271-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  - Metric correlations: eke_synoptic_mean vs exceed_freq = %.3f</span><span class="sc">\n</span><span class="st">"</span>,</span>
 <span id="cb271-2"><a href="#cb271-2" aria-hidden="true" tabindex="-1"></a>            cor_matrix[<span class="st">"Mean EKE"</span>, <span class="st">"Exceed. Freq."</span>]))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  - Metric correlations: eke_mean vs exceed_freq = 0.984</code></pre>
+<pre><code>  - Metric correlations: eke_synoptic_mean vs exceed_freq = 0.984</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb273"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb273-1"><a href="#cb273-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -2943,7 +2943,7 @@ Generated Figures:</code></pre>
 <span id="cb311-18"><a href="#cb311-18" aria-hidden="true" tabindex="-1"></a>      <span class="at">tke           =</span> <span class="fu">mean</span>(tke),</span>
 <span id="cb311-19"><a href="#cb311-19" aria-hidden="true" tabindex="-1"></a>      <span class="at">mke           =</span> <span class="fu">mean</span>(mke),</span>
 <span id="cb311-20"><a href="#cb311-20" aria-hidden="true" tabindex="-1"></a>      <span class="at">eke_budget    =</span> <span class="fu">mean</span>(eke_budget),</span>
-<span id="cb311-21"><a href="#cb311-21" aria-hidden="true" tabindex="-1"></a>      <span class="at">eke_mean      =</span> <span class="fu">mean</span>(eke_mean),</span>
+<span id="cb311-21"><a href="#cb311-21" aria-hidden="true" tabindex="-1"></a>      <span class="at">eke_synoptic_mean      =</span> <span class="fu">mean</span>(eke_synoptic_mean),</span>
 <span id="cb311-22"><a href="#cb311-22" aria-hidden="true" tabindex="-1"></a>      <span class="at">mke_eke_ratio =</span> <span class="fu">mean</span>(mke_eke_ratio),</span>
 <span id="cb311-23"><a href="#cb311-23" aria-hidden="true" tabindex="-1"></a>      <span class="at">eke_fraction  =</span> <span class="fu">mean</span>(eke_fraction),</span>
 <span id="cb311-24"><a href="#cb311-24" aria-hidden="true" tabindex="-1"></a>      <span class="at">.groups       =</span> <span class="st">"drop"</span></span>
@@ -3039,13 +3039,13 @@ Generated Figures:</code></pre>
 <span id="cb323-3"><a href="#cb323-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
 <span id="cb323-4"><a href="#cb323-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">tke_mean        =</span> <span class="fu">mean</span>(tke),</span>
 <span id="cb323-5"><a href="#cb323-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">mke_mean        =</span> <span class="fu">mean</span>(mke),</span>
-<span id="cb323-6"><a href="#cb323-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_mean_budget =</span> <span class="fu">mean</span>(eke_budget),</span>
+<span id="cb323-6"><a href="#cb323-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">eke_synoptic_mean_budget =</span> <span class="fu">mean</span>(eke_budget),</span>
 <span id="cb323-7"><a href="#cb323-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups         =</span> <span class="st">"drop"</span></span>
 <span id="cb323-8"><a href="#cb323-8" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb323-9"><a href="#cb323-9" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb323-10"><a href="#cb323-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Report winter/summer contrast</span></span>
-<span id="cb323-11"><a href="#cb323-11" aria-hidden="true" tabindex="-1"></a>winter_eke <span class="ot">&lt;-</span> <span class="fu">mean</span>(energy_seasonal<span class="sc">$</span>eke_mean_budget[energy_seasonal<span class="sc">$</span>month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">12</span>, <span class="dv">1</span>, <span class="dv">2</span>)])</span>
-<span id="cb323-12"><a href="#cb323-12" aria-hidden="true" tabindex="-1"></a>summer_eke <span class="ot">&lt;-</span> <span class="fu">mean</span>(energy_seasonal<span class="sc">$</span>eke_mean_budget[energy_seasonal<span class="sc">$</span>month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span>, <span class="dv">7</span>, <span class="dv">8</span>)])</span>
+<span id="cb323-11"><a href="#cb323-11" aria-hidden="true" tabindex="-1"></a>winter_eke <span class="ot">&lt;-</span> <span class="fu">mean</span>(energy_seasonal<span class="sc">$</span>eke_synoptic_mean_budget[energy_seasonal<span class="sc">$</span>month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">12</span>, <span class="dv">1</span>, <span class="dv">2</span>)])</span>
+<span id="cb323-12"><a href="#cb323-12" aria-hidden="true" tabindex="-1"></a>summer_eke <span class="ot">&lt;-</span> <span class="fu">mean</span>(energy_seasonal<span class="sc">$</span>eke_synoptic_mean_budget[energy_seasonal<span class="sc">$</span>month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span>, <span class="dv">7</span>, <span class="dv">8</span>)])</span>
 <span id="cb323-13"><a href="#cb323-13" aria-hidden="true" tabindex="-1"></a>winter_mke <span class="ot">&lt;-</span> <span class="fu">mean</span>(energy_seasonal<span class="sc">$</span>mke_mean[energy_seasonal<span class="sc">$</span>month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">12</span>, <span class="dv">1</span>, <span class="dv">2</span>)])</span>
 <span id="cb323-14"><a href="#cb323-14" aria-hidden="true" tabindex="-1"></a>summer_mke <span class="ot">&lt;-</span> <span class="fu">mean</span>(energy_seasonal<span class="sc">$</span>mke_mean[energy_seasonal<span class="sc">$</span>month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span>, <span class="dv">7</span>, <span class="dv">8</span>)])</span>
 <span id="cb323-15"><a href="#cb323-15" aria-hidden="true" tabindex="-1"></a></span>
@@ -3061,11 +3061,11 @@ Generated Figures:</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb327"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb327-1"><a href="#cb327-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Long format for plotting</span></span>
 <span id="cb327-2"><a href="#cb327-2" aria-hidden="true" tabindex="-1"></a>seasonal_long <span class="ot">&lt;-</span> energy_seasonal <span class="sc">%&gt;%</span></span>
-<span id="cb327-3"><a href="#cb327-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(month, tke_mean, mke_mean, eke_mean_budget) <span class="sc">%&gt;%</span></span>
+<span id="cb327-3"><a href="#cb327-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(month, tke_mean, mke_mean, eke_synoptic_mean_budget) <span class="sc">%&gt;%</span></span>
 <span id="cb327-4"><a href="#cb327-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>month, <span class="at">names_to =</span> <span class="st">"component"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb327-5"><a href="#cb327-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb327-6"><a href="#cb327-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">component =</span> <span class="fu">factor</span>(component,</span>
-<span id="cb327-7"><a href="#cb327-7" aria-hidden="true" tabindex="-1"></a>                       <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"tke_mean"</span>, <span class="st">"mke_mean"</span>, <span class="st">"eke_mean_budget"</span>),</span>
+<span id="cb327-7"><a href="#cb327-7" aria-hidden="true" tabindex="-1"></a>                       <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"tke_mean"</span>, <span class="st">"mke_mean"</span>, <span class="st">"eke_synoptic_mean_budget"</span>),</span>
 <span id="cb327-8"><a href="#cb327-8" aria-hidden="true" tabindex="-1"></a>                       <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"TKE"</span>, <span class="st">"MKE"</span>, <span class="st">"EKE"</span>))</span>
 <span id="cb327-9"><a href="#cb327-9" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb327-10"><a href="#cb327-10" aria-hidden="true" tabindex="-1"></a></span>
@@ -3112,14 +3112,14 @@ Generated Figures:</code></pre>
 <pre><code>--- 2.3 EKE Definition Comparison ---</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb330"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb330-1"><a href="#cb330-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute correlation</span></span>
-<span id="cb330-2"><a href="#cb330-2" aria-hidden="true" tabindex="-1"></a>eke_cor <span class="ot">&lt;-</span> <span class="fu">cor</span>(storm_df<span class="sc">$</span>eke_budget, storm_df<span class="sc">$</span>eke_mean, <span class="at">use =</span> <span class="st">"complete.obs"</span>)</span>
+<span id="cb330-2"><a href="#cb330-2" aria-hidden="true" tabindex="-1"></a>eke_cor <span class="ot">&lt;-</span> <span class="fu">cor</span>(storm_df<span class="sc">$</span>eke_budget, storm_df<span class="sc">$</span>eke_synoptic_mean, <span class="at">use =</span> <span class="st">"complete.obs"</span>)</span>
 <span id="cb330-3"><a href="#cb330-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Pearson r (monthly): %.3f</span><span class="sc">\n</span><span class="st">"</span>, eke_cor))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  Pearson r (monthly): 0.885</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb332"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb332-1"><a href="#cb332-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute synoptic fraction</span></span>
 <span id="cb332-2"><a href="#cb332-2" aria-hidden="true" tabindex="-1"></a>storm_df <span class="ot">&lt;-</span> storm_df <span class="sc">%&gt;%</span></span>
-<span id="cb332-3"><a href="#cb332-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">f_synoptic =</span> eke_mean <span class="sc">/</span> eke_budget)</span>
+<span id="cb332-3"><a href="#cb332-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">f_synoptic =</span> eke_synoptic_mean <span class="sc">/</span> eke_budget)</span>
 <span id="cb332-4"><a href="#cb332-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb332-5"><a href="#cb332-5" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Mean synoptic fraction (f_synoptic): %.3f (%.1f%%)</span><span class="sc">\n</span><span class="st">"</span>,</span>
 <span id="cb332-6"><a href="#cb332-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">mean</span>(storm_df<span class="sc">$</span>f_synoptic, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
@@ -3134,13 +3134,13 @@ Generated Figures:</code></pre>
 <pre><code>  Range: 0.246 – 0.451</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb336"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb336-1"><a href="#cb336-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Panel (a): Scatter</span></span>
-<span id="cb336-2"><a href="#cb336-2" aria-hidden="true" tabindex="-1"></a>p_scatter <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(storm_df, <span class="fu">aes</span>(<span class="at">x =</span> eke_budget, <span class="at">y =</span> eke_mean)) <span class="sc">+</span></span>
+<span id="cb336-2"><a href="#cb336-2" aria-hidden="true" tabindex="-1"></a>p_scatter <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(storm_df, <span class="fu">aes</span>(<span class="at">x =</span> eke_budget, <span class="at">y =</span> eke_synoptic_mean)) <span class="sc">+</span></span>
 <span id="cb336-3"><a href="#cb336-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
 <span id="cb336-4"><a href="#cb336-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">color =</span> <span class="st">"#E41A1C"</span>, <span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
 <span id="cb336-5"><a href="#cb336-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="dv">0</span>, <span class="at">slope =</span> <span class="dv">1</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"gray50"</span>) <span class="sc">+</span></span>
 <span id="cb336-6"><a href="#cb336-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"text"</span>,</span>
 <span id="cb336-7"><a href="#cb336-7" aria-hidden="true" tabindex="-1"></a>           <span class="at">x =</span> <span class="fu">min</span>(storm_df<span class="sc">$</span>eke_budget, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="fl">1.1</span>,</span>
-<span id="cb336-8"><a href="#cb336-8" aria-hidden="true" tabindex="-1"></a>           <span class="at">y =</span> <span class="fu">max</span>(storm_df<span class="sc">$</span>eke_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="fl">0.95</span>,</span>
+<span id="cb336-8"><a href="#cb336-8" aria-hidden="true" tabindex="-1"></a>           <span class="at">y =</span> <span class="fu">max</span>(storm_df<span class="sc">$</span>eke_synoptic_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="fl">0.95</span>,</span>
 <span id="cb336-9"><a href="#cb336-9" aria-hidden="true" tabindex="-1"></a>           <span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"r = %.3f"</span>, eke_cor),</span>
 <span id="cb336-10"><a href="#cb336-10" aria-hidden="true" tabindex="-1"></a>           <span class="at">hjust =</span> <span class="dv">0</span>, <span class="at">size =</span> <span class="dv">4</span>, <span class="at">fontface =</span> <span class="st">"bold"</span>) <span class="sc">+</span></span>
 <span id="cb336-11"><a href="#cb336-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
@@ -3153,11 +3153,11 @@ Generated Figures:</code></pre>
 <span id="cb336-18"><a href="#cb336-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb336-19"><a href="#cb336-19" aria-hidden="true" tabindex="-1"></a><span class="co"># Panel (b): Annual time series</span></span>
 <span id="cb336-20"><a href="#cb336-20" aria-hidden="true" tabindex="-1"></a>comparison_annual <span class="ot">&lt;-</span> energy_annual <span class="sc">%&gt;%</span></span>
-<span id="cb336-21"><a href="#cb336-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(year, eke_budget, eke_mean) <span class="sc">%&gt;%</span></span>
+<span id="cb336-21"><a href="#cb336-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(year, eke_budget, eke_synoptic_mean) <span class="sc">%&gt;%</span></span>
 <span id="cb336-22"><a href="#cb336-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="sc">-</span>year, <span class="at">names_to =</span> <span class="st">"type"</span>, <span class="at">values_to =</span> <span class="st">"value"</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb336-23"><a href="#cb336-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb336-24"><a href="#cb336-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">type =</span> <span class="fu">factor</span>(type,</span>
-<span id="cb336-25"><a href="#cb336-25" aria-hidden="true" tabindex="-1"></a>                  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"eke_budget"</span>, <span class="st">"eke_mean"</span>),</span>
+<span id="cb336-25"><a href="#cb336-25" aria-hidden="true" tabindex="-1"></a>                  <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"eke_budget"</span>, <span class="st">"eke_synoptic_mean"</span>),</span>
 <span id="cb336-26"><a href="#cb336-26" aria-hidden="true" tabindex="-1"></a>                  <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"EKE (budget, all sub-monthly)"</span>,</span>
 <span id="cb336-27"><a href="#cb336-27" aria-hidden="true" tabindex="-1"></a>                             <span class="st">"EKE (synoptic, 1.2–6 day)"</span>))</span>
 <span id="cb336-28"><a href="#cb336-28" aria-hidden="true" tabindex="-1"></a>  )</span>

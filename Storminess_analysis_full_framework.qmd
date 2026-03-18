@@ -58,7 +58,7 @@ METRICS_FILE <- file.path(DATA_DIRECTORY, "ERA5_storminess_metrics_monthly.nc")
 
 # Define which metrics to analyze
 METRIC_NAMES <- c(
- "eke_mean",         # PRIMARY: Monthly mean synoptic-scale EKE
+ "eke_synoptic_mean",         # PRIMARY: Monthly mean synoptic-scale EKE
  "eke_p90",          # 90th percentile of monthly EKE
  "eke_p95",          # 95th percentile of monthly EKE  
  "eke_p99",          # 99th percentile of monthly EKE
@@ -140,7 +140,7 @@ The dataset contains the following variables:
 
 ```         
 Variables:
-  eke_mean [m²/s²]              - Monthly mean synoptic-scale EKE (PRIMARY)
+  eke_synoptic_mean [m²/s²]              - Monthly mean synoptic-scale EKE (PRIMARY)
   eke_p90 [m²/s²]               - Monthly 90th percentile EKE
   eke_p95 [m²/s²]               - Monthly 95th percentile EKE
   eke_p99 [m²/s²]               - Monthly 99th percentile EKE
@@ -584,7 +584,7 @@ deseasonalize <- function(df, metric_col) {
 # Create anomalies for all metrics
 storm_df_anom <- storm_df %>%
   mutate(
-    eke_mean_anom = deseasonalize(., "eke_mean"),
+    eke_synoptic_mean_anom = deseasonalize(., "eke_synoptic_mean"),
     eke_p90_anom = deseasonalize(., "eke_p90"),
     eke_p95_anom = deseasonalize(., "eke_p95"),
     eke_p99_anom = deseasonalize(., "eke_p99"),
@@ -593,7 +593,7 @@ storm_df_anom <- storm_df %>%
 
 # Create ts objects for anomalies
 ts_objects_anom <- list(
-  eke_mean = ts(storm_df_anom$eke_mean_anom, start = c(1958, 1), frequency = 12),
+  eke_synoptic_mean = ts(storm_df_anom$eke_synoptic_mean_anom, start = c(1958, 1), frequency = 12),
   eke_p90 = ts(storm_df_anom$eke_p90_anom, start = c(1958, 1), frequency = 12),
   eke_p95 = ts(storm_df_anom$eke_p95_anom, start = c(1958, 1), frequency = 12),
   eke_p99 = ts(storm_df_anom$eke_p99_anom, start = c(1958, 1), frequency = 12),
@@ -759,7 +759,7 @@ The foundational analysis produced the following validated datasets for subseque
 
 | Metric          | Mean        | SD          | Lag-1 ACF |
 |-----------------|-------------|-------------|-----------|
-| eke_mean        | 12.27 m²/s² | 2.80 m²/s²  | 0.153     |
+| eke_synoptic_mean        | 12.27 m²/s² | 2.80 m²/s²  | 0.153     |
 | eke_p90         | 29.47 m²/s² | 6.72 m²/s²  | 0.149     |
 | eke_p95         | 40.75 m²/s² | 9.18 m²/s²  | 0.152     |
 | eke_p99         | 66.39 m²/s² | 14.82 m²/s² | 0.160     |
@@ -949,7 +949,7 @@ energy_annual <- storm_df %>%
     tke           = mean(tke),
     mke           = mean(mke),
     eke_budget    = mean(eke_budget),
-    eke_mean      = mean(eke_mean),
+    eke_synoptic_mean      = mean(eke_synoptic_mean),
     mke_eke_ratio = mean(mke_eke_ratio),
     eke_fraction  = mean(eke_fraction),
     .groups       = "drop"
@@ -1150,7 +1150,7 @@ if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
 
 # Define color schemes
 metric_colors <- c(
-  "eke_mean" = "#0072B2",
+  "eke_synoptic_mean" = "#0072B2",
   "eke_p90" = "#56B4E9", 
   "eke_p95" = "#009E73",
   "eke_p99" = "#9467BD",
@@ -1165,7 +1165,7 @@ season_colors <- c(
 )
 
 # Metrics to plot
-METRICS <- c("eke_mean", "eke_p90", "eke_p95", "eke_p99", "exceed_p95_freq")
+METRICS <- c("eke_synoptic_mean", "eke_p90", "eke_p95", "eke_p99", "exceed_p95_freq")
 
 # ============================================================================
 # PLOT 1: TIME SERIES OVERVIEW (ALL METRICS)
@@ -1180,7 +1180,7 @@ ts_long <- storm_df %>%
   mutate(
     metric = factor(metric, levels = METRICS),
     metric_label = case_when(
-      metric == "eke_mean" ~ "Mean EKE [m²/s²]",
+      metric == "eke_synoptic_mean" ~ "Mean EKE [m²/s²]",
       metric == "eke_p90" ~ "P90 EKE [m²/s²]",
       metric == "eke_p95" ~ "P95 EKE [m²/s²]",
       metric == "eke_p99" ~ "P99 EKE [m²/s²]",
@@ -1270,7 +1270,7 @@ storm_df_season <- storm_df %>%
   mutate(season = factor(season, levels = c("DJF", "MAM", "JJA", "SON")))
 
 # Create boxplots for primary metrics
-p3a <- ggplot(storm_df_season, aes(x = season, y = eke_mean, fill = season)) +
+p3a <- ggplot(storm_df_season, aes(x = season, y = eke_synoptic_mean, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
   labs(title = "Mean EKE", y = expression("m"^2*"/s"^2), x = NULL) +
@@ -1322,8 +1322,8 @@ cat("\n--- Generating Plot 4: Climatological Seasonal Cycle ---\n")
 monthly_clim <- storm_df %>%
   group_by(month) %>%
   summarise(
-    eke_mean_avg = mean(eke_mean, na.rm = TRUE),
-    eke_mean_sd = sd(eke_mean, na.rm = TRUE),
+    eke_synoptic_mean_avg = mean(eke_synoptic_mean, na.rm = TRUE),
+    eke_synoptic_mean_sd = sd(eke_synoptic_mean, na.rm = TRUE),
     eke_p95_avg = mean(eke_p95, na.rm = TRUE),
     eke_p95_sd = sd(eke_p95, na.rm = TRUE),
     exceed_freq_avg = mean(exceed_p95_freq, na.rm = TRUE),
@@ -1334,11 +1334,11 @@ monthly_clim <- storm_df %>%
 
 # Plot for Mean EKE
 p4a <- ggplot(monthly_clim, aes(x = month)) +
-  geom_ribbon(aes(ymin = eke_mean_avg - eke_mean_sd, 
-                  ymax = eke_mean_avg + eke_mean_sd),
+  geom_ribbon(aes(ymin = eke_synoptic_mean_avg - eke_synoptic_mean_sd, 
+                  ymax = eke_synoptic_mean_avg + eke_synoptic_mean_sd),
               fill = "#0072B2", alpha = 0.3) +
-  geom_line(aes(y = eke_mean_avg), color = "#0072B2", linewidth = 1.2) +
-  geom_point(aes(y = eke_mean_avg), color = "#0072B2", size = 3) +
+  geom_line(aes(y = eke_synoptic_mean_avg), color = "#0072B2", linewidth = 1.2) +
+  geom_point(aes(y = eke_synoptic_mean_avg), color = "#0072B2", size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
   labs(title = "Mean EKE", 
        y = expression("m"^2*"/s"^2),
@@ -1394,13 +1394,13 @@ ggsave(file.path(fig_dir, "Fig04_Seasonal_Cycle_Climatology.png"),
 
 cat("\n--- Generating Plot 5: STL Decomposition ---\n")
 
-# STL decomposition for primary metric (eke_mean)
-stl_result <- stl(ts_objects$eke_mean, s.window = "periodic")
+# STL decomposition for primary metric (eke_synoptic_mean)
+stl_result <- stl(ts_objects$eke_synoptic_mean, s.window = "periodic")
 
 # Extract components
 stl_df <- data.frame(
   date = time_dates,
-  observed = as.vector(ts_objects$eke_mean),
+  observed = as.vector(ts_objects$eke_synoptic_mean),
   seasonal = as.vector(stl_result$time.series[, "seasonal"]),
   trend = as.vector(stl_result$time.series[, "trend"]),
   remainder = as.vector(stl_result$time.series[, "remainder"])
@@ -1470,7 +1470,7 @@ stl_p95_df <- data.frame(
 
 # Store for later use
 stl_results <- list(
-  eke_mean = stl_result,
+  eke_synoptic_mean = stl_result,
   eke_p95 = stl_p95
 )
 
@@ -1487,7 +1487,7 @@ cat("\n--- Generating Plot 6: Spatial Climatology Maps (Polar) ---\n")
 # Use FULL domain (metrics_list) not Arctic subset (metrics_arctic)
 # Result: [lat, lon] matrices
 climatology_maps_full <- list()
-for (metric in c("eke_mean", "eke_p95", "exceed_p95_freq")) {
+for (metric in c("eke_synoptic_mean", "eke_p95", "exceed_p95_freq")) {
   if (metric %in% names(metrics_list)) {
     # Apply mean across time dimension (dim 1) - using FULL dataset
     climatology_maps_full[[metric]] <- apply(metrics_list[[metric]], c(2, 3), mean, na.rm = TRUE)
@@ -1528,7 +1528,7 @@ wrap_data <- function(mat) {
 # 3. Create Wrapped Data List
 # ----------------------------------------------------------------------------
 data_list_plot <- list(
-  eke_mean    = wrap_data(climatology_maps_full$eke_mean),
+  eke_synoptic_mean    = wrap_data(climatology_maps_full$eke_synoptic_mean),
   eke_p95     = wrap_data(climatology_maps_full$eke_p95),
   exceed_freq = wrap_data(climatology_maps_full$exceed_p95_freq)
 )
@@ -1617,7 +1617,7 @@ cat("  Cartographic elements created\n")
 # --- 0a. Shared colour limits for Mean EKE and P95 EKE ---
 shared_max <- max(
   max(clim_polar_masked[["eke_p95"]],  na.rm = TRUE),
-  max(clim_polar_masked[["eke_mean"]], na.rm = TRUE)
+  max(clim_polar_masked[["eke_synoptic_mean"]], na.rm = TRUE)
 )
 shared_max_round <- ceiling(shared_max / 10) * 10
 shared_breaks    <- seq(0, shared_max_round, length.out = 5)
@@ -1627,7 +1627,7 @@ cat(sprintf("  Legend breaks: %s\n", paste(shared_breaks, collapse = ", ")))
 
 # --- 0b. Compute P95/Mean ratio and rebuild stars object ---
 climatology_maps_full[["p95_mean_ratio"]] <-
-  climatology_maps_full$eke_p95 / climatology_maps_full$eke_mean
+  climatology_maps_full$eke_p95 / climatology_maps_full$eke_synoptic_mean
 
 # Add wrapped ratio to data list
 data_list_plot[["p95_mean_ratio"]] <- wrap_data(climatology_maps_full$p95_mean_ratio)
@@ -1653,7 +1653,7 @@ cat("\n--- Generating Figure 6a: Mean EKE + P95 EKE ---\n")
 
 # --- Panel (a): Mean EKE ---
 p6a_mean <- ggplot() +
-  geom_stars(data = clim_polar_masked, aes(fill = eke_mean), na.rm = TRUE) +
+  geom_stars(data = clim_polar_masked, aes(fill = eke_synoptic_mean), na.rm = TRUE) +
   scale_fill_viridis(
     name   = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
     option = "C",
@@ -1905,14 +1905,14 @@ cat("\n--- Generating Plot 9: Anomaly Time Series ---\n")
 storm_df_anom <- storm_df %>%
   group_by(month) %>%
   mutate(
-    eke_mean_anom = eke_mean - mean(eke_mean, na.rm = TRUE),
+    eke_synoptic_mean_anom = eke_synoptic_mean - mean(eke_synoptic_mean, na.rm = TRUE),
     eke_p95_anom = eke_p95 - mean(eke_p95, na.rm = TRUE),
     exceed_freq_anom = exceed_p95_freq - mean(exceed_p95_freq, na.rm = TRUE)
   ) %>%
   ungroup()
 
 # Plot anomalies
-p9a <- ggplot(storm_df_anom, aes(x = date, y = eke_mean_anom)) +
+p9a <- ggplot(storm_df_anom, aes(x = date, y = eke_synoptic_mean_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#0072B2", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
@@ -1977,13 +1977,13 @@ storm_df_decade <- storm_df %>%
 seasonal_by_decade <- storm_df_decade %>%
   group_by(decade, month) %>%
   summarise(
-    eke_mean_avg = mean(eke_mean, na.rm = TRUE),
-    eke_mean_se = sd(eke_mean, na.rm = TRUE) / sqrt(n()),
+    eke_synoptic_mean_avg = mean(eke_synoptic_mean, na.rm = TRUE),
+    eke_synoptic_mean_se = sd(eke_synoptic_mean, na.rm = TRUE) / sqrt(n()),
     .groups = "drop"
   )
 
 # We will use the built-in viridis scale inside the plot.
-p10 <- ggplot(seasonal_by_decade, aes(x = month, y = eke_mean_avg, 
+p10 <- ggplot(seasonal_by_decade, aes(x = month, y = eke_synoptic_mean_avg, 
                                       color = decade, group = decade)) +
   geom_line(linewidth = 1) +
   geom_point(size = 2) +
@@ -2066,9 +2066,9 @@ cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 cat("\nKey findings from diagnostic plots:\n")
 cat(sprintf("  - STL variance decomposition: Seasonal=%.1f%%, Trend=%.1f%%, Residual=%.1f%%\n",
             pct_seasonal, pct_trend, pct_remainder))
-cat(sprintf("  - Metric correlations: eke_mean vs eke_p95 = %.3f\n", 
+cat(sprintf("  - Metric correlations: eke_synoptic_mean vs eke_p95 = %.3f\n", 
             cor_matrix["Mean EKE", "P95 EKE"]))
-cat(sprintf("  - Metric correlations: eke_mean vs exceed_freq = %.3f\n",
+cat(sprintf("  - Metric correlations: eke_synoptic_mean vs exceed_freq = %.3f\n",
             cor_matrix["Mean EKE", "Exceed. Freq."]))
 
 cat("\n", rep("=", 70), "\n\n")
@@ -2235,7 +2235,7 @@ if (!exists("energy_annual")) {
       tke           = mean(tke),
       mke           = mean(mke),
       eke_budget    = mean(eke_budget),
-      eke_mean      = mean(eke_mean),
+      eke_synoptic_mean      = mean(eke_synoptic_mean),
       mke_eke_ratio = mean(mke_eke_ratio),
       eke_fraction  = mean(eke_fraction),
       .groups       = "drop"
@@ -2321,13 +2321,13 @@ energy_seasonal <- storm_df %>%
   summarise(
     tke_mean        = mean(tke),
     mke_mean        = mean(mke),
-    eke_mean_budget = mean(eke_budget),
+    eke_synoptic_mean_budget = mean(eke_budget),
     .groups         = "drop"
   )
 
 # Report winter/summer contrast
-winter_eke <- mean(energy_seasonal$eke_mean_budget[energy_seasonal$month %in% c(12, 1, 2)])
-summer_eke <- mean(energy_seasonal$eke_mean_budget[energy_seasonal$month %in% c(6, 7, 8)])
+winter_eke <- mean(energy_seasonal$eke_synoptic_mean_budget[energy_seasonal$month %in% c(12, 1, 2)])
+summer_eke <- mean(energy_seasonal$eke_synoptic_mean_budget[energy_seasonal$month %in% c(6, 7, 8)])
 winter_mke <- mean(energy_seasonal$mke_mean[energy_seasonal$month %in% c(12, 1, 2)])
 summer_mke <- mean(energy_seasonal$mke_mean[energy_seasonal$month %in% c(6, 7, 8)])
 
@@ -2338,11 +2338,11 @@ cat(sprintf("  MKE:        winter = %.1f, summer = %.1f m²/s² (ratio: %.2f)\n"
 
 # Long format for plotting
 seasonal_long <- energy_seasonal %>%
-  select(month, tke_mean, mke_mean, eke_mean_budget) %>%
+  select(month, tke_mean, mke_mean, eke_synoptic_mean_budget) %>%
   pivot_longer(-month, names_to = "component", values_to = "value") %>%
   mutate(
     component = factor(component,
-                       levels = c("tke_mean", "mke_mean", "eke_mean_budget"),
+                       levels = c("tke_mean", "mke_mean", "eke_synoptic_mean_budget"),
                        labels = c("TKE", "MKE", "EKE"))
   )
 
@@ -2388,12 +2388,12 @@ ggsave(file.path(fig_dir, "Fig2.2_Energy_Seasonal_Cycle.png"),
 cat("--- 2.3 EKE Definition Comparison ---\n\n")
 
 # Compute correlation
-eke_cor <- cor(storm_df$eke_budget, storm_df$eke_mean, use = "complete.obs")
+eke_cor <- cor(storm_df$eke_budget, storm_df$eke_synoptic_mean, use = "complete.obs")
 cat(sprintf("  Pearson r (monthly): %.3f\n", eke_cor))
 
 # Compute synoptic fraction
 storm_df <- storm_df %>%
-  mutate(f_synoptic = eke_mean / eke_budget)
+  mutate(f_synoptic = eke_synoptic_mean / eke_budget)
 
 cat(sprintf("  Mean synoptic fraction (f_synoptic): %.3f (%.1f%%)\n",
             mean(storm_df$f_synoptic, na.rm = TRUE),
@@ -2403,13 +2403,13 @@ cat(sprintf("  Range: %.3f – %.3f\n",
             max(storm_df$f_synoptic, na.rm = TRUE)))
 
 # Panel (a): Scatter
-p_scatter <- ggplot(storm_df, aes(x = eke_budget, y = eke_mean)) +
+p_scatter <- ggplot(storm_df, aes(x = eke_budget, y = eke_synoptic_mean)) +
   geom_point(alpha = 0.3, size = 1) +
   geom_smooth(method = "lm", color = "#E41A1C", linewidth = 1) +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray50") +
   annotate("text",
            x = min(storm_df$eke_budget, na.rm = TRUE) * 1.1,
-           y = max(storm_df$eke_mean, na.rm = TRUE) * 0.95,
+           y = max(storm_df$eke_synoptic_mean, na.rm = TRUE) * 0.95,
            label = sprintf("r = %.3f", eke_cor),
            hjust = 0, size = 4, fontface = "bold") +
   labs(
@@ -2422,11 +2422,11 @@ p_scatter <- ggplot(storm_df, aes(x = eke_budget, y = eke_mean)) +
 
 # Panel (b): Annual time series
 comparison_annual <- energy_annual %>%
-  select(year, eke_budget, eke_mean) %>%
+  select(year, eke_budget, eke_synoptic_mean) %>%
   pivot_longer(-year, names_to = "type", values_to = "value") %>%
   mutate(
     type = factor(type,
-                  levels = c("eke_budget", "eke_mean"),
+                  levels = c("eke_budget", "eke_synoptic_mean"),
                   labels = c("EKE (budget, all sub-monthly)",
                              "EKE (synoptic, 1.2–6 day)"))
   )
