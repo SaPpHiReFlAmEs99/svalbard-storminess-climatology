@@ -52,7 +52,5 @@ rsconnect/
 processed_correct/
 
 # Ignore these files
-GEMINI.md
-.claude
 data
 data_raw

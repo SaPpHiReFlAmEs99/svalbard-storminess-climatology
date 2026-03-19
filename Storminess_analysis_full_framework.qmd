@@ -16,12 +16,9 @@ toc: true
 # ============================================================================
 #
 # PURPOSE:
-#   Single source-of-truth configuration block for all analytical phases.
+#   Single configuration block for all analytical phases.
 #   Every path, variable name, colour, and statistical parameter used
 #   downstream is defined here exactly once.
-#
-# USAGE:
-#   Run this chunk first in every session, before any phase-specific chunks.
 #
 # ============================================================================
 
@@ -161,6 +158,11 @@ VAR_LABELS_PLAIN <- c(
   "mke"               = "MKE",
   "eke_budget"        = "EKE_budget"
 )
+
+# Short plotmath labels (no units) — for embedding variable names in compound
+# plot titles, e.g. paste0('"STL Decomposition: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]])
+# Strip everything from the first "~(" onward (removes the "(m^2/s^2)" suffix).
+VAR_LABELS_SHORT <- sub("~\\(.*\\)$", "", VAR_LABELS)
 
 
 # ── 5. ANALYSIS PARAMETERS ────────────────────────────────────────────────────
@@ -391,7 +393,7 @@ Following the methodological framework established by Yau and Chang (2020) and t
 
 This multi-metric approach allows detection of changes in the storm intensity distribution that would be obscured by analyzing mean values alone.
 
-```{r}
+```{r phase1}
 # ============================================================================
 # BOUNDARY NOTE: December 1957 and the Annual Aggregation Rule
 # ============================================================================
@@ -485,7 +487,7 @@ cat(sprintf("\nTime units (raw): %s\n", time_units))
 
 N_MONTHS_EXPECTED <- nc$dim$time$len   # Read directly from file (=817)
 
-dates <- seq.Date(
+time_dates <- seq.Date(
   from       = as.Date("1957-12-01"),
   by         = "month",
   length.out = N_MONTHS_EXPECTED
@@ -493,14 +495,14 @@ dates <- seq.Date(
 
 # Sanity check
 cat(sprintf("\nTime coordinate reconstructed analytically (%d months):\n",
-            length(dates)))
-cat(sprintf("  First: %s\n", format(dates[1])))
-cat(sprintf("  Last:  %s\n", format(dates[length(dates)])))
+            length(time_dates)))
+cat(sprintf("  First: %s\n", format(time_dates[1])))
+cat(sprintf("  Last:  %s\n", format(time_dates[length(time_dates)])))
 
-if (format(dates[length(dates)]) != "2025-12-01") {
+if (format(time_dates[length(time_dates)]) != "2025-12-01") {
   stop(sprintf(
     "ERROR: Final date is %s, expected 2025-12-01.\n%s",
-    format(dates[length(dates)]),
+    format(time_dates[length(time_dates)]),
     "Check N_MONTHS_EXPECTED and the analysis start date."
   ))
 }
@@ -591,30 +593,14 @@ if (dim_sizes[1] == n_lon_expected && dim_sizes[3] == n_time_expected) {
 }
 
 # Verify final dimensions
-cat(sprintf("\nFinal array dimensions: [%s]\n", 
+cat(sprintf("\nFinal array dimensions: [%s]\n",
            paste(dim(metrics_list[[1]]), collapse = " x ")))
 
-# --- Decode time coordinate ---
-cat("\nDecoding time coordinate...\n")
-
-# Parse time units string (e.g., "days since 1958-01-01")
-origin_str <- sub(".*since ", "", time_units)
-origin_date <- as.Date(origin_str)
-
-if (grepl("hours since", time_units)) {
- time_dates <- origin_date + hours(time_raw)
-} else if (grepl("days since", time_units)) {
- time_dates <- origin_date + days(time_raw)
-} else {
- # Assume days
- time_dates <- origin_date + days(time_raw)
-}
-
-time_dates <- as.Date(time_dates)
-
-cat(sprintf("  First date: %s\n", format(time_dates[1], "%Y-%m-%d")))
-cat(sprintf("  Last date:  %s\n", format(time_dates[length(time_dates)], "%Y-%m-%d")))
-cat(sprintf("  Total months: %d\n", length(time_dates)))
+# time_dates was reconstructed analytically in §1.1 (seq.Date from 1957-12-01).
+# Parsing the raw time_units string is unreliable for this file — see §1.1 note.
+cat(sprintf("  time_dates: %s → %s (%d months)\n",
+            format(time_dates[1]), format(time_dates[length(time_dates)]),
+            length(time_dates)))
 ```
 
 ```{r}
@@ -821,12 +807,14 @@ storm_df_anom <- storm_df %>%
   )
 
 # Create ts objects for anomalies
+# Use time_dates[1] so start matches ts_objects (Dec 1957, not Jan 1958)
+ts_start_anom <- c(year(time_dates[1]), month(time_dates[1]))
 ts_objects_anom <- list(
-  eke_synoptic_mean = ts(storm_df_anom$eke_synoptic_mean_anom, start = c(1958, 1), frequency = 12),
-  eke_p90 = ts(storm_df_anom$eke_p90_anom, start = c(1958, 1), frequency = 12),
-  eke_p95 = ts(storm_df_anom$eke_p95_anom, start = c(1958, 1), frequency = 12),
-  eke_p99 = ts(storm_df_anom$eke_p99_anom, start = c(1958, 1), frequency = 12),
-  exceed_p95_freq = ts(storm_df_anom$exceed_p95_freq_anom, start = c(1958, 1), frequency = 12)
+  eke_synoptic_mean = ts(storm_df_anom$eke_synoptic_mean_anom, start = ts_start_anom, frequency = 12),
+  eke_p90           = ts(storm_df_anom$eke_p90_anom,           start = ts_start_anom, frequency = 12),
+  eke_p95           = ts(storm_df_anom$eke_p95_anom,           start = ts_start_anom, frequency = 12),
+  eke_p99           = ts(storm_df_anom$eke_p99_anom,           start = ts_start_anom, frequency = 12),
+  exceed_p95_freq   = ts(storm_df_anom$exceed_p95_freq_anom,   start = ts_start_anom, frequency = 12)
 )
 
 # ----------------------------------------------------------------------------
@@ -1049,10 +1037,7 @@ cat(rep("=", 70), "\n\n")
 
 cat("--- 1.5.1 Loading Energy Budget Components ---\n\n")
 
-TKE_FILE        <- file.path(DATA_DIRECTORY, "ERA5_TKE_monthly.nc")
-MKE_FILE        <- file.path(DATA_DIRECTORY, "ERA5_MKE_monthly.nc")
-EKE_BUDGET_FILE <- file.path(DATA_DIRECTORY, "ERA5_EKE_budget_monthly.nc")
-
+# TKE_FILE, MKE_FILE, EKE_BUDGET_FILE are already defined in the setup-environment chunk.
 # Check all three files exist before proceeding
 energy_files <- list(TKE = TKE_FILE, MKE = MKE_FILE, EKE_budget = EKE_BUDGET_FILE)
 for (name in names(energy_files)) {
@@ -1208,8 +1193,8 @@ cat(sprintf("energy_annual: %d years\n", nrow(energy_annual)))
 cat("\n--- 1.5.4 Diagnostic Pipeline: Energy Components ---\n\n")
 cat("Assessing temporal autocorrelation on DESEASONALIZED energy data...\n\n")
 
-# Energy metrics to diagnose
-ENERGY_METRICS <- c("tke", "mke", "eke_budget")
+# Energy metrics to diagnose (ENERGY_VARS is defined in the setup-environment chunk)
+ENERGY_METRICS <- ENERGY_VARS
 
 # Step 1: Create deseasonalised anomalies
 storm_df <- storm_df %>%
@@ -1220,17 +1205,19 @@ storm_df <- storm_df %>%
   )
 
 # Create ts objects for anomalies (needed for acf/pacf)
+# Use time_dates[1] so start matches the storminess ts objects (Dec 1957)
+ts_start_energy <- c(year(time_dates[1]), month(time_dates[1]))
 ts_objects_energy_anom <- list(
-  tke        = ts(storm_df$tke_anom,        start = c(1958, 1), frequency = 12),
-  mke        = ts(storm_df$mke_anom,        start = c(1958, 1), frequency = 12),
-  eke_budget = ts(storm_df$eke_budget_anom, start = c(1958, 1), frequency = 12)
+  tke        = ts(storm_df$tke_anom,        start = ts_start_energy, frequency = 12),
+  mke        = ts(storm_df$mke_anom,        start = ts_start_energy, frequency = 12),
+  eke_budget = ts(storm_df$eke_budget_anom, start = ts_start_energy, frequency = 12)
 )
 
 # Also create raw ts objects (for inflation factor comparison)
 ts_objects_energy_raw <- list(
-  tke        = ts(storm_df$tke,        start = c(1958, 1), frequency = 12),
-  mke        = ts(storm_df$mke,        start = c(1958, 1), frequency = 12),
-  eke_budget = ts(storm_df$eke_budget, start = c(1958, 1), frequency = 12)
+  tke        = ts(storm_df$tke,        start = ts_start_energy, frequency = 12),
+  mke        = ts(storm_df$mke,        start = ts_start_energy, frequency = 12),
+  eke_budget = ts(storm_df$eke_budget, start = ts_start_energy, frequency = 12)
 )
 
 # Step 2: ACF/PACF + n_eff (identical procedure to §1.4)
@@ -1291,51 +1278,49 @@ print(knitr::kable(acf_comparison_energy, digits = 3, format = "simple"))
 cat("\n", rep("-", 40), "\n")
 cat("Saving prepared data objects...\n")
 
-output_dir <- file.path(DATA_DIRECTORY, "analysis_ready")
-if (!dir.exists(output_dir)) {
-  dir.create(output_dir, recursive = TRUE)
-}
+# OUTPUT_DATA_DIR and PHASE1_DATA are defined in the setup-environment chunk.
+# The output directory is also created there, so no dir.create() needed here.
 
 save(
   # Coordinate data
   lat, lon, lat_arctic, time_dates,
-  
+
   # Area-weighted time series (storminess metrics)
   ts_weighted, ts_objects,
-  
+
   # Master data frame (includes storminess metrics + energy columns:
   # tke, mke, eke_budget, eke_fraction, mke_eke_ratio, and _anom columns)
   storm_df,
-  
+
   # Annual means (energy + synoptic EKE)
   energy_annual,
-  
+
   # ACF diagnostics — storminess metrics
   acf_results,
   acf_comparison,
-  
+
   # ACF diagnostics — energy components
   acf_results_energy,
   acf_comparison_energy,
-  
+
   # Summary statistics
   summary_stats,
-  
+
   # Energy budget closure error (%)
   relative_error,
-  
+
   # Climatological threshold (2D, small)
   eke_p95_clim,
-  
+
   # Configuration
   ARCTIC_LAT_THRESHOLD, REFERENCE_PERIOD,
-  
-  file = file.path(output_dir, "Phase1_Prepared_Data.RData")
-)
-cat(sprintf("Saved to: %s\n", file.path(output_dir, "Phase1_Prepared_Data.RData")))
 
-write_csv(storm_df, file.path(output_dir, "storm_metrics_panarctic_monthly.csv"))
-cat(sprintf("Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_monthly.csv")))
+  file = PHASE1_DATA
+)
+cat(sprintf("Saved to: %s\n", PHASE1_DATA))
+
+write_csv(storm_df, file.path(OUTPUT_DATA_DIR, "storm_metrics_panarctic_monthly.csv"))
+cat(sprintf("Saved CSV: %s\n", file.path(OUTPUT_DATA_DIR, "storm_metrics_panarctic_monthly.csv")))
 ```
 
 ```{r}
@@ -1365,36 +1350,24 @@ cat(sprintf("Saved CSV: %s\n", file.path(output_dir, "storm_metrics_panarctic_mo
 # ============================================================================
 
 # Load Phase 1 data
-DATA_DIRECTORY <- here::here("Data", "processed", "analysis_ready", "Phase1_Prepared_Data.RData")
-if (!file.exists(DATA_DIRECTORY)) {
+# PHASE1_DATA is defined in the setup-environment chunk — do NOT reassign DATA_DIRECTORY here.
+if (!file.exists(PHASE1_DATA)) {
   stop("Phase 1 data not found. Run Phase 1 script first.")
 }
-load(DATA_DIRECTORY)
+load(PHASE1_DATA)
 
 cat("Loaded Phase 1 prepared data\n")
 
-# Create output directory
-fig_dir <- here::here("Figures", "Phase1_Diagnostics")
-if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+# Figure output directory (FIG_PHASE1 defined and created by the setup-environment chunk)
+fig_dir <- FIG_PHASE1
 
-# Define color schemes
-metric_colors <- c(
-  "eke_synoptic_mean" = "#0072B2",
-  "eke_p90" = "#56B4E9", 
-  "eke_p95" = "#009E73",
-  "eke_p99" = "#9467BD",
-  "exceed_p95_freq" = "#D55E00"
-)
+# Colour aliases — plotting code uses lowercase names; values come from the setup chunk
+# so palettes stay consistent across all phases.
+metric_colors <- METRIC_COLORS
+season_colors <- SEASON_COLORS
 
-season_colors <- c(
-  "DJF" = "#4575B4",  # Winter - blue
-  "MAM" = "#91CF60",  # Spring - green
-  "JJA" = "#FC8D59",  # Summer - orange
-  "SON" = "#D73027"   # Autumn - red
-)
-
-# Metrics to plot
-METRICS <- c("eke_synoptic_mean", "eke_p90", "eke_p95", "eke_p99", "exceed_p95_freq")
+# Metrics to plot (METRIC_NAMES defined in the setup-environment chunk)
+METRICS <- METRIC_NAMES
 
 # ============================================================================
 # PLOT 1: TIME SERIES OVERVIEW (ALL METRICS)
@@ -1406,21 +1379,13 @@ cat("\n--- Generating Plot 1: Time Series Overview ---\n")
 ts_long <- storm_df %>%
   select(date, all_of(METRICS)) %>%
   pivot_longer(-date, names_to = "metric", values_to = "value") %>%
-  mutate(
-    metric = factor(metric, levels = METRICS),
-    metric_label = case_when(
-      metric == "eke_synoptic_mean" ~ "Mean EKE [m²/s²]",
-      metric == "eke_p90" ~ "P90 EKE [m²/s²]",
-      metric == "eke_p95" ~ "P95 EKE [m²/s²]",
-      metric == "eke_p99" ~ "P99 EKE [m²/s²]",
-      metric == "exceed_p95_freq" ~ "P95 Exceedance Frequency"
-    )
-  )
+  mutate(metric = factor(metric, levels = METRICS))
 
 p1 <- ggplot(ts_long, aes(x = date, y = value, color = metric)) +
   geom_line(alpha = 0.6, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, se = FALSE, linewidth = 0.8) +
-  facet_wrap(~ metric_label, scales = "free_y", ncol = 1) +
+  facet_wrap(~ metric, scales = "free_y", ncol = 1,
+             labeller = as_labeller(VAR_LABELS, default = label_parsed)) +
   scale_color_manual(values = metric_colors, guide = "none") +
   scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
   labs(
@@ -1461,24 +1426,28 @@ for (metric in METRICS) {
     rho1_anom <- acf(ts_anom, lag.max = 1, plot = FALSE)$acf[2]
     pacf1_anom <- pacf(ts_anom, lag.max = 36, plot = FALSE)$acf[1]
     
+    # Build plotmath titles from the setup-chunk VAR_LABELS_SHORT lookup
+    acf_title  <- parse(text = paste0('"ACF: "~',  VAR_LABELS_SHORT[[metric]], '~"(anomalies)"'))[[1]]
+    pacf_title <- parse(text = paste0('"PACF: "~', VAR_LABELS_SHORT[[metric]], '~"(anomalies)"'))[[1]]
+
     # ACF plot
     acf(ts_anom, lag.max = 36,
-        main = paste0("ACF: ", metric, " (anomalies)"),
+        main = acf_title,
         xlab = "Lag (months)",
         ylab = "Autocorrelation",
         col = metric_colors[metric],
         lwd = 2)
-    mtext(bquote(rho[1] == .(sprintf("%.3f", rho1_anom))), 
+    mtext(bquote(rho[1] == .(sprintf("%.3f", rho1_anom))),
           side = 3, line = -1.5, adj = 0.95, cex = 0.8)
-    
+
     # PACF plot
     pacf(ts_anom, lag.max = 36,
-         main = paste0("PACF: ", metric, " (anomalies)"),
+         main = pacf_title,
          xlab = "Lag (months)",
          ylab = "Partial Autocorrelation",
          col = metric_colors[metric],
          lwd = 2)
-    mtext(bquote(phi[1] == .(sprintf("%.3f", pacf1_anom))), 
+    mtext(bquote(phi[1] == .(sprintf("%.3f", pacf1_anom))),
           side = 3, line = -1.5, adj = 0.95, cex = 0.8)
   }
 }
@@ -1502,21 +1471,24 @@ storm_df_season <- storm_df %>%
 p3a <- ggplot(storm_df_season, aes(x = season, y = eke_synoptic_mean, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = "Mean EKE", y = expression("m"^2*"/s"^2), x = NULL) +
+  labs(title = parse(text = VAR_LABELS[["eke_synoptic_mean"]])[[1]],
+       y = expression("m"^2*"/s"^2), x = NULL) +
   theme_bw(base_size = 12) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p3b <- ggplot(storm_df_season, aes(x = season, y = eke_p95, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = "P95 EKE", y = expression("m"^2*"/s"^2), x = NULL) +
+  labs(title = parse(text = VAR_LABELS[["eke_p95"]])[[1]],
+       y = expression("m"^2*"/s"^2), x = NULL) +
   theme_bw(base_size = 12) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p3c <- ggplot(storm_df_season, aes(x = season, y = eke_p99, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = "P99 EKE", y = expression("m"^2*"/s"^2), x = NULL) +
+  labs(title = parse(text = VAR_LABELS[["eke_p99"]])[[1]],
+       y = expression("m"^2*"/s"^2), x = NULL) +
   theme_bw(base_size = 12) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
@@ -1524,7 +1496,8 @@ p3d <- ggplot(storm_df_season, aes(x = season, y = exceed_p95_freq, fill = seaso
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", linewidth = 0.8) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = "P95 Exceedance Freq.", y = "Fraction", x = NULL) +
+  labs(title = parse(text = VAR_LABELS[["exceed_p95_freq"]])[[1]],
+       y = "Fraction", x = NULL) +
   theme_bw(base_size = 12) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
@@ -1569,7 +1542,7 @@ p4a <- ggplot(monthly_clim, aes(x = month)) +
   geom_line(aes(y = eke_synoptic_mean_avg), color = "#0072B2", linewidth = 1.2) +
   geom_point(aes(y = eke_synoptic_mean_avg), color = "#0072B2", size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = "Mean EKE", 
+  labs(title = parse(text = VAR_LABELS[["eke_synoptic_mean"]])[[1]],
        y = expression("m"^2*"/s"^2),
        x = NULL) +
   theme_bw(base_size = 12) +
@@ -1583,7 +1556,7 @@ p4b <- ggplot(monthly_clim, aes(x = month)) +
   geom_line(aes(y = eke_p95_avg), color = "#009E73", linewidth = 1.2) +
   geom_point(aes(y = eke_p95_avg), color = "#009E73", size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = "P95 EKE",
+  labs(title = parse(text = VAR_LABELS[["eke_p95"]])[[1]],
        y = expression("m"^2*"/s"^2),
        x = NULL) +
   theme_bw(base_size = 12) +
@@ -1591,14 +1564,14 @@ p4b <- ggplot(monthly_clim, aes(x = month)) +
 
 # Plot for Exceedance Frequency
 p4c <- ggplot(monthly_clim, aes(x = month)) +
-  geom_ribbon(aes(ymin = exceed_freq_avg - exceed_freq_sd, 
+  geom_ribbon(aes(ymin = exceed_freq_avg - exceed_freq_sd,
                   ymax = exceed_freq_avg + exceed_freq_sd),
               fill = "#D55E00", alpha = 0.3) +
   geom_line(aes(y = exceed_freq_avg), color = "#D55E00", linewidth = 1.2) +
   geom_point(aes(y = exceed_freq_avg), color = "#D55E00", size = 3) +
   geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = "P95 Exceedance Frequency",
+  labs(title = parse(text = VAR_LABELS[["exceed_p95_freq"]])[[1]],
        y = "Fraction",
        x = NULL) +
   theme_bw(base_size = 12) +
@@ -1670,7 +1643,7 @@ p5 <- ggplot(stl_long, aes(x = date, y = value)) +
   facet_wrap(~ component_label, ncol = 1, scales = "free_y") +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
   labs(
-    title = "STL Decomposition: Mean EKE (Primary Metric)",
+    title = parse(text = paste0('"STL Decomposition: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"(Primary Metric)"'))[[1]],
     subtitle = "Pan-Arctic (≥60°N) | Seasonal-Trend decomposition using LOESS",
     x = NULL,
     y = expression("m"^2*"/s"^2)
@@ -1900,7 +1873,7 @@ p6a_mean <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = "(a) Mean EKE") +
+  labs(title = parse(text = paste0('"(a) "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]]))[[1]]) +
   theme_void(base_size = 12) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
@@ -1931,7 +1904,7 @@ p6a_p95 <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = "(b) P95 EKE") +
+  labs(title = parse(text = paste0('"(b) "~', VAR_LABELS_SHORT[["eke_p95"]]))[[1]]) +
   theme_void(base_size = 12) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
@@ -1985,7 +1958,7 @@ p6b_ratio <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = "(a) P95 / Mean EKE Ratio") +
+  labs(title = parse(text = paste0('"(a) P95 / Mean "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"Ratio"'))[[1]]) +
   theme_void(base_size = 12) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
@@ -2013,7 +1986,7 @@ p6b_exceed <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = "(b) P95 Exceedance Frequency") +
+  labs(title = parse(text = paste0('"(b) "~', VAR_LABELS_SHORT[["exceed_p95_freq"]]))[[1]]) +
   theme_void(base_size = 12) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
@@ -2069,7 +2042,8 @@ dist_data <- storm_df %>%
 p7 <- ggplot(dist_data, aes(x = value, fill = metric)) +
   geom_histogram(aes(y = after_stat(density)), bins = 50, alpha = 0.7, color = "white") +
   geom_density(color = "black", linewidth = 0.8) +
-  facet_wrap(~ metric, scales = "free", ncol = 3) +
+  facet_wrap(~ metric, scales = "free", ncol = 3,
+             labeller = as_labeller(VAR_LABELS, default = label_parsed)) +
   scale_fill_manual(values = metric_colors, guide = "none") +
   labs(
     title = "Distribution of Monthly Storminess Metrics",
@@ -2092,33 +2066,57 @@ ggsave(file.path(fig_dir, "Fig07_Distributions.png"),
 
 cat("\n--- Generating Plot 8: Correlation Matrix ---\n")
 
-# Calculate correlation matrix
+# Calculate correlation matrix — keep METRICS as row/col names so downstream
+# indexing (cat/sprintf below) uses clean variable keys, not display strings.
 cor_data <- storm_df %>%
   select(all_of(METRICS))
 
 cor_matrix <- cor(cor_data, use = "pairwise.complete.obs")
+rownames(cor_matrix) <- METRICS
+colnames(cor_matrix) <- METRICS
 
-# Rename for display
-rownames(cor_matrix) <- c("Mean EKE", "P90 EKE", "P95 EKE", "P99 EKE", "Exceed. Freq.")
-colnames(cor_matrix) <- rownames(cor_matrix)
+# Build plotmath axis labels from VAR_LABELS_SHORT (setup chunk).
+# parse() returns an expression object; scale_x/y_discrete(labels=) accepts
+# a named vector of expressions to render each level as plotmath.
+cor_axis_labels <- setNames(
+  parse(text = VAR_LABELS_SHORT[METRICS]),
+  METRICS
+)
 
-# Create correlation plot
-png(file.path(fig_dir, "Fig08_Correlation_Matrix.png"),
-    width = 8, height = 7, units = "in", res = 300)
+# Melt to long format and keep upper triangle (including diagonal)
+cor_long <- as.data.frame(as.table(cor_matrix), stringsAsFactors = FALSE) %>%
+  rename(row_var = Var1, col_var = Var2, correlation = Freq) %>%
+  mutate(
+    row_var = factor(row_var, levels = METRICS),
+    col_var = factor(col_var, levels = METRICS)
+  ) %>%
+  filter(as.integer(row_var) <= as.integer(col_var))
 
-corrplot(cor_matrix, 
-         method = "color",
-         type = "upper",
-         order = "original",
-         addCoef.col = "black",
-         number.cex = 0.9,
-         tl.col = "black",
-         tl.srt = 45,
-         col = colorRampPalette(c("#B2182B", "white", "#2166AC"))(200),
-         title = "Correlation Between Storminess Metrics\n(Pan-Arctic, 1958–2025)",
-         mar = c(0, 0, 2, 0))
+p8 <- ggplot(cor_long, aes(x = col_var, y = fct_rev(row_var), fill = correlation)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = sprintf("%.2f", correlation)), size = 3.5, color = "black") +
+  scale_fill_gradient2(
+    low = "#B2182B", mid = "white", high = "#2166AC",
+    midpoint = 0, limits = c(-1, 1), name = "r"
+  ) +
+  scale_x_discrete(labels = cor_axis_labels) +
+  scale_y_discrete(labels = cor_axis_labels) +
+  labs(
+    title    = "Correlation Between Storminess Metrics",
+    subtitle = "Pan-Arctic (≥60°N) | 1958–2025",
+    x = NULL, y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x   = element_text(angle = 45, hjust = 1),
+    axis.text.y   = element_text(hjust = 1),
+    plot.title    = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    panel.grid    = element_blank()
+  )
 
-dev.off()
+ggsave(file.path(fig_dir, "Fig08_Correlation_Matrix.png"),
+       p8, width = 8, height = 7, dpi = 300)
 
 # Print correlation summary
 cat("\n  Correlation matrix:\n")
@@ -2145,7 +2143,8 @@ p9a <- ggplot(storm_df_anom, aes(x = date, y = eke_synoptic_mean_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#0072B2", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
-  labs(title = "Mean EKE Anomaly", y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
+  labs(title = parse(text = paste0(VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"Anomaly"'))[[1]],
+       y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
   theme_bw(base_size = 11) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
@@ -2154,7 +2153,8 @@ p9b <- ggplot(storm_df_anom, aes(x = date, y = eke_p95_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#009E73", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
-  labs(title = "P95 EKE Anomaly", y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
+  labs(title = parse(text = paste0(VAR_LABELS_SHORT[["eke_p95"]], '~"Anomaly"'))[[1]],
+       y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
   theme_bw(base_size = 11) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
@@ -2163,7 +2163,8 @@ p9c <- ggplot(storm_df_anom, aes(x = date, y = exceed_freq_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#D55E00", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "black", se = FALSE, linewidth = 0.8) +
-  labs(title = "Exceedance Frequency Anomaly", y = "Anomaly [fraction]", x = NULL) +
+  labs(title = parse(text = paste0(VAR_LABELS_SHORT[["exceed_p95_freq"]], '~"Anomaly"'))[[1]],
+       y = "Anomaly [fraction]", x = NULL) +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
   theme_bw(base_size = 11) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
@@ -2191,15 +2192,18 @@ cat("\n--- Generating Plot 10: Seasonal Cycle Stability ---\n")
 storm_df_decade <- storm_df %>%
   mutate(
     decade = case_when(
-      year >= 1958 & year < 1970 ~ "1958-1969",
+      year >= 1957 & year < 1970 ~ "1958-1969",  # includes Dec 1957 (DJF 1958 warm-up)
       year >= 1970 & year < 1980 ~ "1970-1979",
       year >= 1980 & year < 1990 ~ "1980-1989",
       year >= 1990 & year < 2000 ~ "1990-1999",
       year >= 2000 & year < 2010 ~ "2000-2009",
       year >= 2010 & year < 2020 ~ "2010-2019",
-      year >= 2020 ~ "2020-2024"
+      year >= 2020              ~ "2020-2024"
     ),
-    decade = factor(decade)
+    decade = factor(decade, levels = c(
+      "1958-1969", "1970-1979", "1980-1989", "1990-1999",
+      "2000-2009", "2010-2019", "2020-2024"
+    ))
   )
 
 # Calculate seasonal cycle by decade
@@ -2222,10 +2226,10 @@ p10 <- ggplot(seasonal_by_decade, aes(x = month, y = eke_synoptic_mean_avg,
   scale_color_viridis_d(option = "plasma", name = "Decade", end = 0.9) +
   
   labs(
-    title = "Evolution of the Seasonal Cycle: Mean EKE",
+    title = parse(text = paste0('"Evolution of the Seasonal Cycle: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]]))[[1]],
     subtitle = "Pan-Arctic (≥60°N) | Has the seasonal pattern changed over time?",
     x = NULL,
-    y = expression("Mean EKE [m"^2*"/s"^2*"]")
+    y = parse(text = VAR_LABELS[["eke_synoptic_mean"]])[[1]]
   ) +
   theme_bw(base_size = 12) +
   theme(
@@ -2255,7 +2259,7 @@ p10b <- ggplot(seasonal_exceed_decade, aes(x = month, y = exceed_avg,
   scale_color_viridis_d(option = "plasma", name = "Decade", end = 0.9) +
   
   labs(
-    title = "Evolution of the Seasonal Cycle: P95 Exceedance Frequency",
+    title = parse(text = paste0('"Evolution of the Seasonal Cycle: "~', VAR_LABELS_SHORT[["exceed_p95_freq"]]))[[1]],
     subtitle = "Pan-Arctic (≥60°N) | Dashed line = climatological 5%",
     x = NULL,
     y = "Exceedance Frequency"
@@ -2295,10 +2299,10 @@ cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 cat("\nKey findings from diagnostic plots:\n")
 cat(sprintf("  - STL variance decomposition: Seasonal=%.1f%%, Trend=%.1f%%, Residual=%.1f%%\n",
             pct_seasonal, pct_trend, pct_remainder))
-cat(sprintf("  - Metric correlations: eke_synoptic_mean vs eke_p95 = %.3f\n", 
-            cor_matrix["Mean EKE", "P95 EKE"]))
+cat(sprintf("  - Metric correlations: eke_synoptic_mean vs eke_p95 = %.3f\n",
+            cor_matrix["eke_synoptic_mean", "eke_p95"]))
 cat(sprintf("  - Metric correlations: eke_synoptic_mean vs exceed_freq = %.3f\n",
-            cor_matrix["Mean EKE", "Exceed. Freq."]))
+            cor_matrix["eke_synoptic_mean", "exceed_p95_freq"]))
 
 cat("\n", rep("=", 70), "\n\n")
 ```
@@ -2311,16 +2315,12 @@ cat("\n", rep("=", 70), "\n\n")
 # ACF on left, PACF on right, computed on deseasonalised anomalies.
 # --------------------------------------------------------------------------
 
-fig_dir <- here::here("Figures", "Phase1_Diagnostics")
-
+# FIG_PHASE1 and ENERGY_COLORS are defined in the setup-environment chunk
+fig_dir <- FIG_PHASE1
 
 cat("\n--- Generating ACF/PACF Plot for Energy Components ---\n")
 
-energy_metric_colors <- c(
-  "tke"        = "#1B9E77",
-  "mke"        = "#D95F02",
-  "eke_budget" = "#7570B3"
-)
+energy_metric_colors <- ENERGY_COLORS
 
 png(file.path(fig_dir, "Fig11_ACF_PACF_Energy_Anomalies.png"),
     width = 12, height = 8, units = "in", res = 300)
@@ -2333,17 +2333,21 @@ for (metric in ENERGY_METRICS) {
   rho1_anom  <- acf(ts_anom, lag.max = 1, plot = FALSE)$acf[2]
   pacf1_anom <- pacf(ts_anom, lag.max = 36, plot = FALSE)$acf[1]
   
+  # Build plotmath titles from the setup-chunk VAR_LABELS_SHORT lookup
+  acf_title  <- parse(text = paste0('"ACF: "~',  VAR_LABELS_SHORT[[metric]], '~"(anomalies)"'))[[1]]
+  pacf_title <- parse(text = paste0('"PACF: "~', VAR_LABELS_SHORT[[metric]], '~"(anomalies)"'))[[1]]
+
   # ACF plot
   acf(ts_anom, lag.max = 36,
-      main = paste0("ACF: ", toupper(metric), " (anomalies)"),
+      main = acf_title,
       xlab = "Lag (months)", ylab = "Autocorrelation",
       col = energy_metric_colors[metric], lwd = 2)
   mtext(bquote(rho[1] == .(sprintf("%.3f", rho1_anom))),
         side = 3, line = -1.5, adj = 0.95, cex = 0.8)
-  
+
   # PACF plot
   pacf(ts_anom, lag.max = 36,
-       main = paste0("PACF: ", toupper(metric), " (anomalies)"),
+       main = pacf_title,
        xlab = "Lag (months)", ylab = "Partial Autocorrelation",
        col = energy_metric_colors[metric], lwd = 2)
   mtext(bquote(phi[1] == .(sprintf("%.3f", pacf1_anom))),
@@ -2426,13 +2430,11 @@ cat("PHASE 2: ENERGY BUDGET CHARACTERISATION\n")
 cat(rep("=", 70), "\n\n")
 
 # Load Phase 1 data
-DATA_DIRECTORY <- here::here("Data", "processed", "analysis_ready",
-                         "Phase1_Prepared_Data.RData")
-
-if (!file.exists(DATA_DIRECTORY)) {
+# PHASE1_DATA is defined in the setup-environment chunk — do NOT reassign DATA_DIRECTORY here.
+if (!file.exists(PHASE1_DATA)) {
   stop("Phase 1 data not found. Run Phase 1 script first.")
 }
-load(DATA_DIRECTORY)
+load(PHASE1_DATA)
 cat("✓ Loaded Phase 1 prepared data\n")
 
 # Verify energy columns are present (added in Phase 1 §1.5)
@@ -2444,15 +2446,16 @@ if (length(missing_cols) > 0) {
 }
 cat("Energy budget columns verified\n\n")
 
-# Create output directory
-fig_dir <- here::here("Figures", "Phase2_Energy_Budget")
-if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+# Figure output directory (FIG_PHASE2 defined and created by the setup-environment chunk)
+fig_dir <- FIG_PHASE2
 
-# Colour scheme (consistent with Phase 1 energy plots)
+# Colour scheme for Phase 2 plots.
+# ENERGY_COLORS (from setup chunk) uses variable-name keys ("tke", "mke", "eke_budget").
+# The Phase 2 factor labels are "TKE", "MKE", "EKE", so we create a display alias here.
 energy_colors <- c(
-  "TKE" = "#1B9E77",
-  "MKE" = "#D95F02",
-  "EKE" = "#7570B3"
+  "TKE"        = ENERGY_COLORS[["tke"]],
+  "MKE"        = ENERGY_COLORS[["mke"]],
+  "EKE_budget" = ENERGY_COLORS[["eke_budget"]]
 )
 
 # Reconstruct annual means if not loaded
@@ -2502,17 +2505,22 @@ energy_stack <- energy_annual %>%
   select(year, mke, eke_budget) %>%
   pivot_longer(-year, names_to = "component", values_to = "value") %>%
   mutate(
-    component = factor(component,
-                       levels = c("eke_budget", "mke"),
-                       labels = c("EKE (Transient Eddies)", "MKE (Mean Flow)"))
+    # Keep internal keys as factor levels so ENERGY_COLORS maps directly
+    component = factor(component, levels = c("eke_budget", "mke"))
   )
+
+# Plotmath legend labels: variable name with subscript + descriptive context
+energy_stack_labels <- c(
+  "eke_budget" = "EKE[budget]~(Transient~Eddies)",
+  "mke"        = "MKE~(Mean~Flow)"
+)
 
 p2_1 <- ggplot(energy_stack, aes(x = year, y = value, fill = component)) +
   geom_area(alpha = 0.8) +
   scale_fill_manual(
-    values = c("EKE (Transient Eddies)" = "#7570B3",
-               "MKE (Mean Flow)"        = "#D95F02"),
-    name = NULL
+    values = ENERGY_COLORS[c("eke_budget", "mke")],
+    labels = function(x) parse(text = energy_stack_labels[x]),
+    name   = NULL
   ) +
   labs(
     title    = "Partitioning of Total Kinetic Energy",
@@ -2550,13 +2558,13 @@ energy_seasonal <- storm_df %>%
   summarise(
     tke_mean        = mean(tke),
     mke_mean        = mean(mke),
-    eke_synoptic_mean_budget = mean(eke_budget),
+    eke_budget_mean = mean(eke_budget),   # budget EKE (all sub-monthly variance, eq. 2.9)
     .groups         = "drop"
   )
 
 # Report winter/summer contrast
-winter_eke <- mean(energy_seasonal$eke_synoptic_mean_budget[energy_seasonal$month %in% c(12, 1, 2)])
-summer_eke <- mean(energy_seasonal$eke_synoptic_mean_budget[energy_seasonal$month %in% c(6, 7, 8)])
+winter_eke <- mean(energy_seasonal$eke_budget_mean[energy_seasonal$month %in% c(12, 1, 2)])
+summer_eke <- mean(energy_seasonal$eke_budget_mean[energy_seasonal$month %in% c(6, 7, 8)])
 winter_mke <- mean(energy_seasonal$mke_mean[energy_seasonal$month %in% c(12, 1, 2)])
 summer_mke <- mean(energy_seasonal$mke_mean[energy_seasonal$month %in% c(6, 7, 8)])
 
@@ -2567,19 +2575,24 @@ cat(sprintf("  MKE:        winter = %.1f, summer = %.1f m²/s² (ratio: %.2f)\n"
 
 # Long format for plotting
 seasonal_long <- energy_seasonal %>%
-  select(month, tke_mean, mke_mean, eke_synoptic_mean_budget) %>%
+  select(month, tke_mean, mke_mean, eke_budget_mean) %>%
   pivot_longer(-month, names_to = "component", values_to = "value") %>%
   mutate(
+    # Use ENERGY_VARS keys as factor levels so ENERGY_COLORS maps directly
     component = factor(component,
-                       levels = c("tke_mean", "mke_mean", "eke_synoptic_mean_budget"),
-                       labels = c("TKE", "MKE", "EKE"))
+                       levels = c("tke_mean", "mke_mean", "eke_budget_mean"),
+                       labels = c("tke", "mke", "eke_budget"))
   )
 
 p2_2 <- ggplot(seasonal_long, aes(x = month, y = value, color = component)) +
   geom_line(linewidth = 1.2) +
   geom_point(size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  scale_color_manual(values = energy_colors, name = "Component") +
+  scale_color_manual(
+    values = ENERGY_COLORS,
+    labels = function(x) parse(text = VAR_LABELS_SHORT[x]),
+    name   = "Component"
+  ) +
   labs(
     title    = "Climatological Seasonal Cycle of Energy Components",
     subtitle = "Pan-Arctic (≥60°N) | 1958–2025 mean",
@@ -2642,7 +2655,7 @@ p_scatter <- ggplot(storm_df, aes(x = eke_budget, y = eke_synoptic_mean)) +
            label = sprintf("r = %.3f", eke_cor),
            hjust = 0, size = 4, fontface = "bold") +
   labs(
-    title = "(a) EKE Budget vs Synoptic-Scale EKE",
+    title = parse(text = paste0('"(a) "~EKE[budget]~"vs"~EKE[synoptic]'))[[1]],
     x = expression("EKE"["budget"]*" (all sub-monthly variance) [m"^2*"/s"^2*"]"),
     y = expression("EKE"["synoptic"]*" (1.2–6 day bandpass) [m"^2*"/s"^2*"]")
   ) +
