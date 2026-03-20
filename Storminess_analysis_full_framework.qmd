@@ -2950,19 +2950,27 @@ for (var in ALL_VARS) {
   years <- annual_df$year
   cat(sprintf("  [%s]  N = %d\n", var, length(x)))
 
-  # ── Pre-Whitened Mann-Kendall ────────────────────────────────────────
-  # zyp.zhang() implements the Zhang et al. (2000) algorithm:
-  #   1. Estimate Sen's slope on the original series
-  #   2. Remove slope → detrended series (critical: prevents AR(1) from
-  #      absorbing real trend signal during pre-whitening)
-  #   3. Fit AR(1) to detrended series → φ̂₁
-  #   4. Pre-whiten: x'_t = x_t − φ̂₁ · x_{t−1}
-  #   5. Re-add slope; apply standard MK to pre-whitened series
+# ── Pre-Whitened Mann-Kendall (iterative Zhang method) ───────────────
+  # zyp.zhang() implements the iterative procedure of Zhang et al. (2000):
+  #   1. Estimate φ̂₁ (AR(1)) directly from the original series.
+  #   2. If φ̂₁ ≤ 0.05, compute trend directly via Sen's slope.
+  #   3. Otherwise, pre-whiten: x'_t = x_t − φ̂₁ · x_{t−1}.
+  #   4. Estimate Sen's slope β̂ from the pre-whitened series.
+  #   5. Remove β̂ from the original series to obtain detrended residuals.
+  #   6. Re-estimate φ̂₁ from the detrended residuals.
+  #   7. Repeat steps 3–6 until both β̂ and φ̂₁ change by less than 1%
+  #      between consecutive iterations (typically 3–12 runs; recorded
+  #      in mk_res["nruns"]).
+  #   8. Apply the standard MK test to the final pre-whitened series.
+  # The iterative structure prevents the AR(1) estimate from absorbing
+  # trend signal (which would over-correct), and avoids the need for
+  # an explicit slope-reinflation formula.
   mk_res   <- zyp.zhang(y = x, x = seq_along(x))
   tau      <- unname(mk_res["tau"])
   p_value  <- unname(mk_res["sig"])
-  slope_yr <- unname(mk_res["linear"])   # Sen's slope per year
-  ar1      <- unname(mk_res["autocor"])  # AR(1) coefficient removed
+  slope_yr <- unname(mk_res["trend"])    # Sen's slope per year (NOT "linear")
+  ar1      <- unname(mk_res["autocor"])  # AR(1) of final detrended series
+  nruns    <- unname(mk_res["nruns"])    # iterations to convergence
 
   # ── Adaptive block length ───────────────────────────────────────────
   cat(sprintf("    Block length via pwsd()... "))
@@ -2991,6 +2999,7 @@ for (var in ALL_VARS) {
     tau         = round(tau,            4),
     p_value     = round(p_value,        4),
     ar1_removed = round(ar1,            4),
+    nruns       = nruns,
     significant = p_value < ALPHA,
     pct_change  = round(pct_ch,         2),
     b_length    = ci$b_used,
