@@ -207,23 +207,23 @@ METRIC_COLORS <- c(
   "eke_synoptic_mean" = "#0072B2",  # Blue
   "eke_p90"           = "#56B4E9",  # Sky blue
   "eke_p95"           = "#009E73",  # Teal green
-  "eke_p99"           = "#9467BD",  # Purple
-  "exceed_p95_freq"   = "#D55E00"   # Vermillion
+  "eke_p99"           = "#332288",  # Deep Indigo
+  "exceed_p95_freq"   = "#00204D"   # Midnight Blue
 )
 
 ENERGY_COLORS <- c(
-  "tke"        = "#1B9E77",   # Green
-  "mke"        = "#D95F02",   # Orange
-  "eke_budget" = "#7570B3"    # Periwinkle
+  "tke"        = "#E69F00",   # Golden Orange 
+  "mke"        = "#D55E00",   # Vermillion 
+  "eke_budget" = "#CC79A7"    # Reddish Purple/Pink 
 )
 
 ALL_COLORS <- c(METRIC_COLORS, ENERGY_COLORS)
 
 SEASON_COLORS <- c(
-  "DJF" = "#4575B4",  # Blue   — winter
-  "MAM" = "#91CF60",  # Green  — spring
-  "JJA" = "#FC8D59",  # Orange — summer
-  "SON" = "#D73027"   # Red    — autumn (hypothesis season)
+  "DJF" = "#4575B4",  # Blue   
+  "MAM" = "#91CF60",  # Green  
+  "JJA" = "#D73027",  # Red 
+  "SON" = "#A6611A"   # Warm rust 
 )
 
 
@@ -356,8 +356,6 @@ cat(sprintf("Significance:     \u03b1 = %.2f\n", ALPHA))
     -   5.2 Autumn feedback loop hypothesis evaluation
 
     -   5.3 Comparison with sea-ice loss timelines
-    
-
 
 # Phase 1: Foundational Analysis
 
@@ -974,13 +972,13 @@ The foundational analysis produced the following validated datasets for subseque
 
 **Key Statistical Properties:**
 
-| Metric          | Mean        | SD          | Lag-1 ACF |
-|-----------------|-------------|-------------|-----------|
-| eke_synoptic_mean        | 12.27 m²/s² | 2.80 m²/s²  | 0.153     |
-| eke_p90         | 29.47 m²/s² | 6.72 m²/s²  | 0.149     |
-| eke_p95         | 40.75 m²/s² | 9.18 m²/s²  | 0.152     |
-| eke_p99         | 66.39 m²/s² | 14.82 m²/s² | 0.160     |
-| exceed_p95_freq | 0.0504      | 0.0218      | 0.125     |
+| Metric            | Mean        | SD          | Lag-1 ACF |
+|-------------------|-------------|-------------|-----------|
+| eke_synoptic_mean | 12.27 m²/s² | 2.80 m²/s²  | 0.153     |
+| eke_p90           | 29.47 m²/s² | 6.72 m²/s²  | 0.149     |
+| eke_p95           | 40.75 m²/s² | 9.18 m²/s²  | 0.152     |
+| eke_p99           | 66.39 m²/s² | 14.82 m²/s² | 0.160     |
+| exceed_p95_freq   | 0.0504      | 0.0218      | 0.125     |
 
 : Descriptive statistics for Pan-Arctic storminess metrics {#tbl-descriptive}
 
@@ -3178,5 +3176,5 @@ ggsave(file.path(FIG_PHASE3, "Fig3.2_Annual_Forest.png"),
 save(results_annual, annual_df,
      file = file.path(OUTPUT_DATA_DIR, "Phase3_1_Annual_Results.RData"))
 ```
-```
 
+\`\`\`
