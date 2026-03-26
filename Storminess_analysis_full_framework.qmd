@@ -204,11 +204,11 @@ B_FALLBACK <- 3L      # MBB block length fallback when pwsd() returns b < 1
 # Storminess metrics: blue family. Energy components: warm family.
 
 METRIC_COLORS <- c(
-  "eke_synoptic_mean" = "#0072B2",  # Blue
+  "eke_synoptic_mean" = "#000000",  # Black
   "eke_p90"           = "#56B4E9",  # Sky blue
   "eke_p95"           = "#009E73",  # Teal green
   "eke_p99"           = "#332288",  # Deep Indigo
-  "exceed_p95_freq"   = "#00204D"   # Midnight Blue
+  "exceed_p95_freq"   = "#0072B2"   # Blue
 )
 
 ENERGY_COLORS <- c(

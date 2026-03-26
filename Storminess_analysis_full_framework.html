@@ -357,26 +357,26 @@ window.Quarto = {
 <span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a><span class="co"># Storminess metrics: blue family. Energy components: warm family.</span></span>
 <span id="cb1-193"><a href="#cb1-193" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a>METRIC_COLORS <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
-<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_synoptic_mean"</span> <span class="ot">=</span> <span class="st">"#0072B2"</span>,  <span class="co"># Blue</span></span>
+<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_synoptic_mean"</span> <span class="ot">=</span> <span class="st">"#000000"</span>,  <span class="co"># Black</span></span>
 <span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p90"</span>           <span class="ot">=</span> <span class="st">"#56B4E9"</span>,  <span class="co"># Sky blue</span></span>
 <span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p95"</span>           <span class="ot">=</span> <span class="st">"#009E73"</span>,  <span class="co"># Teal green</span></span>
-<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p99"</span>           <span class="ot">=</span> <span class="st">"#9467BD"</span>,  <span class="co"># Purple</span></span>
-<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a>  <span class="st">"exceed_p95_freq"</span>   <span class="ot">=</span> <span class="st">"#D55E00"</span>   <span class="co"># Vermillion</span></span>
+<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p99"</span>           <span class="ot">=</span> <span class="st">"#332288"</span>,  <span class="co"># Deep Indigo</span></span>
+<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a>  <span class="st">"exceed_p95_freq"</span>   <span class="ot">=</span> <span class="st">"#0072B2"</span>   <span class="co"># Blue</span></span>
 <span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a>ENERGY_COLORS <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
-<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a>  <span class="st">"tke"</span>        <span class="ot">=</span> <span class="st">"#1B9E77"</span>,   <span class="co"># Green</span></span>
-<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a>  <span class="st">"mke"</span>        <span class="ot">=</span> <span class="st">"#D95F02"</span>,   <span class="co"># Orange</span></span>
-<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_budget"</span> <span class="ot">=</span> <span class="st">"#7570B3"</span>    <span class="co"># Periwinkle</span></span>
+<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a>  <span class="st">"tke"</span>        <span class="ot">=</span> <span class="st">"#E69F00"</span>,   <span class="co"># Golden Orange </span></span>
+<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a>  <span class="st">"mke"</span>        <span class="ot">=</span> <span class="st">"#D55E00"</span>,   <span class="co"># Vermillion </span></span>
+<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_budget"</span> <span class="ot">=</span> <span class="st">"#CC79A7"</span>    <span class="co"># Reddish Purple/Pink </span></span>
 <span id="cb1-206"><a href="#cb1-206" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb1-207"><a href="#cb1-207" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-208"><a href="#cb1-208" aria-hidden="true" tabindex="-1"></a>ALL_COLORS <span class="ot">&lt;-</span> <span class="fu">c</span>(METRIC_COLORS, ENERGY_COLORS)</span>
 <span id="cb1-209"><a href="#cb1-209" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-210"><a href="#cb1-210" aria-hidden="true" tabindex="-1"></a>SEASON_COLORS <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
-<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a>  <span class="st">"DJF"</span> <span class="ot">=</span> <span class="st">"#4575B4"</span>,  <span class="co"># Blue   — winter</span></span>
-<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a>  <span class="st">"MAM"</span> <span class="ot">=</span> <span class="st">"#91CF60"</span>,  <span class="co"># Green  — spring</span></span>
-<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a>  <span class="st">"JJA"</span> <span class="ot">=</span> <span class="st">"#FC8D59"</span>,  <span class="co"># Orange — summer</span></span>
-<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a>  <span class="st">"SON"</span> <span class="ot">=</span> <span class="st">"#D73027"</span>   <span class="co"># Red    — autumn (hypothesis season)</span></span>
+<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a>  <span class="st">"DJF"</span> <span class="ot">=</span> <span class="st">"#4575B4"</span>,  <span class="co"># Blue   </span></span>
+<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a>  <span class="st">"MAM"</span> <span class="ot">=</span> <span class="st">"#91CF60"</span>,  <span class="co"># Green  </span></span>
+<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a>  <span class="st">"JJA"</span> <span class="ot">=</span> <span class="st">"#D73027"</span>,  <span class="co"># Red </span></span>
+<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a>  <span class="st">"SON"</span> <span class="ot">=</span> <span class="st">"#A6611A"</span>   <span class="co"># Warm rust </span></span>
 <span id="cb1-215"><a href="#cb1-215" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb1-216"><a href="#cb1-216" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-217"><a href="#cb1-217" aria-hidden="true" tabindex="-1"></a></span>
