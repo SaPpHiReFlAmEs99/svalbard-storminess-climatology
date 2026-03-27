@@ -2735,6 +2735,8 @@ cat(sprintf("\nAll figures saved to: %s\n", fig_dir))
 
 # Phase 3: Trend analysis
 
+## 3.1: Pan-Arctic annual trend analysis
+
 ```{r}
 # ============================================================================
 # PHASE 3.1: PAN-ARCTIC ANNUAL TREND ANALYSIS
@@ -3177,4 +3179,379 @@ save(results_annual, annual_df,
      file = file.path(OUTPUT_DATA_DIR, "Phase3_1_Annual_Results.RData"))
 ```
 
-\`\`\`
+## 3.2: Seasonal decomposition of Pan-Arctic trends
+
+```{r phase3-2-seasonal-trends}
+# ============================================================================
+# PHASE 3.2: SEASONAL DECOMPOSITION OF PAN-ARCTIC TRENDS
+# ============================================================================
+#   - phase3-1-annual-trends chunk (sen_slope(), get_block_length(), mbb_ci()
+#                                   must be present in the R environment;
+#                                   results_annual loaded for reference)
+#
+# PURPOSE:
+#   Apply the identical PWMK + Sen's slope + MBB framework from Phase 3.1
+#   separately to each of the four meteorological seasons (DJF, MAM, JJA,
+#   SON). Annual aggregation in Phase 3.1 averages across all seasons and
+#   therefore masks any signal concentrated in one season.
+#
+# SEASONAL ATTRIBUTION (established in Phase 1, storm_df columns):
+#   storm_df$season      — "DJF" / "MAM" / "JJA" / "SON"
+#   storm_df$season_year — year to which each season is attributed;
+#                          December of year N → season_year = N+1 (WMO
+#                          convention for boreal winter). This ensures
+#                          DJF 1958 = {Dec 1957, Jan 1958, Feb 1958}.
+#
+# SAMPLE SIZES:
+#   All four seasons: N = 68 complete seasons (1958–2025).
+#   No asymmetry between DJF and the other seasons because December 1957
+#   completes DJF 1958 — the principal reason the analysis period was
+#   extended to December 1957 (see Phase 1 boundary note).
+#
+# STATISTICAL FRAMEWORK (identical to Phase 3.1):
+#   Step 1 — Seasonal aggregation (monthly → seasonal means)
+#   Step 2 — Pre-Whitened Mann-Kendall [zyp.zhang()]
+#             Zhang et al. (2000); Zhang & Zwiers (2004)
+#   Step 3 — Sen's slope [sen_slope()]
+#             Sen (1968)
+#   Step 4 — MBB 95% CI [mbb_ci(), block length via get_block_length()]
+#             Künsch (1989); Politis & White (2004); Patton et al. (2009)
+#
+# OUTPUT:
+#   results_seasonal         — 32-row data frame (8 vars × 4 seasons)
+#   Fig3.3_Seasonal_Slopes.png  — forest plot faceted by season
+#   Fig3.4_Seasonal_Series.png  — time series, one panel per variable,
+#                                  four coloured lines (one per season)
+#   Phase3_2_Seasonal_Results.RData
+#
+# ============================================================================
+
+# ============================================================================
+# STEP 1: SEASONAL AGGREGATION
+# ============================================================================
+cat(rep("-", 70), "\n")
+cat("STEP 1: SEASONAL AGGREGATION\n")
+cat(rep("-", 70), "\n\n")
+
+# Each seasonal mean is computed over the three months belonging to that
+# season in a given season_year. The filter n() == 3 simultaneously:
+#   (a) excludes any incomplete boundary seasons, and
+#   (b) confirms the December 1957 → DJF 1958 attribution is correct.
+# SEASONS vector (DJF/MAM/JJA/SON) is defined in the setup chunk.
+
+seasonal_df <- storm_df %>%
+  filter(season_year >= ANNUAL_START_YEAR,          # 1958–2025
+         season_year <= ANALYSIS_END_YEAR) %>%
+  group_by(season, season_year) %>%
+  filter(n() == 3) %>%                               # complete seasons only
+  summarise(
+    across(all_of(ALL_VARS), \(x) mean(x, na.rm = TRUE)),
+    .groups = "drop"
+  ) %>%
+  # Enforce canonical season order for plotting
+  mutate(season = factor(season, levels = SEASONS)) %>%
+  arrange(season, season_year)
+
+# ── Sample size check ────────────────────────────────────────────────────────
+season_counts <- seasonal_df %>%
+  group_by(season) %>%
+  summarise(n = n(), .groups = "drop")
+
+cat("Seasonal sample sizes:\n")
+print(season_counts, row.names = FALSE)
+
+if (any(season_counts$n != (ANALYSIS_END_YEAR - ANNUAL_START_YEAR + 1L))) {
+  warning(glue(
+    "Expected N = {ANALYSIS_END_YEAR - ANNUAL_START_YEAR + 1L} for all seasons.",
+    " Check storm_df for gaps."
+  ))
+} else {
+  cat(sprintf(
+    "\n All seasons complete: N = %d (1958–2025)\n\n",
+    ANALYSIS_END_YEAR - ANNUAL_START_YEAR + 1L
+  ))
+}
+```
+
+```{r}
+# ============================================================================
+# STEP 2: TREND ANALYSIS — PWMK + SEN + MBB PER SEASON × VARIABLE
+# ============================================================================
+cat(rep("-", 70), "\n")
+cat("STEP 2: TREND ANALYSIS (4 seasons × 8 variables = 32 tests)\n")
+cat(rep("-", 70), "\n\n")
+
+results_list_seasonal <- list()
+
+for (seas in SEASONS) {
+
+  cat(sprintf("\n── Season: %s ──────────────────────────────────────\n", seas))
+
+  seas_data <- seasonal_df %>%
+    filter(season == seas) %>%
+    arrange(season_year)
+
+  years_seas <- seas_data$season_year
+
+  for (var in ALL_VARS) {
+
+    x <- seas_data[[var]]
+    cat(sprintf("  [%s]  N = %d\n", var, length(x)))
+
+    # ── Pre-Whitened Mann-Kendall (iterative Zhang method) ──────────────
+    # Identical call to Phase 3.1. Returns tau, sig (p-value), trend
+    # (Sen's slope per year), autocor (AR(1) of final detrended series),
+    # nruns (iterations to convergence).
+    mk_res   <- zyp.zhang(y = x, x = seq_along(x))
+    tau      <- unname(mk_res["tau"])
+    p_value  <- unname(mk_res["sig"])
+    slope_yr <- unname(mk_res["trend"])   # Sen's slope per year (NOT "linear")
+    ar1      <- unname(mk_res["autocor"])
+    nruns    <- unname(mk_res["nruns"])
+
+    # ── Adaptive block length ────────────────────────────────────────────
+    cat(sprintf("    Block length via pwsd()... "))
+    b_opt <- get_block_length(x)
+    cat(sprintf("b = %d years\n", b_opt))
+
+    # ── MBB confidence interval ──────────────────────────────────────────
+    cat(sprintf("    MBB CI (R = %d, b = %d)... ", N_BOOT, b_opt))
+    ci <- mbb_ci(x, b = b_opt)
+    cat("done\n")
+
+    # ── Derived statistics ───────────────────────────────────────────────
+    mean_val <- mean(x, na.rm = TRUE)
+    total_ch <- slope_yr * (max(years_seas) - min(years_seas))
+    pct_ch   <- (total_ch / mean_val) * 100
+
+    key <- paste(seas, var, sep = "__")
+    results_list_seasonal[[key]] <- data.frame(
+      season      = seas,
+      variable    = var,
+      label       = unname(VAR_LABELS_PLAIN[var]),
+      group       = ifelse(var %in% METRIC_NAMES, "Storminess", "Energy"),
+      n           = length(x),
+      mean_val    = round(mean_val,       4),
+      slope_dec   = round(slope_yr * DECADES, 5),
+      ci_lower    = round(ci$lower  * DECADES, 5),
+      ci_upper    = round(ci$upper  * DECADES, 5),
+      tau         = round(tau,            4),
+      p_value     = round(p_value,        4),
+      ar1_removed = round(ar1,            4),
+      nruns       = nruns,
+      significant = p_value < ALPHA,
+      pct_change  = round(pct_ch,         2),
+      b_length    = ci$b_used,
+      stringsAsFactors = FALSE
+    )
+
+    cat(sprintf(
+      "    → slope = %+.4f/dec | p = %.3f | CI [%+.4f, %+.4f] %s\n\n",
+      slope_yr * DECADES, p_value,
+      ci$lower  * DECADES, ci$upper * DECADES,
+      ifelse(p_value < ALPHA, "✓ SIGNIFICANT", "")
+    ))
+  }
+}
+
+results_seasonal <- bind_rows(results_list_seasonal) %>%
+  mutate(season = factor(season, levels = SEASONS))
+
+
+# ── Summary table ─────────────────────────────────────────────────────────────
+cat(rep("=", 70), "\n")
+cat("SEASONAL TREND SUMMARY\n")
+cat(rep("=", 70), "\n\n")
+
+print(
+  results_seasonal %>%
+    select(season, label, group, slope_dec, ci_lower, ci_upper,
+           p_value, significant, pct_change, b_length) %>%
+    arrange(season, group, label),
+  digits = 4, row.names = FALSE
+)
+
+# Significance count per season
+cat("\nSignificant trends by season (α =", ALPHA, "):\n")
+sig_summary <- results_seasonal %>%
+  group_by(season) %>%
+  summarise(
+    storminess_sig = sum(significant & group == "Storminess"),
+    storminess_tot = sum(group == "Storminess"),
+    energy_sig     = sum(significant & group == "Energy"),
+    energy_tot     = sum(group == "Energy"),
+    .groups = "drop"
+  )
+print(sig_summary, row.names = FALSE)
+```
+
+```{r}
+# ============================================================================
+# STEP 3: FIGURES
+# ============================================================================
+cat("\n", rep("-", 70), "\n")
+cat("STEP 3: FIGURES\n")
+cat(rep("-", 70), "\n\n")
+
+# ── Figure 3.3: Seasonal forest plot ─────────────────────────────────────────
+# One panel per season. Shows all 8 variables with Sen's slope + 95% MBB CI.
+# enabling direct visual comparison of slope magnitudes across DJF/MAM/JJA/SON.
+cat("Generating Fig3.3_Seasonal_Slopes.png ...\n")
+
+forest_seas <- results_seasonal %>%
+  mutate(
+    label_fig = factor(
+      unname(VAR_LABELS[variable]),
+      levels = rev(unname(VAR_LABELS[ALL_VARS]))   # reverse for coord readability
+    ),
+    group  = factor(group, levels = c("Storminess", "Energy")),
+    season = factor(season, levels = SEASONS,
+                    labels = unname(SEASON_NAMES))
+  )
+
+p_forest_seas <- ggplot(
+  forest_seas,
+  aes(x = slope_dec, y = label_fig,
+      colour = significant, shape = group)
+) +
+  geom_vline(xintercept = 0, linetype = "dashed",
+             colour = "grey40", linewidth = 0.6) +
+  geom_errorbarh(aes(xmin = ci_lower, xmax = ci_upper),
+                 height = 0.3, linewidth = 0.8) +
+  geom_point(size = 3.5) +
+  geom_text(
+    aes(label = sprintf("p = %.3f", p_value),
+        x     = pmax(ci_upper, slope_dec) + 0.005),
+    hjust = 0, size = 2.5, colour = "grey30"
+  ) +
+  facet_wrap(~ season, ncol = 2, scales = "free_x") +
+  scale_colour_manual(
+    values = SEASON_COLORS,                  # keys "DJF"/"MAM"/"JJA"/"SON" now match
+    labels = unname(SEASON_NAMES),           # legend shows "Winter (DJF)" etc.
+    name   = "Season"
+  ) +
+  scale_shape_manual(
+    values = c("Storminess" = 16, "Energy" = 17),
+    name   = "Variable group"
+  ) +
+  scale_y_discrete(labels = function(x) parse(text = x)) +
+  labs(
+    title    = "Pan-Arctic Seasonal Trends: Sen\u2019s Slope with 95% MBB CI",
+    subtitle = glue(
+      "Pre-Whitened Mann\u2013Kendall | Adaptive block length ",
+      "(Politis & White 2004) | 1958\u20132025 | N = 68 per season"
+    ),
+    x = "Sen\u2019s slope [units per decade]",
+    y = NULL
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(size = 9,  colour = "grey40"),
+    legend.position  = "bottom",
+    strip.text       = element_text(face = "bold", size = 10),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(file.path(FIG_PHASE3, "Fig3.3_Seasonal_Slopes.png"),
+       p_forest_seas, width = 13, height = 9, dpi = 300)
+cat("  ✓ Saved: Fig3.3_Seasonal_Slopes.png\n")
+
+
+# ── Figure 3.4: Seasonal time series ─────────────────────────────────────────
+# One panel per variable (8 panels). Each panel contains four coloured lines,
+# one per season, showing the seasonal mean time series (1958–2025).
+# Sen's slope lines are overlaid for significant trends only (solid) and
+# non-significant trends (dotted). SEASON_COLORS from the setup chunk.
+cat("Generating Fig3.4_Seasonal_Series.png ...\n")
+
+# Prepare long-format seasonal data for plotting
+seasonal_long <- seasonal_df %>%
+  pivot_longer(all_of(ALL_VARS),
+               names_to  = "variable",
+               values_to = "value") %>%
+  mutate(
+    label_fig = factor(unname(VAR_LABELS[variable]),
+                       levels = unname(VAR_LABELS[ALL_VARS])),
+    season    = factor(season, levels = SEASONS)   # short codes only
+  )
+
+# Slope intercepts for overlay lines (centred at series midpoint)
+mid_yr <- mean(seasonal_df$season_year)
+
+slope_lines_seas <- results_seasonal %>%
+  mutate(
+    slope_yr  = slope_dec / DECADES,
+    intercept = mean_val - slope_yr * mid_yr,
+    label_fig = factor(unname(VAR_LABELS[variable]),
+                       levels = unname(VAR_LABELS[ALL_VARS])),
+    season    = factor(season, levels = SEASONS)   # short codes only
+  )
+
+p_series_seas <- ggplot(
+  seasonal_long,
+  aes(x = season_year, y = value, colour = season)
+) +
+  geom_line(linewidth = 0.55, alpha = 0.8) +
+  geom_point(size = 0.7, alpha = 0.45) +
+  # Sen's slope lines: solid if significant, dotted otherwise
+  geom_abline(
+    data = slope_lines_seas,
+    aes(intercept = intercept,
+        slope     = slope_yr,
+        colour    = season,
+        linetype  = significant),
+    linewidth = 0.85
+  ) +
+  facet_wrap(~ label_fig, ncol = 2, scales = "free_y",
+             labeller = label_parsed) +
+  scale_colour_manual(
+    values = SEASON_COLORS,
+    labels = unname(SEASON_NAMES),
+    name   = "Season"
+  ) +
+  scale_linetype_manual(
+    values = c("FALSE" = "dotted", "TRUE" = "solid"),
+    labels = c("FALSE" = glue("Not significant (\u03b1 = {ALPHA})"),
+               "TRUE"  = glue("Significant (\u03b1 = {ALPHA})")),
+    name   = "Sen's slope"
+  ) +
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  labs(
+    title    = "Pan-Arctic Seasonal Time Series and Trends (1958\u20132025)",
+    subtitle = glue(
+      "Pre-Whitened Mann\u2013Kendall | Sen\u2019s slope overlaid | ",
+      "N = 68 per season | Solid = significant at \u03b1 = {ALPHA}"
+    ),
+    x = NULL,
+    y = "Seasonal mean value"
+  ) +
+  theme_bw(base_size = 11) +
+  theme(
+    plot.title       = element_text(face = "bold", size = 13),
+    plot.subtitle    = element_text(size = 9, colour = "grey40"),
+    legend.position  = "bottom",
+    strip.text       = element_text(face = "bold", size = 9),
+    panel.grid.minor = element_blank()
+  ) +
+  guides(
+    colour   = guide_legend(nrow = 1, override.aes = list(linewidth = 1.5)),
+    linetype = guide_legend(nrow = 1)
+  )
+
+ggsave(file.path(FIG_PHASE3, "Fig3.4_Seasonal_Series.png"),
+       p_series_seas, width = 13, height = 14, dpi = 300)
+cat("  ✓ Saved: Fig3.4_Seasonal_Series.png\n")
+
+
+# ============================================================================
+# STEP 4: SAVE RESULTS
+# ============================================================================
+save(results_seasonal, seasonal_df,
+     file = file.path(OUTPUT_DATA_DIR, "Phase3_2_Seasonal_Results.RData"))
+
+cat(sprintf(
+  "\n✓ Phase 3.2 complete.\n  Results: Phase3_2_Seasonal_Results.RData\n  Figures: %s\n",
+  FIG_PHASE3
+))
+```
