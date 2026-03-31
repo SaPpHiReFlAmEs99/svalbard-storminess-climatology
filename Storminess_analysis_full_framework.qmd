@@ -1385,7 +1385,9 @@ p1 <- ggplot(ts_long, aes(x = date, y = value, color = metric)) +
   facet_wrap(~ metric, scales = "free_y", ncol = 1,
              labeller = as_labeller(VAR_LABELS, default = label_parsed)) +
   scale_color_manual(values = metric_colors, guide = "none") +
-  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y",
+               limits = c(min(ts_long$date), max(ts_long$date)),
+               expand = expansion(mult = c(0.01, 0.01))) +
   labs(
     title = "Pan-Arctic (≥60°N) Storminess Metrics: Monthly Time Series",
     subtitle = "1958–2025 | Raw data (light) with LOESS smoother (bold)",
