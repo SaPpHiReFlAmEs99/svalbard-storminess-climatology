@@ -3588,3 +3588,762 @@ cat(sprintf(
   FIG_PHASE3
 ))
 ```
+
+## 3.4: Spatial trends
+
+```{r phase3-4-spatial-trends}
+# ============================================================================
+# PHASE 3.4: SPATIAL TREND PATTERNS AND FIELD SIGNIFICANCE
+# ============================================================================
+#
+# DEPENDS ON:
+#   - setup-environment chunk (all global constants, colours, paths)
+#   - phase3-1 / phase3-2 chunks (sen_slope() in environment)z
+#   - Phase 1 prepared data: PHASE1_DATA (for gridded arrays)
+#   - NetCDF files: METRICS_FILE (direct read for gridded data)
+#
+# PURPOSE:
+#   Apply the Pre-Whitened Mann-Kendall (PWMK) test and Sen's slope
+#   estimator at every ERA5 grid point independently, then apply the
+#   Benjamini-Hochberg (BH) False Discovery Rate correction across
+#   all simultaneous tests to identify field-significant trends.
+#
+#   This addresses the key limitation of Phases 3.1-3.2: the Pan-Arctic
+#   area-weighted mean can mask spatially concentrated signals. A trend
+#   confined to the Svalbard/Barents sector would be diluted to near-zero
+#   in the aggregate even if locally robust.
+#
+# STATISTICAL FRAMEWORK:
+#
+#   Step 1 — Gridded temporal aggregation
+#     For each grid point, compute annual or seasonal means, yielding
+#     a local time series of N = 68 values at each of the ~172,800
+#     grid points in the domain (>=60 N, 1440x120 grid).
+#
+#   Step 2 — Local PWMK trend test [zyp.zhang()]
+#     Applied independently at each grid point. Returns local p-value
+#     (p_local) and Sen's slope per year. This generates K ~ 172,800
+#     simultaneous hypothesis tests.
+#
+#   Step 3 — Benjamini-Hochberg False Discovery Rate correction
+#     [p.adjust(method = "BH")]
+#     The multiple testing problem: at alpha = 0.05, approximately
+#     0.05 x K ~ 8,640 grid points would appear significant by chance
+#     alone under a true global null hypothesis. The BH procedure
+#     controls the EXPECTED PROPORTION of false discoveries among all
+#     rejected tests (Benjamini & Hochberg 1995), rather than the
+#     probability of any false discovery (Bonferroni). This distinction
+#     is crucial: BH is substantially more powerful than Bonferroni
+#     while remaining valid under positive dependence between spatially
+#     correlated grid points (Benjamini & Yekutieli 2001), as confirmed
+#     for climate fields by Wilks (2006) and Ventura et al. (2004).
+#
+#     The BH threshold is applied at alpha_FDR = 0.10, following the
+#     recommendation of Wilks (2016) for spatial climate analyses. Under
+#     spatial correlation, the BH procedure becomes conservative relative
+#     to its nominal level; using alpha_FDR = 2 x alpha_local recovers
+#     approximately the intended control level for typical climate fields.
+#
+#   Step 4 — Polar projection map
+#     Lambert Azimuthal Equal-Area (LAEA), centred on the North Pole.
+#     Identical cartographic setup to Phase 1 Plot 6.
+#
+# KEY REFERENCES:
+#   Benjamini & Hochberg (1995) — FDR procedure
+#     J. Royal Statistical Society B, 57(1): 289-300.
+#     DOI: 10.1111/j.2517-6161.1995.tb02031.x
+#   Wilks (2006) — FDR for climate field significance
+#     J. Appl. Meteorol. Climatol., 45: 1181-1189.
+#     DOI: 10.1175/JAM2404.1
+#   Wilks (2016) — alpha_FDR = 2*alpha_local recommendation
+#     Bull. Amer. Meteor. Soc., 97: 2263-2273.
+#     DOI: 10.1175/BAMS-D-15-00267.1
+#   Ventura et al. (2004) — FDR for climatological data
+#     J. Climate, 17: 4343-4356.
+#   Livezey & Chen (1983) — field significance (classical approach)
+#     Mon. Wea. Rev., 111: 46-59.
+#   Zhang et al. (2000); Zhang & Zwiers (2004) — PWMK
+#
+# SCOPE:
+#   Variables: eke_synoptic_mean, eke_p90, eke_p95, eke_p99,
+#              exceed_p95_freq, tke
+#   Temporal scope: annual (1958-2025) and four seasons (DJF/MAM/JJA/SON)
+#   Domain: >=60 N (ARCTIC_LAT_THRESHOLD from setup chunk)
+#
+# CACHING:
+#   The computation block saves results to Phase3_4_Spatial_Results.RData.
+#   On subsequent runs, if this file exists, the computation is skipped
+#   entirely and results are loaded from disk. This allows rapid iteration
+#   on figure aesthetics without re-running ~1M+ PWMK tests.
+#   To force recomputation, delete the .RData file or set
+#   FORCE_RECOMPUTE <- TRUE before running this chunk.
+#
+# OUTPUT:
+#   spatial_results       — named list by variable, each containing
+#                           annual and seasonal trend grids
+#   fdr_summary           — data frame summarising FDR results
+#   Fig3.5_*              — Annual + seasonal trend maps per variable
+#   Phase3_4_Spatial_Results.RData
+#
+# ============================================================================
+
+
+# ============================================================================
+# PART A: COMPUTATION (skipped if cached results exist)
+# ============================================================================
+
+# ── Configuration ────────────────────────────────────────────────────────────
+ALPHA_FDR <- 0.10   # Wilks (2016, BAMS): alpha_FDR = 2 * alpha_local
+
+# Variables to analyse:
+#   - 5 storminess metrics (all showed significance in MAM or are near-
+#     significant; spatial analysis may reveal localised signals masked
+#     by Pan-Arctic aggregation)
+#   - TKE (the only energy component with significant Pan-Arctic trends)
+SPATIAL_VARS <- c(
+  "eke_synoptic_mean",   # primary metric
+  "eke_p90",             # MAM significant (p = 0.016)
+  "eke_p95",             # MAM significant (p = 0.027)
+  "eke_p99",             # MAM near-significant (p = 0.063); largest absolute slope
+  "exceed_p95_freq"      # MAM significant (p = 0.022); largest relative change (+17.6%)
+)
+
+# Cache control
+RESULTS_FILE <- file.path(OUTPUT_DATA_DIR, "Phase3_4_Spatial_Results.RData")
+if (!exists("FORCE_RECOMPUTE")) FORCE_RECOMPUTE <- FALSE
+
+# ── Timing and progress utilities ────────────────────────────────────────────
+.t0_phase34 <- Sys.time()
+
+progress_msg <- function(msg) {
+  elapsed <- round(as.numeric(difftime(Sys.time(), .t0_phase34, units = "mins")), 1)
+  cat(sprintf("[%s | +%.1f min] %s\n", format(Sys.time(), "%H:%M:%S"), elapsed, msg))
+  flush.console()
+}
+
+
+# ── Check for cached results ─────────────────────────────────────────────────
+if (file.exists(RESULTS_FILE) && !FORCE_RECOMPUTE) {
+
+  progress_msg("CACHE HIT: Loading precomputed spatial results from disk.")
+  load(RESULTS_FILE)
+  progress_msg(sprintf(
+    "  Loaded %d variable(s): %s",
+    length(spatial_results), paste(names(spatial_results), collapse = ", ")
+  ))
+
+  # Verify that all requested variables are present in cached results.
+  # If new variables were added to SPATIAL_VARS since the last run,
+  # the cache is stale and must be recomputed.
+  missing_vars <- setdiff(SPATIAL_VARS, names(spatial_results))
+  if (length(missing_vars) > 0) {
+    progress_msg(sprintf(
+      "  WARNING: Cached results missing %d variable(s): %s",
+      length(missing_vars), paste(missing_vars, collapse = ", ")
+    ))
+    progress_msg("  Triggering full recomputation...")
+    FORCE_RECOMPUTE <- TRUE
+  } else {
+    progress_msg("  All requested variables present. Skipping to PART B (figures).")
+  }
+}
+
+
+if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
+
+  progress_msg("PHASE 3.4 PART A: SPATIAL TREND COMPUTATION — START")
+  cat(rep("=", 70), "\n\n")
+
+  # ========================================================================
+  # A1: LOAD GRIDDED DATA
+  # ========================================================================
+  progress_msg("A1: Loading gridded data from NetCDF...")
+
+  nc <- nc_open(METRICS_FILE)
+
+  lon_vec    <- ncvar_get(nc, "longitude")
+  lat_vec    <- ncvar_get(nc, "latitude")
+  time_raw   <- ncvar_get(nc, "time")
+  time_units <- ncatt_get(nc, "time", "units")$value
+
+  time_origin <- as.Date(sub("days since ", "", time_units))
+  time_dates  <- time_origin + time_raw
+
+  progress_msg(sprintf("  Grid: %d lon x %d lat x %d timesteps",
+                        length(lon_vec), length(lat_vec), length(time_raw)))
+
+  # Read all requested variables
+  gridded_data <- list()
+  for (vi in seq_along(SPATIAL_VARS)) {
+    vname <- SPATIAL_VARS[vi]
+    progress_msg(sprintf("  Reading variable %d/%d: %s ...",
+                          vi, length(SPATIAL_VARS), vname))
+    raw <- ncvar_get(nc, vname)                        # [lon, lat, time]
+    gridded_data[[vname]] <- aperm(raw, c(3, 2, 1))    # -> [time, lat, lon]
+    rm(raw)
+  }
+  nc_close(nc)
+  progress_msg("  NetCDF closed.")
+
+  # Subset to Arctic domain
+  lat_idx <- which(lat_vec >= ARCTIC_LAT_THRESHOLD)
+  lat_arc <- lat_vec[lat_idx]
+
+  for (vname in SPATIAL_VARS) {
+    gridded_data[[vname]] <- gridded_data[[vname]][, lat_idx, ]
+  }
+
+  n_lat  <- length(lat_arc)
+  n_lon  <- length(lon_vec)
+  n_time <- dim(gridded_data[[SPATIAL_VARS[1]]])[1]
+  n_points <- n_lat * n_lon
+
+  progress_msg(sprintf(
+    "  Arctic domain: %d lat (%.1f-%.1f N) x %d lon = %d grid points",
+    n_lat, min(lat_arc), max(lat_arc), n_lon, n_points
+  ))
+  progress_msg(sprintf(
+    "  Total PWMK tests planned: %d vars x 5 periods x %d points = %s tests",
+    length(SPATIAL_VARS), n_points,
+    format(length(SPATIAL_VARS) * 5 * n_points, big.mark = ",")
+  ))
+
+  # Build time index
+  time_df <- data.frame(
+    date  = time_dates,
+    year  = as.integer(format(time_dates, "%Y")),
+    month = as.integer(format(time_dates, "%m"))
+  ) %>%
+    mutate(
+      season = case_when(
+        month %in% c(12, 1, 2) ~ "DJF",
+        month %in% c(3, 4, 5)  ~ "MAM",
+        month %in% c(6, 7, 8)  ~ "JJA",
+        month %in% c(9, 10, 11) ~ "SON"
+      ),
+      season_year = if_else(month == 12, year + 1L, year)
+    )
+
+
+  # ========================================================================
+  # A2: HELPER FUNCTIONS
+  # ========================================================================
+  progress_msg("A2: Defining helper functions...")
+
+  years_vec <- ANNUAL_START_YEAR:ANALYSIS_END_YEAR  # 1958-2025, N=68
+  idx_grid  <- expand.grid(lat = seq_len(n_lat), lon = seq_len(n_lon))
+
+  # Gridpoint PWMK — accepts explicit time axis for robustness
+  run_pwmk_gridpoint <- function(x, time_axis) {
+    valid <- !is.na(x)
+    if (sum(valid) < 10L) {
+      return(c(slope_dec = NA_real_, p_local = NA_real_, tau = NA_real_))
+    }
+    mk <- zyp.zhang(y = x[valid], x = time_axis[valid])
+    c(
+      slope_dec = unname(mk["trend"]) * DECADES,
+      p_local   = unname(mk["sig"]),
+      tau       = unname(mk["tau"])
+    )
+  }
+
+  # BH-FDR on a [lat x lon] p-value matrix
+  apply_bh_fdr <- function(plocal_mat, alpha_fdr = ALPHA_FDR) {
+    p_vec    <- as.vector(plocal_mat)
+    padj_vec <- rep(NA_real_, length(p_vec))
+    valid    <- !is.na(p_vec)
+    padj_vec[valid] <- p.adjust(p_vec[valid], method = "BH")
+    padj_mat <- matrix(padj_vec, nrow(plocal_mat), ncol(plocal_mat))
+    sig_mat  <- padj_mat <= alpha_fdr
+    list(
+      p_adjusted  = padj_mat,
+      significant = sig_mat,
+      n_sig       = sum(sig_mat, na.rm = TRUE),
+      n_total     = sum(!is.na(plocal_mat))
+    )
+  }
+
+  # Run PWMK across all grid points for a [N x lat x lon] array
+  run_spatial_pwmk <- function(data_arr, time_axis, label = "") {
+
+    progress_msg(sprintf("      PWMK on %s grid points (%s)...",
+                          format(n_points, big.mark = ","), label))
+    t_start <- Sys.time()
+
+    plan(multisession)
+
+    trend_list <- future_map(
+      seq_len(n_points),
+      function(i) {
+        run_pwmk_gridpoint(
+          data_arr[, idx_grid$lat[i], idx_grid$lon[i]],
+          time_axis
+        )
+      },
+      .options  = furrr_options(seed = TRUE),
+      .progress = TRUE
+    )
+
+    plan(sequential)
+
+    # Reassemble into matrices
+    slope_mat  <- matrix(NA_real_, n_lat, n_lon)
+    plocal_mat <- matrix(NA_real_, n_lat, n_lon)
+    tau_mat    <- matrix(NA_real_, n_lat, n_lon)
+
+    for (i in seq_len(n_points)) {
+      r <- trend_list[[i]]
+      slope_mat [idx_grid$lat[i], idx_grid$lon[i]] <- r["slope_dec"]
+      plocal_mat[idx_grid$lat[i], idx_grid$lon[i]] <- r["p_local"]
+      tau_mat   [idx_grid$lat[i], idx_grid$lon[i]] <- r["tau"]
+    }
+
+    elapsed_step <- round(as.numeric(difftime(Sys.time(), t_start, units = "mins")), 1)
+    progress_msg(sprintf("      Done (%s) in %.1f min", label, elapsed_step))
+
+    list(slope = slope_mat, p_local = plocal_mat, tau = tau_mat)
+  }
+
+  # Temporal aggregation helpers
+  aggregate_annual <- function(data_3d) {
+    annual_arr <- array(NA_real_, dim = c(length(years_vec), n_lat, n_lon))
+    for (yi in seq_along(years_vec)) {
+      t_idx <- which(time_df$year == years_vec[yi])
+      if (length(t_idx) == 12L) {
+        annual_arr[yi, , ] <- apply(data_3d[t_idx, , ], c(2, 3), mean, na.rm = TRUE)
+      }
+    }
+    annual_arr
+  }
+
+  aggregate_seasonal <- function(data_3d, seas) {
+    season_years <- sort(unique(
+      time_df$season_year[time_df$season == seas &
+                          time_df$season_year >= ANNUAL_START_YEAR &
+                          time_df$season_year <= ANALYSIS_END_YEAR]
+    ))
+    seas_arr <- array(NA_real_, dim = c(length(season_years), n_lat, n_lon))
+    for (si in seq_along(season_years)) {
+      sy    <- season_years[si]
+      t_idx <- which(time_df$season == seas & time_df$season_year == sy)
+      if (length(t_idx) == 3L) {
+        seas_arr[si, , ] <- apply(data_3d[t_idx, , ], c(2, 3), mean, na.rm = TRUE)
+      }
+    }
+    list(data = seas_arr, years = season_years)
+  }
+
+
+  # ========================================================================
+  # A3: MAIN COMPUTATION LOOP
+  # ========================================================================
+  progress_msg("A3: Beginning main computation loop...")
+
+  spatial_results <- list()
+
+  for (vi in seq_along(SPATIAL_VARS)) {
+
+    vname <- SPATIAL_VARS[vi]
+    cat("\n", rep("=", 60), "\n")
+    progress_msg(sprintf("VARIABLE %d/%d: %s", vi, length(SPATIAL_VARS), vname))
+    cat(rep("=", 60), "\n")
+
+    data_3d <- gridded_data[[vname]]
+
+    # ── Annual ─────────────────────────────────────────────────────────────
+    progress_msg(sprintf("    [%s] Annual: aggregating...", vname))
+    annual_arr <- aggregate_annual(data_3d)
+    progress_msg(sprintf("    [%s] Annual array: %d x %d x %d",
+                          vname, dim(annual_arr)[1], n_lat, n_lon))
+
+    pwmk_ann <- run_spatial_pwmk(annual_arr, years_vec,
+                                  label = paste(vname, "annual"))
+    fdr_ann  <- apply_bh_fdr(pwmk_ann$p_local)
+
+    progress_msg(sprintf("    [%s] Annual FDR: %d / %d sig (%.1f%%) at alpha_FDR = %.2f",
+                          vname, fdr_ann$n_sig, fdr_ann$n_total,
+                          100 * fdr_ann$n_sig / fdr_ann$n_total, ALPHA_FDR))
+
+    spatial_results[[vname]] <- list(
+      annual = list(
+        slope       = pwmk_ann$slope,
+        p_local     = pwmk_ann$p_local,
+        tau         = pwmk_ann$tau,
+        p_adjusted  = fdr_ann$p_adjusted,
+        significant = fdr_ann$significant,
+        years       = years_vec
+      ),
+      seasonal = list()
+    )
+
+    rm(annual_arr, pwmk_ann, fdr_ann); gc(verbose = FALSE)
+
+    # ── Seasonal ───────────────────────────────────────────────────────────
+    for (si in seq_along(SEASONS)) {
+      seas <- SEASONS[si]
+      progress_msg(sprintf("    [%s] Season %d/4: %s", vname, si, seas))
+
+      seas_agg <- aggregate_seasonal(data_3d, seas)
+      pwmk_s   <- run_spatial_pwmk(seas_agg$data, seas_agg$years,
+                                    label = paste(vname, seas))
+      fdr_s    <- apply_bh_fdr(pwmk_s$p_local)
+
+      progress_msg(sprintf("    [%s] %s FDR: %d / %d sig (%.1f%%)",
+                            vname, seas, fdr_s$n_sig, fdr_s$n_total,
+                            100 * fdr_s$n_sig / fdr_s$n_total))
+
+      spatial_results[[vname]]$seasonal[[seas]] <- list(
+        slope        = pwmk_s$slope,
+        p_local      = pwmk_s$p_local,
+        tau          = pwmk_s$tau,
+        p_adjusted   = fdr_s$p_adjusted,
+        significant  = fdr_s$significant,
+        season_years = seas_agg$years
+      )
+
+      rm(seas_agg, pwmk_s, fdr_s); gc(verbose = FALSE)
+    }
+
+    # ── Intermediate save after each variable ──────────────────────────────
+    # Guards against crashes: partial results are recoverable.
+    save(spatial_results, ALPHA_FDR, SPATIAL_VARS, lat_arc, lon_vec,
+         file = RESULTS_FILE)
+    progress_msg(sprintf("    Intermediate save after %s (%d/%d variables).",
+                          vname, vi, length(SPATIAL_VARS)))
+
+    rm(data_3d); gc(verbose = FALSE)
+  }
+
+  # Free raw gridded data
+  rm(gridded_data); gc(verbose = FALSE)
+
+  # ========================================================================
+  # A4: BUILD SUMMARY TABLE AND FINAL SAVE
+  # ========================================================================
+  progress_msg("A4: Building summary table and saving final results...")
+
+  summary_rows <- list()
+  for (vname in names(spatial_results)) {
+    res <- spatial_results[[vname]]
+
+    # Annual
+    fdr_a <- apply_bh_fdr(res$annual$p_local)
+    summary_rows[[length(summary_rows) + 1L]] <- data.frame(
+      variable = vname, period = "Annual",
+      n_sig = fdr_a$n_sig, n_total = fdr_a$n_total,
+      pct_sig = round(100 * fdr_a$n_sig / fdr_a$n_total, 2),
+      stringsAsFactors = FALSE
+    )
+
+    # Seasonal
+    for (seas in SEASONS) {
+      fdr_s <- apply_bh_fdr(res$seasonal[[seas]]$p_local)
+      summary_rows[[length(summary_rows) + 1L]] <- data.frame(
+        variable = vname, period = seas,
+        n_sig = fdr_s$n_sig, n_total = fdr_s$n_total,
+        pct_sig = round(100 * fdr_s$n_sig / fdr_s$n_total, 2),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  fdr_summary <- bind_rows(summary_rows)
+
+  # Final save (includes fdr_summary)
+  save(spatial_results, ALPHA_FDR, SPATIAL_VARS, lat_arc, lon_vec,
+       fdr_summary,
+       file = RESULTS_FILE)
+
+  elapsed_total <- round(as.numeric(
+    difftime(Sys.time(), .t0_phase34, units = "mins")), 1)
+
+  cat("\n", rep("=", 70), "\n")
+  progress_msg(sprintf(
+    "PART A COMPLETE. Total computation time: %.1f minutes.", elapsed_total
+  ))
+  cat(rep("=", 70), "\n\n")
+
+}  # end of computation block
+
+
+# ============================================================================
+# PART B: FIGURES (always runs — uses cached or freshly computed results)
+# ============================================================================
+
+progress_msg("PHASE 3.4 PART B: GENERATING FIGURES")
+cat(rep("=", 70), "\n\n")
+
+# Print summary table
+cat("FDR SIGNIFICANCE SUMMARY (alpha_FDR =", ALPHA_FDR, ")\n")
+cat(rep("-", 60), "\n")
+print(fdr_summary, row.names = FALSE)
+cat("\n")
+
+
+# ── B1: Cartographic setup ─────────────────────────────────────────────────
+progress_msg("B1: Setting up cartographic elements...")
+
+arctic_crs  <- "+proj=laea +lat_0=90 +lon_0=0"
+view_radius <- 3330000   
+plot_radius <- 3600000   
+
+wrap_data <- function(mat) {
+  mat[, c(which(lon_vec >= 0), which(lon_vec < 0))]
+}
+lon_wrapped <- c(lon_vec[lon_vec >= 0], lon_vec[lon_vec < 0] + 360)
+
+world       <- ne_countries(scale = "medium", returnclass = "sf")
+world_polar <- st_transform(world, crs = arctic_crs)
+
+graticules <- st_graticule(
+  lon = seq(-180, 180, by = 60),
+  lat = c(60, 70, 80),
+  crs = 4326
+) %>% st_transform(crs = arctic_crs)
+
+lat_labels <- data.frame(lon = 180, lat = c(60, 70, 80)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lat_labels$label <- c("60\u00b0N", "70\u00b0N", "80\u00b0N")
+
+lon_labels <- data.frame(lon = seq(0, 300, by = 60), lat = 62) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs = arctic_crs)
+lon_labels$label <- c("0\u00b0", "60\u00b0E", "120\u00b0E",
+                       "180\u00b0", "120\u00b0W", "60\u00b0W")
+
+circle_mask <- st_sfc(st_point(c(0, 0)), crs = arctic_crs) %>%
+  st_buffer(dist = view_radius)
+
+square_box <- st_as_sfc(st_bbox(
+  c(xmin = -plot_radius, xmax = plot_radius,
+    ymin = -plot_radius, ymax = plot_radius),
+  crs = arctic_crs
+))
+inverse_mask <- st_difference(square_box, circle_mask)
+
+progress_msg("  Cartographic elements ready.")
+
+
+# ── B2: Plotting helpers ───────────────────────────────────────────────────
+make_stars_polar <- function(mat, varname = "value") {
+  mat_wrap <- wrap_data(mat)
+  mat_wrap <- t(mat_wrap)    # [lat, lon] -> [lon, lat] to match stars x/y convention
+  dims <- st_dimensions(x = lon_wrapped, y = lat_arc)
+  st_as_stars(setNames(list(mat_wrap), varname), dimensions = dims) %>%
+    st_set_crs(4326) %>%
+    st_warp(crs = arctic_crs) %>%
+    { .[circle_mask] }
+}
+
+make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
+                       sig_contour = NULL) {
+  p <- ggplot() +
+    geom_stars(data = stars_obj, aes(fill = .data[[fill_var]]),
+               na.rm = TRUE) +
+    fill_scale +
+    geom_sf(data = world_polar, fill = NA, color = "black",
+            linewidth = 0.2) +
+    geom_sf(data = graticules, color = "grey50", linetype = "dashed",
+            linewidth = 0.25) +
+    geom_sf(data = inverse_mask, fill = "white", color = NA) +
+    geom_sf_text(data = lat_labels, aes(label = label),
+                 size = 2.3, color = "black", hjust = 1.2) +
+    geom_sf_text(data = lon_labels, aes(label = label),
+                 size = 2.3, color = "black")
+
+  if (!is.null(sig_contour)) {
+    # st_warp interpolates 0/1 to continuous values; threshold at 0.5
+    # and map directly to alpha via scale_alpha_identity()
+    sig_contour[[1]] <- ifelse(
+      is.na(sig_contour[[1]]) | sig_contour[[1]] < 0.5, 0, 0.35
+    )
+    p <- p +
+      geom_stars(data = sig_contour, aes(alpha = sig_mask),
+                 fill = "black", color = NA, na.rm = TRUE) +
+      scale_alpha_identity()
+  }
+
+  p +
+    coord_sf(xlim = c(-plot_radius, plot_radius),
+             ylim = c(-plot_radius, plot_radius),
+             expand = FALSE) +
+    labs(title = panel_title) +
+    theme_void(base_size = 11) +
+    theme(
+      plot.title        = element_text(face = "bold", hjust = 0.5, size = 12),
+      legend.position   = "right",
+      legend.key.width  = unit(0.5, "cm"),
+      legend.key.height = unit(1.5, "cm"),
+      panel.background  = element_rect(fill = "grey95", color = NA),
+      plot.margin       = margin(5, 5, 5, 5)
+    )
+}
+
+
+# ── B3: Figure configuration per variable ──────────────────────────────────
+# Each variable gets an annual map and a 2x2 seasonal panel.
+# Figure numbering: 3.5a/3.5b (annual/seasonal) for the primary metric,
+# then 3.6a/3.6b, 3.7a/3.7b, etc.
+
+var_plot_config <- list(
+  eke_synoptic_mean = list(
+    fig_annual   = "Fig3.5a_Annual_Trend_Map_EKE_synoptic.png",
+    fig_seasonal = "Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png",
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    display_name = expression(EKE[synoptic])
+  ),
+  eke_p90 = list(
+    fig_annual   = "Fig3.6a_Annual_Trend_Map_P90.png",
+    fig_seasonal = "Fig3.6b_Seasonal_Trend_Maps_P90.png",
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    display_name = expression(P[90] ~ EKE)
+  ),
+  eke_p95 = list(
+    fig_annual   = "Fig3.7a_Annual_Trend_Map_P95.png",
+    fig_seasonal = "Fig3.7b_Seasonal_Trend_Maps_P95.png",
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    display_name = expression(P[95] ~ EKE)
+  ),
+  eke_p99 = list(
+    fig_annual   = "Fig3.8a_Annual_Trend_Map_P99.png",
+    fig_seasonal = "Fig3.8b_Seasonal_Trend_Maps_P99.png",
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    display_name = expression(P[99] ~ EKE)
+  ),
+  exceed_p95_freq = list(
+    fig_annual   = "Fig3.9a_Annual_Trend_Map_ExceedFreq.png",
+    fig_seasonal = "Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png",
+    unit_expr    = expression(hat(beta) ~ "[decade" ^{-1} * "]"),
+    display_name = "P95 Exceedance Freq."
+  ),
+  tke = list(
+    fig_annual   = "Fig3.10a_Annual_Trend_Map_TKE.png",
+    fig_seasonal = "Fig3.10b_Seasonal_Trend_Maps_TKE.png",
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    display_name = "TKE"
+  )
+)
+
+
+# ── B4: Generate figures ───────────────────────────────────────────────────
+for (vname in names(spatial_results)) {
+
+  cfg <- var_plot_config[[vname]]
+  if (is.null(cfg)) {
+    progress_msg(sprintf("  WARNING: No plot config for %s — skipping.", vname))
+    next
+  }
+
+  res <- spatial_results[[vname]]
+
+  cat("\n", rep("-", 50), "\n")
+  progress_msg(sprintf("  Plotting: %s", vname))
+
+  # ── Annual map ─────────────────────────────────────────────────────────
+  slope_ann <- res$annual$slope
+  sig_ann   <- res$annual$significant
+  slope_lim <- quantile(abs(slope_ann), 0.99, na.rm = TRUE)
+
+  slope_stars <- make_stars_polar(slope_ann, "slope")
+  sig_stars   <- make_stars_polar(
+    matrix(as.integer(sig_ann), nrow(slope_ann), ncol(slope_ann)), "sig_mask"
+  )
+
+  fill_scale <- scale_fill_distiller(
+    name      = cfg$unit_expr,
+    palette   = "RdBu",
+    direction = -1,
+    limits    = c(-slope_lim, slope_lim),
+    na.value  = "transparent",
+    oob       = scales::squish
+  )
+
+  p_ann <- make_panel(
+    stars_obj   = slope_stars,
+    fill_var    = "slope",
+    fill_scale  = fill_scale,
+    panel_title = bquote(bold("Annual Sen slope") ~ .(cfg$display_name) ~
+                           "(1958\u20132025)"),
+    sig_contour = sig_stars
+  ) +
+    labs(subtitle = glue(
+      "Pre-Whitened Mann\u2013Kendall | BH-FDR (\u03b1_FDR = {ALPHA_FDR}) ",
+      "| Shading = FDR-significant"
+    )) +
+    theme(plot.subtitle = element_text(size = 8, colour = "grey40", hjust = 0.5))
+
+  ggsave(file.path(FIG_PHASE3, cfg$fig_annual),
+         p_ann, width = 8, height = 8, dpi = 300, bg = "white")
+  progress_msg(sprintf("    Saved: %s", cfg$fig_annual))
+
+  rm(slope_stars, sig_stars, p_ann)
+
+  # ── Seasonal maps (2x2) ────────────────────────────────────────────────
+  all_slopes_seas <- unlist(lapply(res$seasonal, function(x) x$slope))
+  slope_lim_seas  <- quantile(abs(all_slopes_seas), 0.99, na.rm = TRUE)
+
+  season_panels <- list()
+
+  for (seas in SEASONS) {
+    sr    <- res$seasonal[[seas]]
+    sl_st <- make_stars_polar(sr$slope, "slope")
+    sg_st <- make_stars_polar(
+      matrix(as.integer(sr$significant), n_lat, n_lon), "sig_mask"
+    )
+
+    fill_s <- scale_fill_distiller(
+      name      = cfg$unit_expr,
+      palette   = "RdBu",
+      direction = -1,
+      limits    = c(-slope_lim_seas, slope_lim_seas),
+      na.value  = "transparent",
+      oob       = scales::squish
+    )
+
+    season_panels[[seas]] <- make_panel(
+      stars_obj   = sl_st,
+      fill_var    = "slope",
+      fill_scale  = fill_s,
+      panel_title = unname(SEASON_NAMES[seas]),
+      sig_contour = sg_st
+    )
+  }
+
+  fig_seas <- (season_panels[["DJF"]] + season_panels[["MAM"]] +
+                season_panels[["JJA"]] + season_panels[["SON"]]) +
+    plot_layout(ncol = 2, guides = "collect") +
+    plot_annotation(
+      title = paste0("Seasonal Spatial Trends: Sen\u2019s Slope of ",
+                     vname, " (1958\u20132025)"),
+      subtitle = glue(
+        "Pre-Whitened Mann\u2013Kendall | BH-FDR (\u03b1_FDR = {ALPHA_FDR}) ",
+        "| Shading = FDR-significant | Shared colour scale"
+      ),
+      theme = theme(
+        plot.title    = element_text(face = "bold", size = 14, hjust = 0.5),
+        plot.subtitle = element_text(size = 9, colour = "grey40", hjust = 0.5)
+      )
+    )
+
+  ggsave(file.path(FIG_PHASE3, cfg$fig_seasonal),
+         fig_seas, width = 14, height = 14, dpi = 300, bg = "white")
+  progress_msg(sprintf("    Saved: %s", cfg$fig_seasonal))
+
+  rm(season_panels, fig_seas)
+  gc(verbose = FALSE)
+}
+
+
+# ============================================================================
+# FINAL STATUS
+# ============================================================================
+elapsed_total <- round(as.numeric(
+  difftime(Sys.time(), .t0_phase34, units = "mins")), 1)
+
+cat("\n", rep("=", 70), "\n")
+progress_msg(sprintf("PHASE 3.4 COMPLETE. Total time: %.1f minutes.", elapsed_total))
+cat(sprintf("  Results: %s\n", RESULTS_FILE))
+cat(sprintf("  Variables: %s\n", paste(names(spatial_results), collapse = ", ")))
+cat(sprintf("  Figures: %s\n", FIG_PHASE3))
+cat(rep("=", 70), "\n")
+```
