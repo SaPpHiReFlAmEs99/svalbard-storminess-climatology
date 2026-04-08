@@ -4064,6 +4064,11 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
 
 }  # end of computation block
 
+# Derive grid dimensions from lat_arc / lon_vec, which are always available
+# (either from the computation block above or restored from the .RData cache).
+# n_lat / n_lon are NOT saved in the cache, so this must run on every execution.
+n_lat <- length(lat_arc)
+n_lon <- length(lon_vec)
 
 # ============================================================================
 # PART B: FIGURES (always runs — uses cached or freshly computed results)
@@ -4105,7 +4110,7 @@ lat_labels <- data.frame(lon = 180, lat = c(60, 70, 80)) %>%
   st_transform(crs = arctic_crs)
 lat_labels$label <- c("60\u00b0N", "70\u00b0N", "80\u00b0N")
 
-lon_labels <- data.frame(lon = seq(0, 300, by = 60), lat = 62) %>%
+lon_labels <- data.frame(lon = seq(0, 300, by = 60), lat = 58) %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
   st_transform(crs = arctic_crs)
 lon_labels$label <- c("0\u00b0", "60\u00b0E", "120\u00b0E",
@@ -4152,15 +4157,20 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
                  size = 2.3, color = "black")
 
   if (!is.null(sig_contour)) {
-    # st_warp interpolates 0/1 to continuous values; threshold at 0.5
-    # and map directly to alpha via scale_alpha_identity()
+    # st_warp interpolates the binary 0/1 mask to continuous values.
+    # Threshold at 0.5 to recover significance: keep 1L, set everything else NA.
+    # Then convert to sf polygons with st_as_sf(na.rm = TRUE, merge = TRUE):
+    # this operates at the geometry level, so only the significant cells
+    # produce polygons — NA cells produce nothing. geom_sf then overlays
+    # those polygons with a constant black fill, which has no conflict with
+    # the slope fill scale already in the plot (unlike a second geom_stars
+    # layer, which would render the full rectangular raster extent).
     sig_contour[[1]] <- ifelse(
-      is.na(sig_contour[[1]]) | sig_contour[[1]] < 0.5, 0, 0.35
+      !is.na(sig_contour[[1]]) & sig_contour[[1]] >= 0.5, 1L, NA_integer_
     )
+    sig_sf <- st_as_sf(sig_contour, na.rm = TRUE, merge = TRUE)
     p <- p +
-      geom_stars(data = sig_contour, aes(alpha = sig_mask),
-                 fill = "black", color = NA, na.rm = TRUE) +
-      scale_alpha_identity()
+      geom_sf(data = sig_sf, fill = "black", alpha = 0.35, color = NA)
   }
 
   p +
@@ -4189,38 +4199,32 @@ var_plot_config <- list(
   eke_synoptic_mean = list(
     fig_annual   = "Fig3.5a_Annual_Trend_Map_EKE_synoptic.png",
     fig_seasonal = "Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
-    display_name = expression(EKE[synoptic])
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
   ),
   eke_p90 = list(
     fig_annual   = "Fig3.6a_Annual_Trend_Map_P90.png",
     fig_seasonal = "Fig3.6b_Seasonal_Trend_Maps_P90.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
-    display_name = expression(P[90] ~ EKE)
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
   ),
   eke_p95 = list(
     fig_annual   = "Fig3.7a_Annual_Trend_Map_P95.png",
     fig_seasonal = "Fig3.7b_Seasonal_Trend_Maps_P95.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
-    display_name = expression(P[95] ~ EKE)
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
   ),
   eke_p99 = list(
     fig_annual   = "Fig3.8a_Annual_Trend_Map_P99.png",
     fig_seasonal = "Fig3.8b_Seasonal_Trend_Maps_P99.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
-    display_name = expression(P[99] ~ EKE)
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
   ),
   exceed_p95_freq = list(
     fig_annual   = "Fig3.9a_Annual_Trend_Map_ExceedFreq.png",
     fig_seasonal = "Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png",
-    unit_expr    = expression(hat(beta) ~ "[decade" ^{-1} * "]"),
-    display_name = "P95 Exceedance Freq."
+    unit_expr    = expression(hat(beta) ~ "[decade" ^{-1} * "]")
   ),
   tke = list(
     fig_annual   = "Fig3.10a_Annual_Trend_Map_TKE.png",
     fig_seasonal = "Fig3.10b_Seasonal_Trend_Maps_TKE.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
-    display_name = "TKE"
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
   )
 )
 
@@ -4262,8 +4266,10 @@ for (vname in names(spatial_results)) {
     stars_obj   = slope_stars,
     fill_var    = "slope",
     fill_scale  = fill_scale,
-    panel_title = bquote(bold("Annual Sen slope") ~ .(cfg$display_name) ~
-                           "(1958\u20132025)"),
+    panel_title = parse(text = paste0(
+      'bold("Annual Sen\'s slope") ~ ', VAR_LABELS_SHORT[[vname]],
+      ' ~ "(1958\u20132025)"'
+    ))[[1]],
     sig_contour = sig_stars
   ) +
     labs(subtitle = glue(
@@ -4314,7 +4320,7 @@ for (vname in names(spatial_results)) {
     plot_layout(ncol = 2, guides = "collect") +
     plot_annotation(
       title = paste0("Seasonal Spatial Trends: Sen\u2019s Slope of ",
-                     vname, " (1958\u20132025)"),
+                     VAR_LABELS_PLAIN[[vname]], " (1958\u20132025)"),
       subtitle = glue(
         "Pre-Whitened Mann\u2013Kendall | BH-FDR (\u03b1_FDR = {ALPHA_FDR}) ",
         "| Shading = FDR-significant | Shared colour scale"
@@ -4347,3 +4353,67 @@ cat(sprintf("  Variables: %s\n", paste(names(spatial_results), collapse = ", "))
 cat(sprintf("  Figures: %s\n", FIG_PHASE3))
 cat(rep("=", 70), "\n")
 ```
+
+```{r}
+load(file.path(OUTPUT_DATA_DIR, "Phase3_4_Spatial_Results.RData"))
+
+# Check if fdr_summary exists (it's saved in the final save but not the intermediate ones)
+if (exists("fdr_summary")) {
+  print(fdr_summary, row.names = FALSE)
+} else {
+  # Rebuild it manually from spatial_results
+  for (vname in names(spatial_results)) {
+    res <- spatial_results[[vname]]
+    
+    # Annual
+    n_sig_a <- sum(res$annual$significant, na.rm = TRUE)
+    n_tot_a <- sum(!is.na(res$annual$p_local))
+    cat(sprintf("%s | Annual | %d / %d sig (%.2f%%)\n",
+                vname, n_sig_a, n_tot_a, 100 * n_sig_a / n_tot_a))
+    
+    # Seasonal
+    for (seas in c("DJF", "MAM", "JJA", "SON")) {
+      sr <- res$seasonal[[seas]]
+      n_sig_s <- sum(sr$significant, na.rm = TRUE)
+      n_tot_s <- sum(!is.na(sr$p_local))
+      cat(sprintf("%s | %s    | %d / %d sig (%.2f%%)\n",
+                  vname, seas, n_sig_s, n_tot_s, 100 * n_sig_s / n_tot_s))
+    }
+    cat("\n")
+  }
+}
+```
+
+```{r}
+# Check what the seasonal aggregation actually produced
+load(RESULTS_FILE)
+
+# Pick a grid point with a strong visual slope in the MAM map (red region)
+# and check the raw p-value BEFORE FDR correction
+res <- spatial_results[["eke_synoptic_mean"]]
+
+# Distribution of raw local p-values for MAM
+p_mam <- res$seasonal[["MAM"]]$p_local
+cat("MAM raw p-values summary:\n")
+print(summary(as.vector(p_mam)))
+cat(sprintf("\nMAM points with raw p < 0.05: %d / %d (%.1f%%)\n",
+            sum(p_mam < 0.05, na.rm = TRUE),
+            sum(!is.na(p_mam)),
+            100 * sum(p_mam < 0.05, na.rm = TRUE) / sum(!is.na(p_mam))))
+
+# Compare with DJF
+p_djf <- res$seasonal[["DJF"]]$p_local
+cat("\nDJF raw p-values summary:\n")
+print(summary(as.vector(p_djf)))
+cat(sprintf("\nDJF points with raw p < 0.05: %d / %d (%.1f%%)\n",
+            sum(p_djf < 0.05, na.rm = TRUE),
+            sum(!is.na(p_djf)),
+            100 * sum(p_djf < 0.05, na.rm = TRUE) / sum(!is.na(p_djf))))
+
+# Also check slopes
+cat("\nMAM slopes summary:\n")
+print(summary(as.vector(res$seasonal[["MAM"]]$slope)))
+cat("\nDJF slopes summary:\n")
+print(summary(as.vector(res$seasonal[["DJF"]]$slope)))
+```
+
