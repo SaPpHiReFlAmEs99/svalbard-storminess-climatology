@@ -3589,6 +3589,7 @@ cat(sprintf(
 ))
 ```
 
+
 ## 3.4: Spatial trends
 
 ```{r phase3-4-spatial-trends}
@@ -3598,15 +3599,13 @@ cat(sprintf(
 #
 # DEPENDS ON:
 #   - setup-environment chunk (all global constants, colours, paths)
-#   - phase3-1 / phase3-2 chunks (sen_slope() in environment)z
-#   - Phase 1 prepared data: PHASE1_DATA (for gridded arrays)
+#   - phase3-1 / phase3-2 chunks (sen_slope() in environment)
 #   - NetCDF files: METRICS_FILE (direct read for gridded data)
 #
 # PURPOSE:
 #   Apply the Pre-Whitened Mann-Kendall (PWMK) test and Sen's slope
-#   estimator at every ERA5 grid point independently, then apply the
-#   Benjamini-Hochberg (BH) False Discovery Rate correction across
-#   all simultaneous tests to identify field-significant trends.
+#   estimator at every ERA5 grid point independently to map the spatial
+#   pattern of long-term trends in Arctic storminess.
 #
 #   This addresses the key limitation of Phases 3.1-3.2: the Pan-Arctic
 #   area-weighted mean can mask spatially concentrated signals. A trend
@@ -3625,24 +3624,34 @@ cat(sprintf(
 #     (p_local) and Sen's slope per year. This generates K ~ 172,800
 #     simultaneous hypothesis tests.
 #
-#   Step 3 — Benjamini-Hochberg False Discovery Rate correction
-#     [p.adjust(method = "BH")]
-#     The multiple testing problem: at alpha = 0.05, approximately
-#     0.05 x K ~ 8,640 grid points would appear significant by chance
-#     alone under a true global null hypothesis. The BH procedure
-#     controls the EXPECTED PROPORTION of false discoveries among all
-#     rejected tests (Benjamini & Hochberg 1995), rather than the
-#     probability of any false discovery (Bonferroni). This distinction
-#     is crucial: BH is substantially more powerful than Bonferroni
-#     while remaining valid under positive dependence between spatially
-#     correlated grid points (Benjamini & Yekutieli 2001), as confirmed
-#     for climate fields by Wilks (2006) and Ventura et al. (2004).
+#   Step 3 — TWO-LAYER FIELD SIGNIFICANCE
 #
-#     The BH threshold is applied at alpha_FDR = 0.10, following the
-#     recommendation of Wilks (2016) for spatial climate analyses. Under
-#     spatial correlation, the BH procedure becomes conservative relative
-#     to its nominal level; using alpha_FDR = 2 x alpha_local recovers
-#     approximately the intended control level for typical climate fields.
+#     Layer 1: Global (field) significance via the rejection fraction.
+#       Under the global null hypothesis (no trend at any grid point),
+#       exactly alpha = 5% of grid points are expected to yield p < 0.05
+#       by chance. If the observed rejection fraction f_obs substantially
+#       exceeds this expectation, the field as a whole contains real
+#       signal. This is conceptually equivalent to the Livezey & Chen
+#       (1983) counting test, but reported as a fraction rather than a
+#       formal metatest, because the latter requires a resampling
+#       procedure to account for spatial correlation.
+#
+#     Layer 2: Local identification via p_local < 0.05 stippling.
+#       Once field significance is established, grid points with
+#       p_local < 0.05 are stippled to indicate WHERE the signal is
+#       concentrated. These are interpreted as indicative spatial
+#       patterns, not individually confirmed trends.
+#
+#     NOTE ON BH-FDR: The Benjamini-Hochberg FDR correction
+#       (Wilks 2006, 2016) was evaluated but is NOT applied here.
+#       At ERA5 native resolution (K ~ 172,800), BH becomes
+#       excessively conservative because grid points vastly exceed
+#       the effective spatial degrees of freedom (~100-3000;
+#       Bretherton et al. 1999). The Wilks (2016) alpha_FDR = 0.10
+#       calibration was validated at K = 3,720 and does not
+#       extrapolate to K > 100,000. This is documented in the
+#       thesis Discussion. See Cortes et al. (2020) for a
+#       systematic comparison at high K.
 #
 #   Step 4 — Polar projection map
 #     Lambert Azimuthal Equal-Area (LAEA), centred on the North Pole.
@@ -3651,22 +3660,23 @@ cat(sprintf(
 # KEY REFERENCES:
 #   Benjamini & Hochberg (1995) — FDR procedure
 #     J. Royal Statistical Society B, 57(1): 289-300.
-#     DOI: 10.1111/j.2517-6161.1995.tb02031.x
 #   Wilks (2006) — FDR for climate field significance
 #     J. Appl. Meteorol. Climatol., 45: 1181-1189.
-#     DOI: 10.1175/JAM2404.1
 #   Wilks (2016) — alpha_FDR = 2*alpha_local recommendation
 #     Bull. Amer. Meteor. Soc., 97: 2263-2273.
-#     DOI: 10.1175/BAMS-D-15-00267.1
+#   Bretherton et al. (1999) — Effective spatial degrees of freedom
+#     J. Climate, 12: 1990-2009.
+#   Cortes et al. (2020) — Multiple testing for spatio-temporal data
+#     Environ. Ecol. Stat., 27: 293-318.
 #   Ventura et al. (2004) — FDR for climatological data
 #     J. Climate, 17: 4343-4356.
-#   Livezey & Chen (1983) — field significance (classical approach)
+#   Livezey & Chen (1983) — Field significance (classical approach)
 #     Mon. Wea. Rev., 111: 46-59.
 #   Zhang et al. (2000); Zhang & Zwiers (2004) — PWMK
 #
 # SCOPE:
 #   Variables: eke_synoptic_mean, eke_p90, eke_p95, eke_p99,
-#              exceed_p95_freq, tke
+#              exceed_p95_freq
 #   Temporal scope: annual (1958-2025) and four seasons (DJF/MAM/JJA/SON)
 #   Domain: >=60 N (ARCTIC_LAT_THRESHOLD from setup chunk)
 #
@@ -3674,15 +3684,14 @@ cat(sprintf(
 #   The computation block saves results to Phase3_4_Spatial_Results.RData.
 #   On subsequent runs, if this file exists, the computation is skipped
 #   entirely and results are loaded from disk. This allows rapid iteration
-#   on figure aesthetics without re-running ~1M+ PWMK tests.
-#   To force recomputation, delete the .RData file or set
-#   FORCE_RECOMPUTE <- TRUE before running this chunk.
+#   on figure aesthetics without re-running ~860,000 PWMK tests.
+#   To force recomputation, set FORCE_RECOMPUTE <- TRUE before running.
 #
 # OUTPUT:
 #   spatial_results       — named list by variable, each containing
 #                           annual and seasonal trend grids
-#   fdr_summary           — data frame summarising FDR results
-#   Fig3.5_*              — Annual + seasonal trend maps per variable
+#   field_sig_summary     — data frame with rejection fractions
+#   Fig3.5–3.9            — Annual + seasonal trend maps per variable
 #   Phase3_4_Spatial_Results.RData
 #
 # ============================================================================
@@ -3693,13 +3702,14 @@ cat(sprintf(
 # ============================================================================
 
 # ── Configuration ────────────────────────────────────────────────────────────
-ALPHA_FDR <- 0.10   # Wilks (2016, BAMS): alpha_FDR = 2 * alpha_local
+
+# Local significance threshold for stippling (Layer 2)
+ALPHA_LOCAL <- 0.05
 
 # Variables to analyse:
-#   - 5 storminess metrics (all showed significance in MAM or are near-
-#     significant; spatial analysis may reveal localised signals masked
-#     by Pan-Arctic aggregation)
-#   - TKE (the only energy component with significant Pan-Arctic trends)
+#   - 5 storminess metrics: all showed significance in MAM at the Pan-Arctic
+#     scale (Phase 3.2), or near-significance in the case of P99. Spatial
+#     analysis may reveal localised signals masked by area-weighted aggregation.
 SPATIAL_VARS <- c(
   "eke_synoptic_mean",   # primary metric
   "eke_p90",             # MAM significant (p = 0.016)
@@ -3732,9 +3742,7 @@ if (file.exists(RESULTS_FILE) && !FORCE_RECOMPUTE) {
     length(spatial_results), paste(names(spatial_results), collapse = ", ")
   ))
 
-  # Verify that all requested variables are present in cached results.
-  # If new variables were added to SPATIAL_VARS since the last run,
-  # the cache is stale and must be recomputed.
+  # Staleness check: verify all requested variables are present
   missing_vars <- setdiff(SPATIAL_VARS, names(spatial_results))
   if (length(missing_vars) > 0) {
     progress_msg(sprintf(
@@ -3793,9 +3801,9 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
     gridded_data[[vname]] <- gridded_data[[vname]][, lat_idx, ]
   }
 
-  n_lat  <- length(lat_arc)
-  n_lon  <- length(lon_vec)
-  n_time <- dim(gridded_data[[SPATIAL_VARS[1]]])[1]
+  n_lat    <- length(lat_arc)
+  n_lon    <- length(lon_vec)
+  n_time   <- dim(gridded_data[[SPATIAL_VARS[1]]])[1]
   n_points <- n_lat * n_lon
 
   progress_msg(sprintf(
@@ -3844,22 +3852,6 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
       slope_dec = unname(mk["trend"]) * DECADES,
       p_local   = unname(mk["sig"]),
       tau       = unname(mk["tau"])
-    )
-  }
-
-  # BH-FDR on a [lat x lon] p-value matrix
-  apply_bh_fdr <- function(plocal_mat, alpha_fdr = ALPHA_FDR) {
-    p_vec    <- as.vector(plocal_mat)
-    padj_vec <- rep(NA_real_, length(p_vec))
-    valid    <- !is.na(p_vec)
-    padj_vec[valid] <- p.adjust(p_vec[valid], method = "BH")
-    padj_mat <- matrix(padj_vec, nrow(plocal_mat), ncol(plocal_mat))
-    sig_mat  <- padj_mat <= alpha_fdr
-    list(
-      p_adjusted  = padj_mat,
-      significant = sig_mat,
-      n_sig       = sum(sig_mat, na.rm = TRUE),
-      n_total     = sum(!is.na(plocal_mat))
     )
   }
 
@@ -3958,25 +3950,28 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
 
     pwmk_ann <- run_spatial_pwmk(annual_arr, years_vec,
                                   label = paste(vname, "annual"))
-    fdr_ann  <- apply_bh_fdr(pwmk_ann$p_local)
 
-    progress_msg(sprintf("    [%s] Annual FDR: %d / %d sig (%.1f%%) at alpha_FDR = %.2f",
-                          vname, fdr_ann$n_sig, fdr_ann$n_total,
-                          100 * fdr_ann$n_sig / fdr_ann$n_total, ALPHA_FDR))
+    # Field significance: rejection fraction
+    n_local_sig <- sum(pwmk_ann$p_local < ALPHA_LOCAL, na.rm = TRUE)
+    n_total     <- sum(!is.na(pwmk_ann$p_local))
+    progress_msg(sprintf(
+      "    [%s] Annual: %d / %d (%.1f%%) with local p < %.2f (%.0fx null expectation)",
+      vname, n_local_sig, n_total, 100 * n_local_sig / n_total,
+      ALPHA_LOCAL, n_local_sig / (ALPHA_LOCAL * n_total)
+    ))
 
     spatial_results[[vname]] <- list(
       annual = list(
-        slope       = pwmk_ann$slope,
-        p_local     = pwmk_ann$p_local,
-        tau         = pwmk_ann$tau,
-        p_adjusted  = fdr_ann$p_adjusted,
-        significant = fdr_ann$significant,
-        years       = years_vec
+        slope     = pwmk_ann$slope,
+        p_local   = pwmk_ann$p_local,
+        tau       = pwmk_ann$tau,
+        sig_local = pwmk_ann$p_local < ALPHA_LOCAL,
+        years     = years_vec
       ),
       seasonal = list()
     )
 
-    rm(annual_arr, pwmk_ann, fdr_ann); gc(verbose = FALSE)
+    rm(annual_arr, pwmk_ann); gc(verbose = FALSE)
 
     # ── Seasonal ───────────────────────────────────────────────────────────
     for (si in seq_along(SEASONS)) {
@@ -3986,27 +3981,29 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
       seas_agg <- aggregate_seasonal(data_3d, seas)
       pwmk_s   <- run_spatial_pwmk(seas_agg$data, seas_agg$years,
                                     label = paste(vname, seas))
-      fdr_s    <- apply_bh_fdr(pwmk_s$p_local)
 
-      progress_msg(sprintf("    [%s] %s FDR: %d / %d sig (%.1f%%)",
-                            vname, seas, fdr_s$n_sig, fdr_s$n_total,
-                            100 * fdr_s$n_sig / fdr_s$n_total))
+      n_local_s <- sum(pwmk_s$p_local < ALPHA_LOCAL, na.rm = TRUE)
+      n_total_s <- sum(!is.na(pwmk_s$p_local))
+      progress_msg(sprintf(
+        "    [%s] %s: %d / %d (%.1f%%) with local p < %.2f (%.0fx null)",
+        vname, seas, n_local_s, n_total_s, 100 * n_local_s / n_total_s,
+        ALPHA_LOCAL, n_local_s / (ALPHA_LOCAL * n_total_s)
+      ))
 
       spatial_results[[vname]]$seasonal[[seas]] <- list(
         slope        = pwmk_s$slope,
         p_local      = pwmk_s$p_local,
         tau          = pwmk_s$tau,
-        p_adjusted   = fdr_s$p_adjusted,
-        significant  = fdr_s$significant,
+        sig_local    = pwmk_s$p_local < ALPHA_LOCAL,
         season_years = seas_agg$years
       )
 
-      rm(seas_agg, pwmk_s, fdr_s); gc(verbose = FALSE)
+      rm(seas_agg, pwmk_s); gc(verbose = FALSE)
     }
 
     # ── Intermediate save after each variable ──────────────────────────────
-    # Guards against crashes: partial results are recoverable.
-    save(spatial_results, ALPHA_FDR, SPATIAL_VARS, lat_arc, lon_vec,
+    save(spatial_results, ALPHA_LOCAL, SPATIAL_VARS,
+         lat_arc, lon_vec,
          file = RESULTS_FILE)
     progress_msg(sprintf("    Intermediate save after %s (%d/%d variables).",
                           vname, vi, length(SPATIAL_VARS)))
@@ -4018,39 +4015,52 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
   rm(gridded_data); gc(verbose = FALSE)
 
   # ========================================================================
-  # A4: BUILD SUMMARY TABLE AND FINAL SAVE
+  # A4: BUILD SUMMARY TABLES AND FINAL SAVE
   # ========================================================================
-  progress_msg("A4: Building summary table and saving final results...")
+  progress_msg("A4: Building summary tables and saving final results...")
 
   summary_rows <- list()
   for (vname in names(spatial_results)) {
     res <- spatial_results[[vname]]
 
     # Annual
-    fdr_a <- apply_bh_fdr(res$annual$p_local)
+    p_ann   <- res$annual$p_local
+    n_tot   <- sum(!is.na(p_ann))
+    n_loc   <- sum(p_ann < ALPHA_LOCAL, na.rm = TRUE)
     summary_rows[[length(summary_rows) + 1L]] <- data.frame(
-      variable = vname, period = "Annual",
-      n_sig = fdr_a$n_sig, n_total = fdr_a$n_total,
-      pct_sig = round(100 * fdr_a$n_sig / fdr_a$n_total, 2),
+      variable      = vname,
+      period        = "Annual",
+      n_total       = n_tot,
+      n_local_sig   = n_loc,
+      pct_local     = round(100 * n_loc / n_tot, 2),
+      ratio_to_null = round(n_loc / (ALPHA_LOCAL * n_tot), 2),
+      min_p         = signif(min(p_ann, na.rm = TRUE), 3),
       stringsAsFactors = FALSE
     )
 
     # Seasonal
     for (seas in SEASONS) {
-      fdr_s <- apply_bh_fdr(res$seasonal[[seas]]$p_local)
+      sr    <- res$seasonal[[seas]]
+      p_s   <- sr$p_local
+      n_ts  <- sum(!is.na(p_s))
+      n_ls  <- sum(p_s < ALPHA_LOCAL, na.rm = TRUE)
       summary_rows[[length(summary_rows) + 1L]] <- data.frame(
-        variable = vname, period = seas,
-        n_sig = fdr_s$n_sig, n_total = fdr_s$n_total,
-        pct_sig = round(100 * fdr_s$n_sig / fdr_s$n_total, 2),
+        variable      = vname,
+        period        = seas,
+        n_total       = n_ts,
+        n_local_sig   = n_ls,
+        pct_local     = round(100 * n_ls / n_ts, 2),
+        ratio_to_null = round(n_ls / (ALPHA_LOCAL * n_ts), 2),
+        min_p         = signif(min(p_s, na.rm = TRUE), 3),
         stringsAsFactors = FALSE
       )
     }
   }
-  fdr_summary <- bind_rows(summary_rows)
+  field_sig_summary <- bind_rows(summary_rows)
 
-  # Final save (includes fdr_summary)
-  save(spatial_results, ALPHA_FDR, SPATIAL_VARS, lat_arc, lon_vec,
-       fdr_summary,
+  # Final save
+  save(spatial_results, ALPHA_LOCAL, SPATIAL_VARS,
+       lat_arc, lon_vec, field_sig_summary,
        file = RESULTS_FILE)
 
   elapsed_total <- round(as.numeric(
@@ -4064,11 +4074,10 @@ if (!file.exists(RESULTS_FILE) || FORCE_RECOMPUTE) {
 
 }  # end of computation block
 
-# Derive grid dimensions from lat_arc / lon_vec, which are always available
-# (either from the computation block above or restored from the .RData cache).
-# n_lat / n_lon are NOT saved in the cache, so this must run on every execution.
+# Derive grid dimensions from cached lat_arc / lon_vec
 n_lat <- length(lat_arc)
 n_lon <- length(lon_vec)
+
 
 # ============================================================================
 # PART B: FIGURES (always runs — uses cached or freshly computed results)
@@ -4077,10 +4086,12 @@ n_lon <- length(lon_vec)
 progress_msg("PHASE 3.4 PART B: GENERATING FIGURES")
 cat(rep("=", 70), "\n\n")
 
-# Print summary table
-cat("FDR SIGNIFICANCE SUMMARY (alpha_FDR =", ALPHA_FDR, ")\n")
-cat(rep("-", 60), "\n")
-print(fdr_summary, row.names = FALSE)
+# ── Print field significance summary ─────────────────────────────────────────
+cat("FIELD SIGNIFICANCE SUMMARY\n")
+cat("  Rejection fraction: observed % with local p < 0.05 vs 5% null expectation\n")
+cat("  ratio_to_null: observed rejections / expected under H0 (values >> 1 = field significance)\n")
+cat(rep("-", 90), "\n")
+print(field_sig_summary, row.names = FALSE)
 cat("\n")
 
 
@@ -4088,8 +4099,8 @@ cat("\n")
 progress_msg("B1: Setting up cartographic elements...")
 
 arctic_crs  <- "+proj=laea +lat_0=90 +lon_0=0"
-view_radius <- 3330000   
-plot_radius <- 3600000   
+view_radius <- 3330000   # clips at ~60 N data boundary
+plot_radius <- 3600000   # space for labels
 
 wrap_data <- function(mat) {
   mat[, c(which(lon_vec >= 0), which(lon_vec < 0))]
@@ -4132,7 +4143,7 @@ progress_msg("  Cartographic elements ready.")
 # ── B2: Plotting helpers ───────────────────────────────────────────────────
 make_stars_polar <- function(mat, varname = "value") {
   mat_wrap <- wrap_data(mat)
-  mat_wrap <- t(mat_wrap)    # [lat, lon] -> [lon, lat] to match stars x/y convention
+  mat_wrap <- t(mat_wrap)   # [lat, lon] -> [lon, lat] for stars x/y convention
   dims <- st_dimensions(x = lon_wrapped, y = lat_arc)
   st_as_stars(setNames(list(mat_wrap), varname), dimensions = dims) %>%
     st_set_crs(4326) %>%
@@ -4156,21 +4167,17 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
     geom_sf_text(data = lon_labels, aes(label = label),
                  size = 2.3, color = "black")
 
+  # Significance overlay: convert raster to sf polygons to avoid
+  # scale conflicts with the slope fill layer
   if (!is.null(sig_contour)) {
-    # st_warp interpolates the binary 0/1 mask to continuous values.
-    # Threshold at 0.5 to recover significance: keep 1L, set everything else NA.
-    # Then convert to sf polygons with st_as_sf(na.rm = TRUE, merge = TRUE):
-    # this operates at the geometry level, so only the significant cells
-    # produce polygons — NA cells produce nothing. geom_sf then overlays
-    # those polygons with a constant black fill, which has no conflict with
-    # the slope fill scale already in the plot (unlike a second geom_stars
-    # layer, which would render the full rectangular raster extent).
     sig_contour[[1]] <- ifelse(
       !is.na(sig_contour[[1]]) & sig_contour[[1]] >= 0.5, 1L, NA_integer_
     )
     sig_sf <- st_as_sf(sig_contour, na.rm = TRUE, merge = TRUE)
-    p <- p +
-      geom_sf(data = sig_sf, fill = "black", alpha = 0.35, color = NA)
+    if (nrow(sig_sf) > 0) {
+      p <- p +
+        geom_sf(data = sig_sf, fill = "black", alpha = 0.35, color = NA)
+    }
   }
 
   p +
@@ -4191,10 +4198,6 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
 
 
 # ── B3: Figure configuration per variable ──────────────────────────────────
-# Each variable gets an annual map and a 2x2 seasonal panel.
-# Figure numbering: 3.5a/3.5b (annual/seasonal) for the primary metric,
-# then 3.6a/3.6b, 3.7a/3.7b, etc.
-
 var_plot_config <- list(
   eke_synoptic_mean = list(
     fig_annual   = "Fig3.5a_Annual_Trend_Map_EKE_synoptic.png",
@@ -4220,11 +4223,6 @@ var_plot_config <- list(
     fig_annual   = "Fig3.9a_Annual_Trend_Map_ExceedFreq.png",
     fig_seasonal = "Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png",
     unit_expr    = expression(hat(beta) ~ "[decade" ^{-1} * "]")
-  ),
-  tke = list(
-    fig_annual   = "Fig3.10a_Annual_Trend_Map_TKE.png",
-    fig_seasonal = "Fig3.10b_Seasonal_Trend_Maps_TKE.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
   )
 )
 
@@ -4244,13 +4242,18 @@ for (vname in names(spatial_results)) {
   progress_msg(sprintf("  Plotting: %s", vname))
 
   # ── Annual map ─────────────────────────────────────────────────────────
-  slope_ann <- res$annual$slope
-  sig_ann   <- res$annual$significant
-  slope_lim <- quantile(abs(slope_ann), 0.99, na.rm = TRUE)
+  slope_ann  <- res$annual$slope
+  sig_ann    <- res$annual$sig_local   # <-- local p < 0.05 (NOT FDR)
+  slope_lim  <- quantile(abs(slope_ann), 0.99, na.rm = TRUE)
+
+  # Rejection fraction for subtitle
+  n_sig_ann  <- sum(sig_ann, na.rm = TRUE)
+  n_tot_ann  <- sum(!is.na(res$annual$p_local))
+  pct_ann    <- round(100 * n_sig_ann / n_tot_ann, 1)
 
   slope_stars <- make_stars_polar(slope_ann, "slope")
   sig_stars   <- make_stars_polar(
-    matrix(as.integer(sig_ann), nrow(slope_ann), ncol(slope_ann)), "sig_mask"
+    matrix(as.integer(sig_ann), n_lat, n_lon), "sig_mask"
   )
 
   fill_scale <- scale_fill_distiller(
@@ -4273,8 +4276,8 @@ for (vname in names(spatial_results)) {
     sig_contour = sig_stars
   ) +
     labs(subtitle = glue(
-      "Pre-Whitened Mann\u2013Kendall | BH-FDR (\u03b1_FDR = {ALPHA_FDR}) ",
-      "| Shading = FDR-significant"
+      "PWMK | Shading: local p < {ALPHA_LOCAL} ",
+      "({pct_ann}% of grid points; {ALPHA_LOCAL*100}% expected under H\u2080)"
     )) +
     theme(plot.subtitle = element_text(size = 8, colour = "grey40", hjust = 0.5))
 
@@ -4294,7 +4297,7 @@ for (vname in names(spatial_results)) {
     sr    <- res$seasonal[[seas]]
     sl_st <- make_stars_polar(sr$slope, "slope")
     sg_st <- make_stars_polar(
-      matrix(as.integer(sr$significant), n_lat, n_lon), "sig_mask"
+      matrix(as.integer(sr$sig_local), n_lat, n_lon), "sig_mask"  # <-- local p
     )
 
     fill_s <- scale_fill_distiller(
@@ -4306,11 +4309,16 @@ for (vname in names(spatial_results)) {
       oob       = scales::squish
     )
 
+    # Rejection fraction for this season
+    n_sig_s <- sum(sr$sig_local, na.rm = TRUE)
+    n_tot_s <- sum(!is.na(sr$p_local))
+    pct_s   <- round(100 * n_sig_s / n_tot_s, 1)
+
     season_panels[[seas]] <- make_panel(
       stars_obj   = sl_st,
       fill_var    = "slope",
       fill_scale  = fill_s,
-      panel_title = unname(SEASON_NAMES[seas]),
+      panel_title = paste0(unname(SEASON_NAMES[seas]), " (", pct_s, "%)"),
       sig_contour = sg_st
     )
   }
@@ -4322,8 +4330,9 @@ for (vname in names(spatial_results)) {
       title = paste0("Seasonal Spatial Trends: Sen\u2019s Slope of ",
                      VAR_LABELS_PLAIN[[vname]], " (1958\u20132025)"),
       subtitle = glue(
-        "Pre-Whitened Mann\u2013Kendall | BH-FDR (\u03b1_FDR = {ALPHA_FDR}) ",
-        "| Shading = FDR-significant | Shared colour scale"
+        "PWMK | Shading: local p < {ALPHA_LOCAL} ",
+        "| Parenthetical % = rejection fraction ",
+        "(5% expected under H\u2080) | Shared colour scale"
       ),
       theme = theme(
         plot.title    = element_text(face = "bold", size = 14, hjust = 0.5),
@@ -4354,66 +4363,6 @@ cat(sprintf("  Figures: %s\n", FIG_PHASE3))
 cat(rep("=", 70), "\n")
 ```
 
-```{r}
-load(file.path(OUTPUT_DATA_DIR, "Phase3_4_Spatial_Results.RData"))
 
-# Check if fdr_summary exists (it's saved in the final save but not the intermediate ones)
-if (exists("fdr_summary")) {
-  print(fdr_summary, row.names = FALSE)
-} else {
-  # Rebuild it manually from spatial_results
-  for (vname in names(spatial_results)) {
-    res <- spatial_results[[vname]]
-    
-    # Annual
-    n_sig_a <- sum(res$annual$significant, na.rm = TRUE)
-    n_tot_a <- sum(!is.na(res$annual$p_local))
-    cat(sprintf("%s | Annual | %d / %d sig (%.2f%%)\n",
-                vname, n_sig_a, n_tot_a, 100 * n_sig_a / n_tot_a))
-    
-    # Seasonal
-    for (seas in c("DJF", "MAM", "JJA", "SON")) {
-      sr <- res$seasonal[[seas]]
-      n_sig_s <- sum(sr$significant, na.rm = TRUE)
-      n_tot_s <- sum(!is.na(sr$p_local))
-      cat(sprintf("%s | %s    | %d / %d sig (%.2f%%)\n",
-                  vname, seas, n_sig_s, n_tot_s, 100 * n_sig_s / n_tot_s))
-    }
-    cat("\n")
-  }
-}
-```
 
-```{r}
-# Check what the seasonal aggregation actually produced
-load(RESULTS_FILE)
-
-# Pick a grid point with a strong visual slope in the MAM map (red region)
-# and check the raw p-value BEFORE FDR correction
-res <- spatial_results[["eke_synoptic_mean"]]
-
-# Distribution of raw local p-values for MAM
-p_mam <- res$seasonal[["MAM"]]$p_local
-cat("MAM raw p-values summary:\n")
-print(summary(as.vector(p_mam)))
-cat(sprintf("\nMAM points with raw p < 0.05: %d / %d (%.1f%%)\n",
-            sum(p_mam < 0.05, na.rm = TRUE),
-            sum(!is.na(p_mam)),
-            100 * sum(p_mam < 0.05, na.rm = TRUE) / sum(!is.na(p_mam))))
-
-# Compare with DJF
-p_djf <- res$seasonal[["DJF"]]$p_local
-cat("\nDJF raw p-values summary:\n")
-print(summary(as.vector(p_djf)))
-cat(sprintf("\nDJF points with raw p < 0.05: %d / %d (%.1f%%)\n",
-            sum(p_djf < 0.05, na.rm = TRUE),
-            sum(!is.na(p_djf)),
-            100 * sum(p_djf < 0.05, na.rm = TRUE) / sum(!is.na(p_djf))))
-
-# Also check slopes
-cat("\nMAM slopes summary:\n")
-print(summary(as.vector(res$seasonal[["MAM"]]$slope)))
-cat("\nDJF slopes summary:\n")
-print(summary(as.vector(res$seasonal[["DJF"]]$slope)))
-```
 
