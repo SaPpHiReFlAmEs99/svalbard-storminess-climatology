@@ -3589,7 +3589,6 @@ cat(sprintf(
 ))
 ```
 
-
 ## 3.4: Spatial trends
 
 ```{r phase3-4-spatial-trends}
@@ -4167,8 +4166,7 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
     geom_sf_text(data = lon_labels, aes(label = label),
                  size = 2.3, color = "black")
 
-  # Significance overlay: convert raster to sf polygons to avoid
-  # scale conflicts with the slope fill layer
+  # Significance overlay: convert raster to sf polygons to avoid scale conflicts with the slope fill layer
   if (!is.null(sig_contour)) {
     sig_contour[[1]] <- ifelse(
       !is.na(sig_contour[[1]]) & sig_contour[[1]] >= 0.5, 1L, NA_integer_
@@ -4176,7 +4174,7 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
     sig_sf <- st_as_sf(sig_contour, na.rm = TRUE, merge = TRUE)
     if (nrow(sig_sf) > 0) {
       p <- p +
-        geom_sf(data = sig_sf, fill = "black", alpha = 0.35, color = NA)
+        geom_sf(data = sig_sf, fill = NA, alpha = 0.2, color = "blue4")
     }
   }
 
@@ -4362,7 +4360,3 @@ cat(sprintf("  Variables: %s\n", paste(names(spatial_results), collapse = ", "))
 cat(sprintf("  Figures: %s\n", FIG_PHASE3))
 cat(rep("=", 70), "\n")
 ```
-
-
-
-
