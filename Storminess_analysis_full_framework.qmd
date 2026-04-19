@@ -4274,7 +4274,7 @@ for (vname in names(spatial_results)) {
     sig_contour = sig_stars
   ) +
     labs(subtitle = glue(
-      "PWMK | Shading: local p < {ALPHA_LOCAL} ",
+      "PWMK | Blue contours: local p < {ALPHA_LOCAL} ",
       "({pct_ann}% of grid points; {ALPHA_LOCAL*100}% expected under H\u2080)"
     )) +
     theme(plot.subtitle = element_text(size = 8, colour = "grey40", hjust = 0.5))
@@ -4328,7 +4328,7 @@ for (vname in names(spatial_results)) {
       title = paste0("Seasonal Spatial Trends: Sen\u2019s Slope of ",
                      VAR_LABELS_PLAIN[[vname]], " (1958\u20132025)"),
       subtitle = glue(
-        "PWMK | Shading: local p < {ALPHA_LOCAL} ",
+        "PWMK | Blue contours: local p < {ALPHA_LOCAL} ",
         "| Parenthetical % = rejection fraction ",
         "(5% expected under H\u2080) | Shared colour scale"
       ),

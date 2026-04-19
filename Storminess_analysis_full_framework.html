@@ -135,6 +135,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#pan-arctic-annual-trend-analysis" id="toc-pan-arctic-annual-trend-analysis" class="nav-link" data-scroll-target="#pan-arctic-annual-trend-analysis">3.1: Pan-Arctic annual trend analysis</a></li>
   <li><a href="#seasonal-decomposition-of-pan-arctic-trends" id="toc-seasonal-decomposition-of-pan-arctic-trends" class="nav-link" data-scroll-target="#seasonal-decomposition-of-pan-arctic-trends">3.2: Seasonal decomposition of Pan-Arctic trends</a></li>
+  <li><a href="#spatial-trends" id="toc-spatial-trends" class="nav-link" data-scroll-target="#spatial-trends">3.4: Spatial trends</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -1915,29 +1916,31 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb190-10"><a href="#cb190-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> metric, <span class="at">scales =</span> <span class="st">"free_y"</span>, <span class="at">ncol =</span> <span class="dv">1</span>,</span>
 <span id="cb190-11"><a href="#cb190-11" aria-hidden="true" tabindex="-1"></a>             <span class="at">labeller =</span> <span class="fu">as_labeller</span>(VAR_LABELS, <span class="at">default =</span> label_parsed)) <span class="sc">+</span></span>
 <span id="cb190-12"><a href="#cb190-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> metric_colors, <span class="at">guide =</span> <span class="st">"none"</span>) <span class="sc">+</span></span>
-<span id="cb190-13"><a href="#cb190-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_date</span>(<span class="at">date_breaks =</span> <span class="st">"5 years"</span>, <span class="at">date_labels =</span> <span class="st">"%Y"</span>) <span class="sc">+</span></span>
-<span id="cb190-14"><a href="#cb190-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb190-15"><a href="#cb190-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Pan-Arctic (≥60°N) Storminess Metrics: Monthly Time Series"</span>,</span>
-<span id="cb190-16"><a href="#cb190-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"1958–2025 | Raw data (light) with LOESS smoother (bold)"</span>,</span>
-<span id="cb190-17"><a href="#cb190-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="cn">NULL</span>,</span>
-<span id="cb190-18"><a href="#cb190-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="cn">NULL</span></span>
-<span id="cb190-19"><a href="#cb190-19" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb190-20"><a href="#cb190-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> <span class="dv">11</span>) <span class="sc">+</span></span>
-<span id="cb190-21"><a href="#cb190-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
-<span id="cb190-22"><a href="#cb190-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
-<span id="cb190-23"><a href="#cb190-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">hjust =</span> <span class="dv">0</span>),</span>
-<span id="cb190-24"><a href="#cb190-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.background =</span> <span class="fu">element_rect</span>(<span class="at">fill =</span> <span class="st">"gray95"</span>),</span>
-<span id="cb190-25"><a href="#cb190-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor =</span> <span class="fu">element_blank</span>()</span>
-<span id="cb190-26"><a href="#cb190-26" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb190-27"><a href="#cb190-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb190-28"><a href="#cb190-28" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(fig_dir, <span class="st">"Fig01_TimeSeries_AllMetrics.png"</span>),</span>
-<span id="cb190-29"><a href="#cb190-29" aria-hidden="true" tabindex="-1"></a>       p1, <span class="at">width =</span> <span class="dv">12</span>, <span class="at">height =</span> <span class="dv">14</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
-<span id="cb190-30"><a href="#cb190-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb190-31"><a href="#cb190-31" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb190-32"><a href="#cb190-32" aria-hidden="true" tabindex="-1"></a><span class="co"># PLOT 2: ACF AND PACF PLOTS (ON DESEASONALIZED ANOMALIES)</span></span>
+<span id="cb190-13"><a href="#cb190-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_date</span>(<span class="at">date_breaks =</span> <span class="st">"5 years"</span>, <span class="at">date_labels =</span> <span class="st">"%Y"</span>,</span>
+<span id="cb190-14"><a href="#cb190-14" aria-hidden="true" tabindex="-1"></a>               <span class="at">limits =</span> <span class="fu">c</span>(<span class="fu">min</span>(ts_long<span class="sc">$</span>date), <span class="fu">max</span>(ts_long<span class="sc">$</span>date)),</span>
+<span id="cb190-15"><a href="#cb190-15" aria-hidden="true" tabindex="-1"></a>               <span class="at">expand =</span> <span class="fu">expansion</span>(<span class="at">mult =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.01</span>))) <span class="sc">+</span></span>
+<span id="cb190-16"><a href="#cb190-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb190-17"><a href="#cb190-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Pan-Arctic (≥60°N) Storminess Metrics: Monthly Time Series"</span>,</span>
+<span id="cb190-18"><a href="#cb190-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"1958–2025 | Raw data (light) with LOESS smoother (bold)"</span>,</span>
+<span id="cb190-19"><a href="#cb190-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="cn">NULL</span>,</span>
+<span id="cb190-20"><a href="#cb190-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="cn">NULL</span></span>
+<span id="cb190-21"><a href="#cb190-21" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb190-22"><a href="#cb190-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> <span class="dv">11</span>) <span class="sc">+</span></span>
+<span id="cb190-23"><a href="#cb190-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb190-24"><a href="#cb190-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>),</span>
+<span id="cb190-25"><a href="#cb190-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">hjust =</span> <span class="dv">0</span>),</span>
+<span id="cb190-26"><a href="#cb190-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.background =</span> <span class="fu">element_rect</span>(<span class="at">fill =</span> <span class="st">"gray95"</span>),</span>
+<span id="cb190-27"><a href="#cb190-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor =</span> <span class="fu">element_blank</span>()</span>
+<span id="cb190-28"><a href="#cb190-28" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb190-29"><a href="#cb190-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb190-30"><a href="#cb190-30" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(fig_dir, <span class="st">"Fig01_TimeSeries_AllMetrics.png"</span>),</span>
+<span id="cb190-31"><a href="#cb190-31" aria-hidden="true" tabindex="-1"></a>       p1, <span class="at">width =</span> <span class="dv">12</span>, <span class="at">height =</span> <span class="dv">14</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
+<span id="cb190-32"><a href="#cb190-32" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb190-33"><a href="#cb190-33" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb190-34"><a href="#cb190-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb190-35"><a href="#cb190-35" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">--- Generating Plot 2: ACF and PACF Plots (Anomalies) ---</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb190-34"><a href="#cb190-34" aria-hidden="true" tabindex="-1"></a><span class="co"># PLOT 2: ACF AND PACF PLOTS (ON DESEASONALIZED ANOMALIES)</span></span>
+<span id="cb190-35"><a href="#cb190-35" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb190-36"><a href="#cb190-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb190-37"><a href="#cb190-37" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">--- Generating Plot 2: ACF and PACF Plots (Anomalies) ---</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 --- Generating Plot 2: ACF and PACF Plots (Anomalies) ---</code></pre>
@@ -4811,6 +4814,891 @@ Significant trends by season (α = 0.05 ):</code></pre>
 ✓ Phase 3.2 complete.
   Results: Phase3_2_Seasonal_Results.RData
   Figures: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures/Phase3_Trends</code></pre>
+</div>
+</div>
+</section>
+<section id="spatial-trends" class="level2">
+<h2 class="anchored" data-anchor-id="spatial-trends">3.4: Spatial trends</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb477"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb477-1"><a href="#cb477-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb477-2"><a href="#cb477-2" aria-hidden="true" tabindex="-1"></a><span class="co"># PHASE 3.4: SPATIAL TREND PATTERNS AND FIELD SIGNIFICANCE</span></span>
+<span id="cb477-3"><a href="#cb477-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb477-4"><a href="#cb477-4" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-5"><a href="#cb477-5" aria-hidden="true" tabindex="-1"></a><span class="co"># DEPENDS ON:</span></span>
+<span id="cb477-6"><a href="#cb477-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   - setup-environment chunk (all global constants, colours, paths)</span></span>
+<span id="cb477-7"><a href="#cb477-7" aria-hidden="true" tabindex="-1"></a><span class="co">#   - phase3-1 / phase3-2 chunks (sen_slope() in environment)</span></span>
+<span id="cb477-8"><a href="#cb477-8" aria-hidden="true" tabindex="-1"></a><span class="co">#   - NetCDF files: METRICS_FILE (direct read for gridded data)</span></span>
+<span id="cb477-9"><a href="#cb477-9" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-10"><a href="#cb477-10" aria-hidden="true" tabindex="-1"></a><span class="co"># PURPOSE:</span></span>
+<span id="cb477-11"><a href="#cb477-11" aria-hidden="true" tabindex="-1"></a><span class="co">#   Apply the Pre-Whitened Mann-Kendall (PWMK) test and Sen's slope</span></span>
+<span id="cb477-12"><a href="#cb477-12" aria-hidden="true" tabindex="-1"></a><span class="co">#   estimator at every ERA5 grid point independently to map the spatial</span></span>
+<span id="cb477-13"><a href="#cb477-13" aria-hidden="true" tabindex="-1"></a><span class="co">#   pattern of long-term trends in Arctic storminess.</span></span>
+<span id="cb477-14"><a href="#cb477-14" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-15"><a href="#cb477-15" aria-hidden="true" tabindex="-1"></a><span class="co">#   This addresses the key limitation of Phases 3.1-3.2: the Pan-Arctic</span></span>
+<span id="cb477-16"><a href="#cb477-16" aria-hidden="true" tabindex="-1"></a><span class="co">#   area-weighted mean can mask spatially concentrated signals. A trend</span></span>
+<span id="cb477-17"><a href="#cb477-17" aria-hidden="true" tabindex="-1"></a><span class="co">#   confined to the Svalbard/Barents sector would be diluted to near-zero</span></span>
+<span id="cb477-18"><a href="#cb477-18" aria-hidden="true" tabindex="-1"></a><span class="co">#   in the aggregate even if locally robust.</span></span>
+<span id="cb477-19"><a href="#cb477-19" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-20"><a href="#cb477-20" aria-hidden="true" tabindex="-1"></a><span class="co"># STATISTICAL FRAMEWORK:</span></span>
+<span id="cb477-21"><a href="#cb477-21" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-22"><a href="#cb477-22" aria-hidden="true" tabindex="-1"></a><span class="co">#   Step 1 — Gridded temporal aggregation</span></span>
+<span id="cb477-23"><a href="#cb477-23" aria-hidden="true" tabindex="-1"></a><span class="co">#     For each grid point, compute annual or seasonal means, yielding</span></span>
+<span id="cb477-24"><a href="#cb477-24" aria-hidden="true" tabindex="-1"></a><span class="co">#     a local time series of N = 68 values at each of the ~172,800</span></span>
+<span id="cb477-25"><a href="#cb477-25" aria-hidden="true" tabindex="-1"></a><span class="co">#     grid points in the domain (&gt;=60 N, 1440x120 grid).</span></span>
+<span id="cb477-26"><a href="#cb477-26" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-27"><a href="#cb477-27" aria-hidden="true" tabindex="-1"></a><span class="co">#   Step 2 — Local PWMK trend test [zyp.zhang()]</span></span>
+<span id="cb477-28"><a href="#cb477-28" aria-hidden="true" tabindex="-1"></a><span class="co">#     Applied independently at each grid point. Returns local p-value</span></span>
+<span id="cb477-29"><a href="#cb477-29" aria-hidden="true" tabindex="-1"></a><span class="co">#     (p_local) and Sen's slope per year. This generates K ~ 172,800</span></span>
+<span id="cb477-30"><a href="#cb477-30" aria-hidden="true" tabindex="-1"></a><span class="co">#     simultaneous hypothesis tests.</span></span>
+<span id="cb477-31"><a href="#cb477-31" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-32"><a href="#cb477-32" aria-hidden="true" tabindex="-1"></a><span class="co">#   Step 3 — TWO-LAYER FIELD SIGNIFICANCE</span></span>
+<span id="cb477-33"><a href="#cb477-33" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-34"><a href="#cb477-34" aria-hidden="true" tabindex="-1"></a><span class="co">#     Layer 1: Global (field) significance via the rejection fraction.</span></span>
+<span id="cb477-35"><a href="#cb477-35" aria-hidden="true" tabindex="-1"></a><span class="co">#       Under the global null hypothesis (no trend at any grid point),</span></span>
+<span id="cb477-36"><a href="#cb477-36" aria-hidden="true" tabindex="-1"></a><span class="co">#       exactly alpha = 5% of grid points are expected to yield p &lt; 0.05</span></span>
+<span id="cb477-37"><a href="#cb477-37" aria-hidden="true" tabindex="-1"></a><span class="co">#       by chance. If the observed rejection fraction f_obs substantially</span></span>
+<span id="cb477-38"><a href="#cb477-38" aria-hidden="true" tabindex="-1"></a><span class="co">#       exceeds this expectation, the field as a whole contains real</span></span>
+<span id="cb477-39"><a href="#cb477-39" aria-hidden="true" tabindex="-1"></a><span class="co">#       signal. This is conceptually equivalent to the Livezey &amp; Chen</span></span>
+<span id="cb477-40"><a href="#cb477-40" aria-hidden="true" tabindex="-1"></a><span class="co">#       (1983) counting test, but reported as a fraction rather than a</span></span>
+<span id="cb477-41"><a href="#cb477-41" aria-hidden="true" tabindex="-1"></a><span class="co">#       formal metatest, because the latter requires a resampling</span></span>
+<span id="cb477-42"><a href="#cb477-42" aria-hidden="true" tabindex="-1"></a><span class="co">#       procedure to account for spatial correlation.</span></span>
+<span id="cb477-43"><a href="#cb477-43" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-44"><a href="#cb477-44" aria-hidden="true" tabindex="-1"></a><span class="co">#     Layer 2: Local identification via p_local &lt; 0.05 stippling.</span></span>
+<span id="cb477-45"><a href="#cb477-45" aria-hidden="true" tabindex="-1"></a><span class="co">#       Once field significance is established, grid points with</span></span>
+<span id="cb477-46"><a href="#cb477-46" aria-hidden="true" tabindex="-1"></a><span class="co">#       p_local &lt; 0.05 are stippled to indicate WHERE the signal is</span></span>
+<span id="cb477-47"><a href="#cb477-47" aria-hidden="true" tabindex="-1"></a><span class="co">#       concentrated. These are interpreted as indicative spatial</span></span>
+<span id="cb477-48"><a href="#cb477-48" aria-hidden="true" tabindex="-1"></a><span class="co">#       patterns, not individually confirmed trends.</span></span>
+<span id="cb477-49"><a href="#cb477-49" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-50"><a href="#cb477-50" aria-hidden="true" tabindex="-1"></a><span class="co">#     </span><span class="al">NOTE</span><span class="co"> ON BH-FDR: The Benjamini-Hochberg FDR correction</span></span>
+<span id="cb477-51"><a href="#cb477-51" aria-hidden="true" tabindex="-1"></a><span class="co">#       (Wilks 2006, 2016) was evaluated but is NOT applied here.</span></span>
+<span id="cb477-52"><a href="#cb477-52" aria-hidden="true" tabindex="-1"></a><span class="co">#       At ERA5 native resolution (K ~ 172,800), BH becomes</span></span>
+<span id="cb477-53"><a href="#cb477-53" aria-hidden="true" tabindex="-1"></a><span class="co">#       excessively conservative because grid points vastly exceed</span></span>
+<span id="cb477-54"><a href="#cb477-54" aria-hidden="true" tabindex="-1"></a><span class="co">#       the effective spatial degrees of freedom (~100-3000;</span></span>
+<span id="cb477-55"><a href="#cb477-55" aria-hidden="true" tabindex="-1"></a><span class="co">#       Bretherton et al. 1999). The Wilks (2016) alpha_FDR = 0.10</span></span>
+<span id="cb477-56"><a href="#cb477-56" aria-hidden="true" tabindex="-1"></a><span class="co">#       calibration was validated at K = 3,720 and does not</span></span>
+<span id="cb477-57"><a href="#cb477-57" aria-hidden="true" tabindex="-1"></a><span class="co">#       extrapolate to K &gt; 100,000. This is documented in the</span></span>
+<span id="cb477-58"><a href="#cb477-58" aria-hidden="true" tabindex="-1"></a><span class="co">#       thesis Discussion. See Cortes et al. (2020) for a</span></span>
+<span id="cb477-59"><a href="#cb477-59" aria-hidden="true" tabindex="-1"></a><span class="co">#       systematic comparison at high K.</span></span>
+<span id="cb477-60"><a href="#cb477-60" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-61"><a href="#cb477-61" aria-hidden="true" tabindex="-1"></a><span class="co">#   Step 4 — Polar projection map</span></span>
+<span id="cb477-62"><a href="#cb477-62" aria-hidden="true" tabindex="-1"></a><span class="co">#     Lambert Azimuthal Equal-Area (LAEA), centred on the North Pole.</span></span>
+<span id="cb477-63"><a href="#cb477-63" aria-hidden="true" tabindex="-1"></a><span class="co">#     Identical cartographic setup to Phase 1 Plot 6.</span></span>
+<span id="cb477-64"><a href="#cb477-64" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-65"><a href="#cb477-65" aria-hidden="true" tabindex="-1"></a><span class="co"># KEY REFERENCES:</span></span>
+<span id="cb477-66"><a href="#cb477-66" aria-hidden="true" tabindex="-1"></a><span class="co">#   Benjamini &amp; Hochberg (1995) — FDR procedure</span></span>
+<span id="cb477-67"><a href="#cb477-67" aria-hidden="true" tabindex="-1"></a><span class="co">#     J. Royal Statistical Society B, 57(1): 289-300.</span></span>
+<span id="cb477-68"><a href="#cb477-68" aria-hidden="true" tabindex="-1"></a><span class="co">#   Wilks (2006) — FDR for climate field significance</span></span>
+<span id="cb477-69"><a href="#cb477-69" aria-hidden="true" tabindex="-1"></a><span class="co">#     J. Appl. Meteorol. Climatol., 45: 1181-1189.</span></span>
+<span id="cb477-70"><a href="#cb477-70" aria-hidden="true" tabindex="-1"></a><span class="co">#   Wilks (2016) — alpha_FDR = 2*alpha_local recommendation</span></span>
+<span id="cb477-71"><a href="#cb477-71" aria-hidden="true" tabindex="-1"></a><span class="co">#     Bull. Amer. Meteor. Soc., 97: 2263-2273.</span></span>
+<span id="cb477-72"><a href="#cb477-72" aria-hidden="true" tabindex="-1"></a><span class="co">#   Bretherton et al. (1999) — Effective spatial degrees of freedom</span></span>
+<span id="cb477-73"><a href="#cb477-73" aria-hidden="true" tabindex="-1"></a><span class="co">#     J. Climate, 12: 1990-2009.</span></span>
+<span id="cb477-74"><a href="#cb477-74" aria-hidden="true" tabindex="-1"></a><span class="co">#   Cortes et al. (2020) — Multiple testing for spatio-temporal data</span></span>
+<span id="cb477-75"><a href="#cb477-75" aria-hidden="true" tabindex="-1"></a><span class="co">#     Environ. Ecol. Stat., 27: 293-318.</span></span>
+<span id="cb477-76"><a href="#cb477-76" aria-hidden="true" tabindex="-1"></a><span class="co">#   Ventura et al. (2004) — FDR for climatological data</span></span>
+<span id="cb477-77"><a href="#cb477-77" aria-hidden="true" tabindex="-1"></a><span class="co">#     J. Climate, 17: 4343-4356.</span></span>
+<span id="cb477-78"><a href="#cb477-78" aria-hidden="true" tabindex="-1"></a><span class="co">#   Livezey &amp; Chen (1983) — Field significance (classical approach)</span></span>
+<span id="cb477-79"><a href="#cb477-79" aria-hidden="true" tabindex="-1"></a><span class="co">#     Mon. Wea. Rev., 111: 46-59.</span></span>
+<span id="cb477-80"><a href="#cb477-80" aria-hidden="true" tabindex="-1"></a><span class="co">#   Zhang et al. (2000); Zhang &amp; Zwiers (2004) — PWMK</span></span>
+<span id="cb477-81"><a href="#cb477-81" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-82"><a href="#cb477-82" aria-hidden="true" tabindex="-1"></a><span class="co"># SCOPE:</span></span>
+<span id="cb477-83"><a href="#cb477-83" aria-hidden="true" tabindex="-1"></a><span class="co">#   Variables: eke_synoptic_mean, eke_p90, eke_p95, eke_p99,</span></span>
+<span id="cb477-84"><a href="#cb477-84" aria-hidden="true" tabindex="-1"></a><span class="co">#              exceed_p95_freq</span></span>
+<span id="cb477-85"><a href="#cb477-85" aria-hidden="true" tabindex="-1"></a><span class="co">#   Temporal scope: annual (1958-2025) and four seasons (DJF/MAM/JJA/SON)</span></span>
+<span id="cb477-86"><a href="#cb477-86" aria-hidden="true" tabindex="-1"></a><span class="co">#   Domain: &gt;=60 N (ARCTIC_LAT_THRESHOLD from setup chunk)</span></span>
+<span id="cb477-87"><a href="#cb477-87" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-88"><a href="#cb477-88" aria-hidden="true" tabindex="-1"></a><span class="co"># CACHING:</span></span>
+<span id="cb477-89"><a href="#cb477-89" aria-hidden="true" tabindex="-1"></a><span class="co">#   The computation block saves results to Phase3_4_Spatial_Results.RData.</span></span>
+<span id="cb477-90"><a href="#cb477-90" aria-hidden="true" tabindex="-1"></a><span class="co">#   On subsequent runs, if this file exists, the computation is skipped</span></span>
+<span id="cb477-91"><a href="#cb477-91" aria-hidden="true" tabindex="-1"></a><span class="co">#   entirely and results are loaded from disk. This allows rapid iteration</span></span>
+<span id="cb477-92"><a href="#cb477-92" aria-hidden="true" tabindex="-1"></a><span class="co">#   on figure aesthetics without re-running ~860,000 PWMK tests.</span></span>
+<span id="cb477-93"><a href="#cb477-93" aria-hidden="true" tabindex="-1"></a><span class="co">#   To force recomputation, set FORCE_RECOMPUTE &lt;- TRUE before running.</span></span>
+<span id="cb477-94"><a href="#cb477-94" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-95"><a href="#cb477-95" aria-hidden="true" tabindex="-1"></a><span class="co"># OUTPUT:</span></span>
+<span id="cb477-96"><a href="#cb477-96" aria-hidden="true" tabindex="-1"></a><span class="co">#   spatial_results       — named list by variable, each containing</span></span>
+<span id="cb477-97"><a href="#cb477-97" aria-hidden="true" tabindex="-1"></a><span class="co">#                           annual and seasonal trend grids</span></span>
+<span id="cb477-98"><a href="#cb477-98" aria-hidden="true" tabindex="-1"></a><span class="co">#   field_sig_summary     — data frame with rejection fractions</span></span>
+<span id="cb477-99"><a href="#cb477-99" aria-hidden="true" tabindex="-1"></a><span class="co">#   Fig3.5–3.9            — Annual + seasonal trend maps per variable</span></span>
+<span id="cb477-100"><a href="#cb477-100" aria-hidden="true" tabindex="-1"></a><span class="co">#   Phase3_4_Spatial_Results.RData</span></span>
+<span id="cb477-101"><a href="#cb477-101" aria-hidden="true" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb477-102"><a href="#cb477-102" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb477-103"><a href="#cb477-103" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-104"><a href="#cb477-104" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-105"><a href="#cb477-105" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb477-106"><a href="#cb477-106" aria-hidden="true" tabindex="-1"></a><span class="co"># PART A: COMPUTATION (skipped if cached results exist)</span></span>
+<span id="cb477-107"><a href="#cb477-107" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb477-108"><a href="#cb477-108" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-109"><a href="#cb477-109" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Configuration ────────────────────────────────────────────────────────────</span></span>
+<span id="cb477-110"><a href="#cb477-110" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-111"><a href="#cb477-111" aria-hidden="true" tabindex="-1"></a><span class="co"># Local significance threshold for stippling (Layer 2)</span></span>
+<span id="cb477-112"><a href="#cb477-112" aria-hidden="true" tabindex="-1"></a>ALPHA_LOCAL <span class="ot">&lt;-</span> <span class="fl">0.05</span></span>
+<span id="cb477-113"><a href="#cb477-113" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-114"><a href="#cb477-114" aria-hidden="true" tabindex="-1"></a><span class="co"># Variables to analyse:</span></span>
+<span id="cb477-115"><a href="#cb477-115" aria-hidden="true" tabindex="-1"></a><span class="co">#   - 5 storminess metrics: all showed significance in MAM at the Pan-Arctic</span></span>
+<span id="cb477-116"><a href="#cb477-116" aria-hidden="true" tabindex="-1"></a><span class="co">#     scale (Phase 3.2), or near-significance in the case of P99. Spatial</span></span>
+<span id="cb477-117"><a href="#cb477-117" aria-hidden="true" tabindex="-1"></a><span class="co">#     analysis may reveal localised signals masked by area-weighted aggregation.</span></span>
+<span id="cb477-118"><a href="#cb477-118" aria-hidden="true" tabindex="-1"></a>SPATIAL_VARS <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb477-119"><a href="#cb477-119" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_synoptic_mean"</span>,   <span class="co"># primary metric</span></span>
+<span id="cb477-120"><a href="#cb477-120" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p90"</span>,             <span class="co"># MAM significant (p = 0.016)</span></span>
+<span id="cb477-121"><a href="#cb477-121" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p95"</span>,             <span class="co"># MAM significant (p = 0.027)</span></span>
+<span id="cb477-122"><a href="#cb477-122" aria-hidden="true" tabindex="-1"></a>  <span class="st">"eke_p99"</span>,             <span class="co"># MAM near-significant (p = 0.063); largest absolute slope</span></span>
+<span id="cb477-123"><a href="#cb477-123" aria-hidden="true" tabindex="-1"></a>  <span class="st">"exceed_p95_freq"</span>      <span class="co"># MAM significant (p = 0.022); largest relative change (+17.6%)</span></span>
+<span id="cb477-124"><a href="#cb477-124" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb477-125"><a href="#cb477-125" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-126"><a href="#cb477-126" aria-hidden="true" tabindex="-1"></a><span class="co"># Cache control</span></span>
+<span id="cb477-127"><a href="#cb477-127" aria-hidden="true" tabindex="-1"></a>RESULTS_FILE <span class="ot">&lt;-</span> <span class="fu">file.path</span>(OUTPUT_DATA_DIR, <span class="st">"Phase3_4_Spatial_Results.RData"</span>)</span>
+<span id="cb477-128"><a href="#cb477-128" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">exists</span>(<span class="st">"FORCE_RECOMPUTE"</span>)) FORCE_RECOMPUTE <span class="ot">&lt;-</span> <span class="cn">FALSE</span></span>
+<span id="cb477-129"><a href="#cb477-129" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-130"><a href="#cb477-130" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Timing and progress utilities ────────────────────────────────────────────</span></span>
+<span id="cb477-131"><a href="#cb477-131" aria-hidden="true" tabindex="-1"></a>.t0_phase34 <span class="ot">&lt;-</span> <span class="fu">Sys.time</span>()</span>
+<span id="cb477-132"><a href="#cb477-132" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-133"><a href="#cb477-133" aria-hidden="true" tabindex="-1"></a>progress_msg <span class="ot">&lt;-</span> <span class="cf">function</span>(msg) {</span>
+<span id="cb477-134"><a href="#cb477-134" aria-hidden="true" tabindex="-1"></a>  elapsed <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">as.numeric</span>(<span class="fu">difftime</span>(<span class="fu">Sys.time</span>(), .t0_phase34, <span class="at">units =</span> <span class="st">"mins"</span>)), <span class="dv">1</span>)</span>
+<span id="cb477-135"><a href="#cb477-135" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"[%s | +%.1f min] %s</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">format</span>(<span class="fu">Sys.time</span>(), <span class="st">"%H:%M:%S"</span>), elapsed, msg))</span>
+<span id="cb477-136"><a href="#cb477-136" aria-hidden="true" tabindex="-1"></a>  <span class="fu">flush.console</span>()</span>
+<span id="cb477-137"><a href="#cb477-137" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb477-138"><a href="#cb477-138" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-139"><a href="#cb477-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-140"><a href="#cb477-140" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Check for cached results ─────────────────────────────────────────────────</span></span>
+<span id="cb477-141"><a href="#cb477-141" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">file.exists</span>(RESULTS_FILE) <span class="sc">&amp;&amp;</span> <span class="sc">!</span>FORCE_RECOMPUTE) {</span>
+<span id="cb477-142"><a href="#cb477-142" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-143"><a href="#cb477-143" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"CACHE HIT: Loading precomputed spatial results from disk."</span>)</span>
+<span id="cb477-144"><a href="#cb477-144" aria-hidden="true" tabindex="-1"></a>  <span class="fu">load</span>(RESULTS_FILE)</span>
+<span id="cb477-145"><a href="#cb477-145" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb477-146"><a href="#cb477-146" aria-hidden="true" tabindex="-1"></a>    <span class="st">"  Loaded %d variable(s): %s"</span>,</span>
+<span id="cb477-147"><a href="#cb477-147" aria-hidden="true" tabindex="-1"></a>    <span class="fu">length</span>(spatial_results), <span class="fu">paste</span>(<span class="fu">names</span>(spatial_results), <span class="at">collapse =</span> <span class="st">", "</span>)</span>
+<span id="cb477-148"><a href="#cb477-148" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb477-149"><a href="#cb477-149" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb477-150"><a href="#cb477-150" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Staleness check: verify all requested variables are present</span></span>
+<span id="cb477-151"><a href="#cb477-151" aria-hidden="true" tabindex="-1"></a>  missing_vars <span class="ot">&lt;-</span> <span class="fu">setdiff</span>(SPATIAL_VARS, <span class="fu">names</span>(spatial_results))</span>
+<span id="cb477-152"><a href="#cb477-152" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">length</span>(missing_vars) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb477-153"><a href="#cb477-153" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb477-154"><a href="#cb477-154" aria-hidden="true" tabindex="-1"></a>      <span class="st">"  WARNING: Cached results missing %d variable(s): %s"</span>,</span>
+<span id="cb477-155"><a href="#cb477-155" aria-hidden="true" tabindex="-1"></a>      <span class="fu">length</span>(missing_vars), <span class="fu">paste</span>(missing_vars, <span class="at">collapse =</span> <span class="st">", "</span>)</span>
+<span id="cb477-156"><a href="#cb477-156" aria-hidden="true" tabindex="-1"></a>    ))</span>
+<span id="cb477-157"><a href="#cb477-157" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="st">"  Triggering full recomputation..."</span>)</span>
+<span id="cb477-158"><a href="#cb477-158" aria-hidden="true" tabindex="-1"></a>    FORCE_RECOMPUTE <span class="ot">&lt;-</span> <span class="cn">TRUE</span></span>
+<span id="cb477-159"><a href="#cb477-159" aria-hidden="true" tabindex="-1"></a>  } <span class="cf">else</span> {</span>
+<span id="cb477-160"><a href="#cb477-160" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="st">"  All requested variables present. Skipping to PART B (figures)."</span>)</span>
+<span id="cb477-161"><a href="#cb477-161" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb477-162"><a href="#cb477-162" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:39 | +0.0 min] CACHE HIT: Loading precomputed spatial results from disk.
+[02:30:39 | +0.0 min]   Loaded 5 variable(s): eke_synoptic_mean, eke_p90, eke_p95, eke_p99, exceed_p95_freq
+[02:30:39 | +0.0 min]   All requested variables present. Skipping to PART B (figures).</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb479"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb479-1"><a href="#cb479-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(RESULTS_FILE) <span class="sc">||</span> FORCE_RECOMPUTE) {</span>
+<span id="cb479-2"><a href="#cb479-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-3"><a href="#cb479-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"PHASE 3.4 PART A: SPATIAL TREND COMPUTATION — START"</span>)</span>
+<span id="cb479-4"><a href="#cb479-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
+<span id="cb479-5"><a href="#cb479-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-6"><a href="#cb479-6" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-7"><a href="#cb479-7" aria-hidden="true" tabindex="-1"></a>  <span class="co"># A1: LOAD GRIDDED DATA</span></span>
+<span id="cb479-8"><a href="#cb479-8" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-9"><a href="#cb479-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"A1: Loading gridded data from NetCDF..."</span>)</span>
+<span id="cb479-10"><a href="#cb479-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-11"><a href="#cb479-11" aria-hidden="true" tabindex="-1"></a>  nc <span class="ot">&lt;-</span> <span class="fu">nc_open</span>(METRICS_FILE)</span>
+<span id="cb479-12"><a href="#cb479-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-13"><a href="#cb479-13" aria-hidden="true" tabindex="-1"></a>  lon_vec    <span class="ot">&lt;-</span> <span class="fu">ncvar_get</span>(nc, <span class="st">"longitude"</span>)</span>
+<span id="cb479-14"><a href="#cb479-14" aria-hidden="true" tabindex="-1"></a>  lat_vec    <span class="ot">&lt;-</span> <span class="fu">ncvar_get</span>(nc, <span class="st">"latitude"</span>)</span>
+<span id="cb479-15"><a href="#cb479-15" aria-hidden="true" tabindex="-1"></a>  time_raw   <span class="ot">&lt;-</span> <span class="fu">ncvar_get</span>(nc, <span class="st">"time"</span>)</span>
+<span id="cb479-16"><a href="#cb479-16" aria-hidden="true" tabindex="-1"></a>  time_units <span class="ot">&lt;-</span> <span class="fu">ncatt_get</span>(nc, <span class="st">"time"</span>, <span class="st">"units"</span>)<span class="sc">$</span>value</span>
+<span id="cb479-17"><a href="#cb479-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-18"><a href="#cb479-18" aria-hidden="true" tabindex="-1"></a>  time_origin <span class="ot">&lt;-</span> <span class="fu">as.Date</span>(<span class="fu">sub</span>(<span class="st">"days since "</span>, <span class="st">""</span>, time_units))</span>
+<span id="cb479-19"><a href="#cb479-19" aria-hidden="true" tabindex="-1"></a>  time_dates  <span class="ot">&lt;-</span> time_origin <span class="sc">+</span> time_raw</span>
+<span id="cb479-20"><a href="#cb479-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-21"><a href="#cb479-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"  Grid: %d lon x %d lat x %d timesteps"</span>,</span>
+<span id="cb479-22"><a href="#cb479-22" aria-hidden="true" tabindex="-1"></a>                        <span class="fu">length</span>(lon_vec), <span class="fu">length</span>(lat_vec), <span class="fu">length</span>(time_raw)))</span>
+<span id="cb479-23"><a href="#cb479-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-24"><a href="#cb479-24" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Read all requested variables</span></span>
+<span id="cb479-25"><a href="#cb479-25" aria-hidden="true" tabindex="-1"></a>  gridded_data <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb479-26"><a href="#cb479-26" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (vi <span class="cf">in</span> <span class="fu">seq_along</span>(SPATIAL_VARS)) {</span>
+<span id="cb479-27"><a href="#cb479-27" aria-hidden="true" tabindex="-1"></a>    vname <span class="ot">&lt;-</span> SPATIAL_VARS[vi]</span>
+<span id="cb479-28"><a href="#cb479-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"  Reading variable %d/%d: %s ..."</span>,</span>
+<span id="cb479-29"><a href="#cb479-29" aria-hidden="true" tabindex="-1"></a>                          vi, <span class="fu">length</span>(SPATIAL_VARS), vname))</span>
+<span id="cb479-30"><a href="#cb479-30" aria-hidden="true" tabindex="-1"></a>    raw <span class="ot">&lt;-</span> <span class="fu">ncvar_get</span>(nc, vname)                        <span class="co"># [lon, lat, time]</span></span>
+<span id="cb479-31"><a href="#cb479-31" aria-hidden="true" tabindex="-1"></a>    gridded_data[[vname]] <span class="ot">&lt;-</span> <span class="fu">aperm</span>(raw, <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">2</span>, <span class="dv">1</span>))    <span class="co"># -&gt; [time, lat, lon]</span></span>
+<span id="cb479-32"><a href="#cb479-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rm</span>(raw)</span>
+<span id="cb479-33"><a href="#cb479-33" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-34"><a href="#cb479-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nc_close</span>(nc)</span>
+<span id="cb479-35"><a href="#cb479-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"  NetCDF closed."</span>)</span>
+<span id="cb479-36"><a href="#cb479-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-37"><a href="#cb479-37" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Subset to Arctic domain</span></span>
+<span id="cb479-38"><a href="#cb479-38" aria-hidden="true" tabindex="-1"></a>  lat_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(lat_vec <span class="sc">&gt;=</span> ARCTIC_LAT_THRESHOLD)</span>
+<span id="cb479-39"><a href="#cb479-39" aria-hidden="true" tabindex="-1"></a>  lat_arc <span class="ot">&lt;-</span> lat_vec[lat_idx]</span>
+<span id="cb479-40"><a href="#cb479-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-41"><a href="#cb479-41" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (vname <span class="cf">in</span> SPATIAL_VARS) {</span>
+<span id="cb479-42"><a href="#cb479-42" aria-hidden="true" tabindex="-1"></a>    gridded_data[[vname]] <span class="ot">&lt;-</span> gridded_data[[vname]][, lat_idx, ]</span>
+<span id="cb479-43"><a href="#cb479-43" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-44"><a href="#cb479-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-45"><a href="#cb479-45" aria-hidden="true" tabindex="-1"></a>  n_lat    <span class="ot">&lt;-</span> <span class="fu">length</span>(lat_arc)</span>
+<span id="cb479-46"><a href="#cb479-46" aria-hidden="true" tabindex="-1"></a>  n_lon    <span class="ot">&lt;-</span> <span class="fu">length</span>(lon_vec)</span>
+<span id="cb479-47"><a href="#cb479-47" aria-hidden="true" tabindex="-1"></a>  n_time   <span class="ot">&lt;-</span> <span class="fu">dim</span>(gridded_data[[SPATIAL_VARS[<span class="dv">1</span>]]])[<span class="dv">1</span>]</span>
+<span id="cb479-48"><a href="#cb479-48" aria-hidden="true" tabindex="-1"></a>  n_points <span class="ot">&lt;-</span> n_lat <span class="sc">*</span> n_lon</span>
+<span id="cb479-49"><a href="#cb479-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-50"><a href="#cb479-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb479-51"><a href="#cb479-51" aria-hidden="true" tabindex="-1"></a>    <span class="st">"  Arctic domain: %d lat (%.1f-%.1f N) x %d lon = %d grid points"</span>,</span>
+<span id="cb479-52"><a href="#cb479-52" aria-hidden="true" tabindex="-1"></a>    n_lat, <span class="fu">min</span>(lat_arc), <span class="fu">max</span>(lat_arc), n_lon, n_points</span>
+<span id="cb479-53"><a href="#cb479-53" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb479-54"><a href="#cb479-54" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb479-55"><a href="#cb479-55" aria-hidden="true" tabindex="-1"></a>    <span class="st">"  Total PWMK tests planned: %d vars x 5 periods x %d points = %s tests"</span>,</span>
+<span id="cb479-56"><a href="#cb479-56" aria-hidden="true" tabindex="-1"></a>    <span class="fu">length</span>(SPATIAL_VARS), n_points,</span>
+<span id="cb479-57"><a href="#cb479-57" aria-hidden="true" tabindex="-1"></a>    <span class="fu">format</span>(<span class="fu">length</span>(SPATIAL_VARS) <span class="sc">*</span> <span class="dv">5</span> <span class="sc">*</span> n_points, <span class="at">big.mark =</span> <span class="st">","</span>)</span>
+<span id="cb479-58"><a href="#cb479-58" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb479-59"><a href="#cb479-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-60"><a href="#cb479-60" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Build time index</span></span>
+<span id="cb479-61"><a href="#cb479-61" aria-hidden="true" tabindex="-1"></a>  time_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb479-62"><a href="#cb479-62" aria-hidden="true" tabindex="-1"></a>    <span class="at">date  =</span> time_dates,</span>
+<span id="cb479-63"><a href="#cb479-63" aria-hidden="true" tabindex="-1"></a>    <span class="at">year  =</span> <span class="fu">as.integer</span>(<span class="fu">format</span>(time_dates, <span class="st">"%Y"</span>)),</span>
+<span id="cb479-64"><a href="#cb479-64" aria-hidden="true" tabindex="-1"></a>    <span class="at">month =</span> <span class="fu">as.integer</span>(<span class="fu">format</span>(time_dates, <span class="st">"%m"</span>))</span>
+<span id="cb479-65"><a href="#cb479-65" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb479-66"><a href="#cb479-66" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb479-67"><a href="#cb479-67" aria-hidden="true" tabindex="-1"></a>      <span class="at">season =</span> <span class="fu">case_when</span>(</span>
+<span id="cb479-68"><a href="#cb479-68" aria-hidden="true" tabindex="-1"></a>        month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">12</span>, <span class="dv">1</span>, <span class="dv">2</span>) <span class="sc">~</span> <span class="st">"DJF"</span>,</span>
+<span id="cb479-69"><a href="#cb479-69" aria-hidden="true" tabindex="-1"></a>        month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">5</span>)  <span class="sc">~</span> <span class="st">"MAM"</span>,</span>
+<span id="cb479-70"><a href="#cb479-70" aria-hidden="true" tabindex="-1"></a>        month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">6</span>, <span class="dv">7</span>, <span class="dv">8</span>)  <span class="sc">~</span> <span class="st">"JJA"</span>,</span>
+<span id="cb479-71"><a href="#cb479-71" aria-hidden="true" tabindex="-1"></a>        month <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">9</span>, <span class="dv">10</span>, <span class="dv">11</span>) <span class="sc">~</span> <span class="st">"SON"</span></span>
+<span id="cb479-72"><a href="#cb479-72" aria-hidden="true" tabindex="-1"></a>      ),</span>
+<span id="cb479-73"><a href="#cb479-73" aria-hidden="true" tabindex="-1"></a>      <span class="at">season_year =</span> <span class="fu">if_else</span>(month <span class="sc">==</span> <span class="dv">12</span>, year <span class="sc">+</span> <span class="dv">1</span>L, year)</span>
+<span id="cb479-74"><a href="#cb479-74" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb479-75"><a href="#cb479-75" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-76"><a href="#cb479-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-77"><a href="#cb479-77" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-78"><a href="#cb479-78" aria-hidden="true" tabindex="-1"></a>  <span class="co"># A2: HELPER FUNCTIONS</span></span>
+<span id="cb479-79"><a href="#cb479-79" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-80"><a href="#cb479-80" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"A2: Defining helper functions..."</span>)</span>
+<span id="cb479-81"><a href="#cb479-81" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-82"><a href="#cb479-82" aria-hidden="true" tabindex="-1"></a>  years_vec <span class="ot">&lt;-</span> ANNUAL_START_YEAR<span class="sc">:</span>ANALYSIS_END_YEAR  <span class="co"># 1958-2025, N=68</span></span>
+<span id="cb479-83"><a href="#cb479-83" aria-hidden="true" tabindex="-1"></a>  idx_grid  <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">lat =</span> <span class="fu">seq_len</span>(n_lat), <span class="at">lon =</span> <span class="fu">seq_len</span>(n_lon))</span>
+<span id="cb479-84"><a href="#cb479-84" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-85"><a href="#cb479-85" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Gridpoint PWMK — accepts explicit time axis for robustness</span></span>
+<span id="cb479-86"><a href="#cb479-86" aria-hidden="true" tabindex="-1"></a>  run_pwmk_gridpoint <span class="ot">&lt;-</span> <span class="cf">function</span>(x, time_axis) {</span>
+<span id="cb479-87"><a href="#cb479-87" aria-hidden="true" tabindex="-1"></a>    valid <span class="ot">&lt;-</span> <span class="sc">!</span><span class="fu">is.na</span>(x)</span>
+<span id="cb479-88"><a href="#cb479-88" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">sum</span>(valid) <span class="sc">&lt;</span> <span class="dv">10</span>L) {</span>
+<span id="cb479-89"><a href="#cb479-89" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span>(<span class="fu">c</span>(<span class="at">slope_dec =</span> <span class="cn">NA_real_</span>, <span class="at">p_local =</span> <span class="cn">NA_real_</span>, <span class="at">tau =</span> <span class="cn">NA_real_</span>))</span>
+<span id="cb479-90"><a href="#cb479-90" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb479-91"><a href="#cb479-91" aria-hidden="true" tabindex="-1"></a>    mk <span class="ot">&lt;-</span> <span class="fu">zyp.zhang</span>(<span class="at">y =</span> x[valid], <span class="at">x =</span> time_axis[valid])</span>
+<span id="cb479-92"><a href="#cb479-92" aria-hidden="true" tabindex="-1"></a>    <span class="fu">c</span>(</span>
+<span id="cb479-93"><a href="#cb479-93" aria-hidden="true" tabindex="-1"></a>      <span class="at">slope_dec =</span> <span class="fu">unname</span>(mk[<span class="st">"trend"</span>]) <span class="sc">*</span> DECADES,</span>
+<span id="cb479-94"><a href="#cb479-94" aria-hidden="true" tabindex="-1"></a>      <span class="at">p_local   =</span> <span class="fu">unname</span>(mk[<span class="st">"sig"</span>]),</span>
+<span id="cb479-95"><a href="#cb479-95" aria-hidden="true" tabindex="-1"></a>      <span class="at">tau       =</span> <span class="fu">unname</span>(mk[<span class="st">"tau"</span>])</span>
+<span id="cb479-96"><a href="#cb479-96" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb479-97"><a href="#cb479-97" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-98"><a href="#cb479-98" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-99"><a href="#cb479-99" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Run PWMK across all grid points for a [N x lat x lon] array</span></span>
+<span id="cb479-100"><a href="#cb479-100" aria-hidden="true" tabindex="-1"></a>  run_spatial_pwmk <span class="ot">&lt;-</span> <span class="cf">function</span>(data_arr, time_axis, <span class="at">label =</span> <span class="st">""</span>) {</span>
+<span id="cb479-101"><a href="#cb479-101" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-102"><a href="#cb479-102" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"      PWMK on %s grid points (%s)..."</span>,</span>
+<span id="cb479-103"><a href="#cb479-103" aria-hidden="true" tabindex="-1"></a>                          <span class="fu">format</span>(n_points, <span class="at">big.mark =</span> <span class="st">","</span>), label))</span>
+<span id="cb479-104"><a href="#cb479-104" aria-hidden="true" tabindex="-1"></a>    t_start <span class="ot">&lt;-</span> <span class="fu">Sys.time</span>()</span>
+<span id="cb479-105"><a href="#cb479-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-106"><a href="#cb479-106" aria-hidden="true" tabindex="-1"></a>    <span class="fu">plan</span>(multisession)</span>
+<span id="cb479-107"><a href="#cb479-107" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-108"><a href="#cb479-108" aria-hidden="true" tabindex="-1"></a>    trend_list <span class="ot">&lt;-</span> <span class="fu">future_map</span>(</span>
+<span id="cb479-109"><a href="#cb479-109" aria-hidden="true" tabindex="-1"></a>      <span class="fu">seq_len</span>(n_points),</span>
+<span id="cb479-110"><a href="#cb479-110" aria-hidden="true" tabindex="-1"></a>      <span class="cf">function</span>(i) {</span>
+<span id="cb479-111"><a href="#cb479-111" aria-hidden="true" tabindex="-1"></a>        <span class="fu">run_pwmk_gridpoint</span>(</span>
+<span id="cb479-112"><a href="#cb479-112" aria-hidden="true" tabindex="-1"></a>          data_arr[, idx_grid<span class="sc">$</span>lat[i], idx_grid<span class="sc">$</span>lon[i]],</span>
+<span id="cb479-113"><a href="#cb479-113" aria-hidden="true" tabindex="-1"></a>          time_axis</span>
+<span id="cb479-114"><a href="#cb479-114" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb479-115"><a href="#cb479-115" aria-hidden="true" tabindex="-1"></a>      },</span>
+<span id="cb479-116"><a href="#cb479-116" aria-hidden="true" tabindex="-1"></a>      <span class="at">.options  =</span> <span class="fu">furrr_options</span>(<span class="at">seed =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb479-117"><a href="#cb479-117" aria-hidden="true" tabindex="-1"></a>      <span class="at">.progress =</span> <span class="cn">TRUE</span></span>
+<span id="cb479-118"><a href="#cb479-118" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb479-119"><a href="#cb479-119" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-120"><a href="#cb479-120" aria-hidden="true" tabindex="-1"></a>    <span class="fu">plan</span>(sequential)</span>
+<span id="cb479-121"><a href="#cb479-121" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-122"><a href="#cb479-122" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Reassemble into matrices</span></span>
+<span id="cb479-123"><a href="#cb479-123" aria-hidden="true" tabindex="-1"></a>    slope_mat  <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="cn">NA_real_</span>, n_lat, n_lon)</span>
+<span id="cb479-124"><a href="#cb479-124" aria-hidden="true" tabindex="-1"></a>    plocal_mat <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="cn">NA_real_</span>, n_lat, n_lon)</span>
+<span id="cb479-125"><a href="#cb479-125" aria-hidden="true" tabindex="-1"></a>    tau_mat    <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="cn">NA_real_</span>, n_lat, n_lon)</span>
+<span id="cb479-126"><a href="#cb479-126" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-127"><a href="#cb479-127" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(n_points)) {</span>
+<span id="cb479-128"><a href="#cb479-128" aria-hidden="true" tabindex="-1"></a>      r <span class="ot">&lt;-</span> trend_list[[i]]</span>
+<span id="cb479-129"><a href="#cb479-129" aria-hidden="true" tabindex="-1"></a>      slope_mat [idx_grid<span class="sc">$</span>lat[i], idx_grid<span class="sc">$</span>lon[i]] <span class="ot">&lt;-</span> r[<span class="st">"slope_dec"</span>]</span>
+<span id="cb479-130"><a href="#cb479-130" aria-hidden="true" tabindex="-1"></a>      plocal_mat[idx_grid<span class="sc">$</span>lat[i], idx_grid<span class="sc">$</span>lon[i]] <span class="ot">&lt;-</span> r[<span class="st">"p_local"</span>]</span>
+<span id="cb479-131"><a href="#cb479-131" aria-hidden="true" tabindex="-1"></a>      tau_mat   [idx_grid<span class="sc">$</span>lat[i], idx_grid<span class="sc">$</span>lon[i]] <span class="ot">&lt;-</span> r[<span class="st">"tau"</span>]</span>
+<span id="cb479-132"><a href="#cb479-132" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb479-133"><a href="#cb479-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-134"><a href="#cb479-134" aria-hidden="true" tabindex="-1"></a>    elapsed_step <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">as.numeric</span>(<span class="fu">difftime</span>(<span class="fu">Sys.time</span>(), t_start, <span class="at">units =</span> <span class="st">"mins"</span>)), <span class="dv">1</span>)</span>
+<span id="cb479-135"><a href="#cb479-135" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"      Done (%s) in %.1f min"</span>, label, elapsed_step))</span>
+<span id="cb479-136"><a href="#cb479-136" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-137"><a href="#cb479-137" aria-hidden="true" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">slope =</span> slope_mat, <span class="at">p_local =</span> plocal_mat, <span class="at">tau =</span> tau_mat)</span>
+<span id="cb479-138"><a href="#cb479-138" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-139"><a href="#cb479-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-140"><a href="#cb479-140" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Temporal aggregation helpers</span></span>
+<span id="cb479-141"><a href="#cb479-141" aria-hidden="true" tabindex="-1"></a>  aggregate_annual <span class="ot">&lt;-</span> <span class="cf">function</span>(data_3d) {</span>
+<span id="cb479-142"><a href="#cb479-142" aria-hidden="true" tabindex="-1"></a>    annual_arr <span class="ot">&lt;-</span> <span class="fu">array</span>(<span class="cn">NA_real_</span>, <span class="at">dim =</span> <span class="fu">c</span>(<span class="fu">length</span>(years_vec), n_lat, n_lon))</span>
+<span id="cb479-143"><a href="#cb479-143" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (yi <span class="cf">in</span> <span class="fu">seq_along</span>(years_vec)) {</span>
+<span id="cb479-144"><a href="#cb479-144" aria-hidden="true" tabindex="-1"></a>      t_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(time_df<span class="sc">$</span>year <span class="sc">==</span> years_vec[yi])</span>
+<span id="cb479-145"><a href="#cb479-145" aria-hidden="true" tabindex="-1"></a>      <span class="cf">if</span> (<span class="fu">length</span>(t_idx) <span class="sc">==</span> <span class="dv">12</span>L) {</span>
+<span id="cb479-146"><a href="#cb479-146" aria-hidden="true" tabindex="-1"></a>        annual_arr[yi, , ] <span class="ot">&lt;-</span> <span class="fu">apply</span>(data_3d[t_idx, , ], <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>), mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb479-147"><a href="#cb479-147" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb479-148"><a href="#cb479-148" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb479-149"><a href="#cb479-149" aria-hidden="true" tabindex="-1"></a>    annual_arr</span>
+<span id="cb479-150"><a href="#cb479-150" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-151"><a href="#cb479-151" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-152"><a href="#cb479-152" aria-hidden="true" tabindex="-1"></a>  aggregate_seasonal <span class="ot">&lt;-</span> <span class="cf">function</span>(data_3d, seas) {</span>
+<span id="cb479-153"><a href="#cb479-153" aria-hidden="true" tabindex="-1"></a>    season_years <span class="ot">&lt;-</span> <span class="fu">sort</span>(<span class="fu">unique</span>(</span>
+<span id="cb479-154"><a href="#cb479-154" aria-hidden="true" tabindex="-1"></a>      time_df<span class="sc">$</span>season_year[time_df<span class="sc">$</span>season <span class="sc">==</span> seas <span class="sc">&amp;</span></span>
+<span id="cb479-155"><a href="#cb479-155" aria-hidden="true" tabindex="-1"></a>                          time_df<span class="sc">$</span>season_year <span class="sc">&gt;=</span> ANNUAL_START_YEAR <span class="sc">&amp;</span></span>
+<span id="cb479-156"><a href="#cb479-156" aria-hidden="true" tabindex="-1"></a>                          time_df<span class="sc">$</span>season_year <span class="sc">&lt;=</span> ANALYSIS_END_YEAR]</span>
+<span id="cb479-157"><a href="#cb479-157" aria-hidden="true" tabindex="-1"></a>    ))</span>
+<span id="cb479-158"><a href="#cb479-158" aria-hidden="true" tabindex="-1"></a>    seas_arr <span class="ot">&lt;-</span> <span class="fu">array</span>(<span class="cn">NA_real_</span>, <span class="at">dim =</span> <span class="fu">c</span>(<span class="fu">length</span>(season_years), n_lat, n_lon))</span>
+<span id="cb479-159"><a href="#cb479-159" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (si <span class="cf">in</span> <span class="fu">seq_along</span>(season_years)) {</span>
+<span id="cb479-160"><a href="#cb479-160" aria-hidden="true" tabindex="-1"></a>      sy    <span class="ot">&lt;-</span> season_years[si]</span>
+<span id="cb479-161"><a href="#cb479-161" aria-hidden="true" tabindex="-1"></a>      t_idx <span class="ot">&lt;-</span> <span class="fu">which</span>(time_df<span class="sc">$</span>season <span class="sc">==</span> seas <span class="sc">&amp;</span> time_df<span class="sc">$</span>season_year <span class="sc">==</span> sy)</span>
+<span id="cb479-162"><a href="#cb479-162" aria-hidden="true" tabindex="-1"></a>      <span class="cf">if</span> (<span class="fu">length</span>(t_idx) <span class="sc">==</span> <span class="dv">3</span>L) {</span>
+<span id="cb479-163"><a href="#cb479-163" aria-hidden="true" tabindex="-1"></a>        seas_arr[si, , ] <span class="ot">&lt;-</span> <span class="fu">apply</span>(data_3d[t_idx, , ], <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>), mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb479-164"><a href="#cb479-164" aria-hidden="true" tabindex="-1"></a>      }</span>
+<span id="cb479-165"><a href="#cb479-165" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb479-166"><a href="#cb479-166" aria-hidden="true" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">data =</span> seas_arr, <span class="at">years =</span> season_years)</span>
+<span id="cb479-167"><a href="#cb479-167" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-168"><a href="#cb479-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-169"><a href="#cb479-169" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-170"><a href="#cb479-170" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-171"><a href="#cb479-171" aria-hidden="true" tabindex="-1"></a>  <span class="co"># A3: MAIN COMPUTATION LOOP</span></span>
+<span id="cb479-172"><a href="#cb479-172" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-173"><a href="#cb479-173" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"A3: Beginning main computation loop..."</span>)</span>
+<span id="cb479-174"><a href="#cb479-174" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-175"><a href="#cb479-175" aria-hidden="true" tabindex="-1"></a>  spatial_results <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb479-176"><a href="#cb479-176" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-177"><a href="#cb479-177" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (vi <span class="cf">in</span> <span class="fu">seq_along</span>(SPATIAL_VARS)) {</span>
+<span id="cb479-178"><a href="#cb479-178" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-179"><a href="#cb479-179" aria-hidden="true" tabindex="-1"></a>    vname <span class="ot">&lt;-</span> SPATIAL_VARS[vi]</span>
+<span id="cb479-180"><a href="#cb479-180" aria-hidden="true" tabindex="-1"></a>    <span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">60</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb479-181"><a href="#cb479-181" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"VARIABLE %d/%d: %s"</span>, vi, <span class="fu">length</span>(SPATIAL_VARS), vname))</span>
+<span id="cb479-182"><a href="#cb479-182" aria-hidden="true" tabindex="-1"></a>    <span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">60</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb479-183"><a href="#cb479-183" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-184"><a href="#cb479-184" aria-hidden="true" tabindex="-1"></a>    data_3d <span class="ot">&lt;-</span> gridded_data[[vname]]</span>
+<span id="cb479-185"><a href="#cb479-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-186"><a href="#cb479-186" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ── Annual ─────────────────────────────────────────────────────────────</span></span>
+<span id="cb479-187"><a href="#cb479-187" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"    [%s] Annual: aggregating..."</span>, vname))</span>
+<span id="cb479-188"><a href="#cb479-188" aria-hidden="true" tabindex="-1"></a>    annual_arr <span class="ot">&lt;-</span> <span class="fu">aggregate_annual</span>(data_3d)</span>
+<span id="cb479-189"><a href="#cb479-189" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"    [%s] Annual array: %d x %d x %d"</span>,</span>
+<span id="cb479-190"><a href="#cb479-190" aria-hidden="true" tabindex="-1"></a>                          vname, <span class="fu">dim</span>(annual_arr)[<span class="dv">1</span>], n_lat, n_lon))</span>
+<span id="cb479-191"><a href="#cb479-191" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-192"><a href="#cb479-192" aria-hidden="true" tabindex="-1"></a>    pwmk_ann <span class="ot">&lt;-</span> <span class="fu">run_spatial_pwmk</span>(annual_arr, years_vec,</span>
+<span id="cb479-193"><a href="#cb479-193" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">label =</span> <span class="fu">paste</span>(vname, <span class="st">"annual"</span>))</span>
+<span id="cb479-194"><a href="#cb479-194" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-195"><a href="#cb479-195" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Field significance: rejection fraction</span></span>
+<span id="cb479-196"><a href="#cb479-196" aria-hidden="true" tabindex="-1"></a>    n_local_sig <span class="ot">&lt;-</span> <span class="fu">sum</span>(pwmk_ann<span class="sc">$</span>p_local <span class="sc">&lt;</span> ALPHA_LOCAL, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb479-197"><a href="#cb479-197" aria-hidden="true" tabindex="-1"></a>    n_total     <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(pwmk_ann<span class="sc">$</span>p_local))</span>
+<span id="cb479-198"><a href="#cb479-198" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb479-199"><a href="#cb479-199" aria-hidden="true" tabindex="-1"></a>      <span class="st">"    [%s] Annual: %d / %d (%.1f%%) with local p &lt; %.2f (%.0fx null expectation)"</span>,</span>
+<span id="cb479-200"><a href="#cb479-200" aria-hidden="true" tabindex="-1"></a>      vname, n_local_sig, n_total, <span class="dv">100</span> <span class="sc">*</span> n_local_sig <span class="sc">/</span> n_total,</span>
+<span id="cb479-201"><a href="#cb479-201" aria-hidden="true" tabindex="-1"></a>      ALPHA_LOCAL, n_local_sig <span class="sc">/</span> (ALPHA_LOCAL <span class="sc">*</span> n_total)</span>
+<span id="cb479-202"><a href="#cb479-202" aria-hidden="true" tabindex="-1"></a>    ))</span>
+<span id="cb479-203"><a href="#cb479-203" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-204"><a href="#cb479-204" aria-hidden="true" tabindex="-1"></a>    spatial_results[[vname]] <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb479-205"><a href="#cb479-205" aria-hidden="true" tabindex="-1"></a>      <span class="at">annual =</span> <span class="fu">list</span>(</span>
+<span id="cb479-206"><a href="#cb479-206" aria-hidden="true" tabindex="-1"></a>        <span class="at">slope     =</span> pwmk_ann<span class="sc">$</span>slope,</span>
+<span id="cb479-207"><a href="#cb479-207" aria-hidden="true" tabindex="-1"></a>        <span class="at">p_local   =</span> pwmk_ann<span class="sc">$</span>p_local,</span>
+<span id="cb479-208"><a href="#cb479-208" aria-hidden="true" tabindex="-1"></a>        <span class="at">tau       =</span> pwmk_ann<span class="sc">$</span>tau,</span>
+<span id="cb479-209"><a href="#cb479-209" aria-hidden="true" tabindex="-1"></a>        <span class="at">sig_local =</span> pwmk_ann<span class="sc">$</span>p_local <span class="sc">&lt;</span> ALPHA_LOCAL,</span>
+<span id="cb479-210"><a href="#cb479-210" aria-hidden="true" tabindex="-1"></a>        <span class="at">years     =</span> years_vec</span>
+<span id="cb479-211"><a href="#cb479-211" aria-hidden="true" tabindex="-1"></a>      ),</span>
+<span id="cb479-212"><a href="#cb479-212" aria-hidden="true" tabindex="-1"></a>      <span class="at">seasonal =</span> <span class="fu">list</span>()</span>
+<span id="cb479-213"><a href="#cb479-213" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb479-214"><a href="#cb479-214" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-215"><a href="#cb479-215" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rm</span>(annual_arr, pwmk_ann); <span class="fu">gc</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb479-216"><a href="#cb479-216" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-217"><a href="#cb479-217" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ── Seasonal ───────────────────────────────────────────────────────────</span></span>
+<span id="cb479-218"><a href="#cb479-218" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (si <span class="cf">in</span> <span class="fu">seq_along</span>(SEASONS)) {</span>
+<span id="cb479-219"><a href="#cb479-219" aria-hidden="true" tabindex="-1"></a>      seas <span class="ot">&lt;-</span> SEASONS[si]</span>
+<span id="cb479-220"><a href="#cb479-220" aria-hidden="true" tabindex="-1"></a>      <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"    [%s] Season %d/4: %s"</span>, vname, si, seas))</span>
+<span id="cb479-221"><a href="#cb479-221" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-222"><a href="#cb479-222" aria-hidden="true" tabindex="-1"></a>      seas_agg <span class="ot">&lt;-</span> <span class="fu">aggregate_seasonal</span>(data_3d, seas)</span>
+<span id="cb479-223"><a href="#cb479-223" aria-hidden="true" tabindex="-1"></a>      pwmk_s   <span class="ot">&lt;-</span> <span class="fu">run_spatial_pwmk</span>(seas_agg<span class="sc">$</span>data, seas_agg<span class="sc">$</span>years,</span>
+<span id="cb479-224"><a href="#cb479-224" aria-hidden="true" tabindex="-1"></a>                                    <span class="at">label =</span> <span class="fu">paste</span>(vname, seas))</span>
+<span id="cb479-225"><a href="#cb479-225" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-226"><a href="#cb479-226" aria-hidden="true" tabindex="-1"></a>      n_local_s <span class="ot">&lt;-</span> <span class="fu">sum</span>(pwmk_s<span class="sc">$</span>p_local <span class="sc">&lt;</span> ALPHA_LOCAL, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb479-227"><a href="#cb479-227" aria-hidden="true" tabindex="-1"></a>      n_total_s <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(pwmk_s<span class="sc">$</span>p_local))</span>
+<span id="cb479-228"><a href="#cb479-228" aria-hidden="true" tabindex="-1"></a>      <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb479-229"><a href="#cb479-229" aria-hidden="true" tabindex="-1"></a>        <span class="st">"    [%s] %s: %d / %d (%.1f%%) with local p &lt; %.2f (%.0fx null)"</span>,</span>
+<span id="cb479-230"><a href="#cb479-230" aria-hidden="true" tabindex="-1"></a>        vname, seas, n_local_s, n_total_s, <span class="dv">100</span> <span class="sc">*</span> n_local_s <span class="sc">/</span> n_total_s,</span>
+<span id="cb479-231"><a href="#cb479-231" aria-hidden="true" tabindex="-1"></a>        ALPHA_LOCAL, n_local_s <span class="sc">/</span> (ALPHA_LOCAL <span class="sc">*</span> n_total_s)</span>
+<span id="cb479-232"><a href="#cb479-232" aria-hidden="true" tabindex="-1"></a>      ))</span>
+<span id="cb479-233"><a href="#cb479-233" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-234"><a href="#cb479-234" aria-hidden="true" tabindex="-1"></a>      spatial_results[[vname]]<span class="sc">$</span>seasonal[[seas]] <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb479-235"><a href="#cb479-235" aria-hidden="true" tabindex="-1"></a>        <span class="at">slope        =</span> pwmk_s<span class="sc">$</span>slope,</span>
+<span id="cb479-236"><a href="#cb479-236" aria-hidden="true" tabindex="-1"></a>        <span class="at">p_local      =</span> pwmk_s<span class="sc">$</span>p_local,</span>
+<span id="cb479-237"><a href="#cb479-237" aria-hidden="true" tabindex="-1"></a>        <span class="at">tau          =</span> pwmk_s<span class="sc">$</span>tau,</span>
+<span id="cb479-238"><a href="#cb479-238" aria-hidden="true" tabindex="-1"></a>        <span class="at">sig_local    =</span> pwmk_s<span class="sc">$</span>p_local <span class="sc">&lt;</span> ALPHA_LOCAL,</span>
+<span id="cb479-239"><a href="#cb479-239" aria-hidden="true" tabindex="-1"></a>        <span class="at">season_years =</span> seas_agg<span class="sc">$</span>years</span>
+<span id="cb479-240"><a href="#cb479-240" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb479-241"><a href="#cb479-241" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-242"><a href="#cb479-242" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rm</span>(seas_agg, pwmk_s); <span class="fu">gc</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb479-243"><a href="#cb479-243" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb479-244"><a href="#cb479-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-245"><a href="#cb479-245" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ── Intermediate save after each variable ──────────────────────────────</span></span>
+<span id="cb479-246"><a href="#cb479-246" aria-hidden="true" tabindex="-1"></a>    <span class="fu">save</span>(spatial_results, ALPHA_LOCAL, SPATIAL_VARS,</span>
+<span id="cb479-247"><a href="#cb479-247" aria-hidden="true" tabindex="-1"></a>         lat_arc, lon_vec,</span>
+<span id="cb479-248"><a href="#cb479-248" aria-hidden="true" tabindex="-1"></a>         <span class="at">file =</span> RESULTS_FILE)</span>
+<span id="cb479-249"><a href="#cb479-249" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"    Intermediate save after %s (%d/%d variables)."</span>,</span>
+<span id="cb479-250"><a href="#cb479-250" aria-hidden="true" tabindex="-1"></a>                          vname, vi, <span class="fu">length</span>(SPATIAL_VARS)))</span>
+<span id="cb479-251"><a href="#cb479-251" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-252"><a href="#cb479-252" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rm</span>(data_3d); <span class="fu">gc</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb479-253"><a href="#cb479-253" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-254"><a href="#cb479-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-255"><a href="#cb479-255" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Free raw gridded data</span></span>
+<span id="cb479-256"><a href="#cb479-256" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rm</span>(gridded_data); <span class="fu">gc</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb479-257"><a href="#cb479-257" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-258"><a href="#cb479-258" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-259"><a href="#cb479-259" aria-hidden="true" tabindex="-1"></a>  <span class="co"># A4: BUILD SUMMARY TABLES AND FINAL SAVE</span></span>
+<span id="cb479-260"><a href="#cb479-260" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ========================================================================</span></span>
+<span id="cb479-261"><a href="#cb479-261" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="st">"A4: Building summary tables and saving final results..."</span>)</span>
+<span id="cb479-262"><a href="#cb479-262" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-263"><a href="#cb479-263" aria-hidden="true" tabindex="-1"></a>  summary_rows <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb479-264"><a href="#cb479-264" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (vname <span class="cf">in</span> <span class="fu">names</span>(spatial_results)) {</span>
+<span id="cb479-265"><a href="#cb479-265" aria-hidden="true" tabindex="-1"></a>    res <span class="ot">&lt;-</span> spatial_results[[vname]]</span>
+<span id="cb479-266"><a href="#cb479-266" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-267"><a href="#cb479-267" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Annual</span></span>
+<span id="cb479-268"><a href="#cb479-268" aria-hidden="true" tabindex="-1"></a>    p_ann   <span class="ot">&lt;-</span> res<span class="sc">$</span>annual<span class="sc">$</span>p_local</span>
+<span id="cb479-269"><a href="#cb479-269" aria-hidden="true" tabindex="-1"></a>    n_tot   <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(p_ann))</span>
+<span id="cb479-270"><a href="#cb479-270" aria-hidden="true" tabindex="-1"></a>    n_loc   <span class="ot">&lt;-</span> <span class="fu">sum</span>(p_ann <span class="sc">&lt;</span> ALPHA_LOCAL, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb479-271"><a href="#cb479-271" aria-hidden="true" tabindex="-1"></a>    summary_rows[[<span class="fu">length</span>(summary_rows) <span class="sc">+</span> <span class="dv">1</span>L]] <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb479-272"><a href="#cb479-272" aria-hidden="true" tabindex="-1"></a>      <span class="at">variable      =</span> vname,</span>
+<span id="cb479-273"><a href="#cb479-273" aria-hidden="true" tabindex="-1"></a>      <span class="at">period        =</span> <span class="st">"Annual"</span>,</span>
+<span id="cb479-274"><a href="#cb479-274" aria-hidden="true" tabindex="-1"></a>      <span class="at">n_total       =</span> n_tot,</span>
+<span id="cb479-275"><a href="#cb479-275" aria-hidden="true" tabindex="-1"></a>      <span class="at">n_local_sig   =</span> n_loc,</span>
+<span id="cb479-276"><a href="#cb479-276" aria-hidden="true" tabindex="-1"></a>      <span class="at">pct_local     =</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">*</span> n_loc <span class="sc">/</span> n_tot, <span class="dv">2</span>),</span>
+<span id="cb479-277"><a href="#cb479-277" aria-hidden="true" tabindex="-1"></a>      <span class="at">ratio_to_null =</span> <span class="fu">round</span>(n_loc <span class="sc">/</span> (ALPHA_LOCAL <span class="sc">*</span> n_tot), <span class="dv">2</span>),</span>
+<span id="cb479-278"><a href="#cb479-278" aria-hidden="true" tabindex="-1"></a>      <span class="at">min_p         =</span> <span class="fu">signif</span>(<span class="fu">min</span>(p_ann, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="dv">3</span>),</span>
+<span id="cb479-279"><a href="#cb479-279" aria-hidden="true" tabindex="-1"></a>      <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb479-280"><a href="#cb479-280" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb479-281"><a href="#cb479-281" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-282"><a href="#cb479-282" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Seasonal</span></span>
+<span id="cb479-283"><a href="#cb479-283" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (seas <span class="cf">in</span> SEASONS) {</span>
+<span id="cb479-284"><a href="#cb479-284" aria-hidden="true" tabindex="-1"></a>      sr    <span class="ot">&lt;-</span> res<span class="sc">$</span>seasonal[[seas]]</span>
+<span id="cb479-285"><a href="#cb479-285" aria-hidden="true" tabindex="-1"></a>      p_s   <span class="ot">&lt;-</span> sr<span class="sc">$</span>p_local</span>
+<span id="cb479-286"><a href="#cb479-286" aria-hidden="true" tabindex="-1"></a>      n_ts  <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(p_s))</span>
+<span id="cb479-287"><a href="#cb479-287" aria-hidden="true" tabindex="-1"></a>      n_ls  <span class="ot">&lt;-</span> <span class="fu">sum</span>(p_s <span class="sc">&lt;</span> ALPHA_LOCAL, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb479-288"><a href="#cb479-288" aria-hidden="true" tabindex="-1"></a>      summary_rows[[<span class="fu">length</span>(summary_rows) <span class="sc">+</span> <span class="dv">1</span>L]] <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb479-289"><a href="#cb479-289" aria-hidden="true" tabindex="-1"></a>        <span class="at">variable      =</span> vname,</span>
+<span id="cb479-290"><a href="#cb479-290" aria-hidden="true" tabindex="-1"></a>        <span class="at">period        =</span> seas,</span>
+<span id="cb479-291"><a href="#cb479-291" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_total       =</span> n_ts,</span>
+<span id="cb479-292"><a href="#cb479-292" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_local_sig   =</span> n_ls,</span>
+<span id="cb479-293"><a href="#cb479-293" aria-hidden="true" tabindex="-1"></a>        <span class="at">pct_local     =</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">*</span> n_ls <span class="sc">/</span> n_ts, <span class="dv">2</span>),</span>
+<span id="cb479-294"><a href="#cb479-294" aria-hidden="true" tabindex="-1"></a>        <span class="at">ratio_to_null =</span> <span class="fu">round</span>(n_ls <span class="sc">/</span> (ALPHA_LOCAL <span class="sc">*</span> n_ts), <span class="dv">2</span>),</span>
+<span id="cb479-295"><a href="#cb479-295" aria-hidden="true" tabindex="-1"></a>        <span class="at">min_p         =</span> <span class="fu">signif</span>(<span class="fu">min</span>(p_s, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="dv">3</span>),</span>
+<span id="cb479-296"><a href="#cb479-296" aria-hidden="true" tabindex="-1"></a>        <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb479-297"><a href="#cb479-297" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb479-298"><a href="#cb479-298" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb479-299"><a href="#cb479-299" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb479-300"><a href="#cb479-300" aria-hidden="true" tabindex="-1"></a>  field_sig_summary <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(summary_rows)</span>
+<span id="cb479-301"><a href="#cb479-301" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-302"><a href="#cb479-302" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Final save</span></span>
+<span id="cb479-303"><a href="#cb479-303" aria-hidden="true" tabindex="-1"></a>  <span class="fu">save</span>(spatial_results, ALPHA_LOCAL, SPATIAL_VARS,</span>
+<span id="cb479-304"><a href="#cb479-304" aria-hidden="true" tabindex="-1"></a>       lat_arc, lon_vec, field_sig_summary,</span>
+<span id="cb479-305"><a href="#cb479-305" aria-hidden="true" tabindex="-1"></a>       <span class="at">file =</span> RESULTS_FILE)</span>
+<span id="cb479-306"><a href="#cb479-306" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-307"><a href="#cb479-307" aria-hidden="true" tabindex="-1"></a>  elapsed_total <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">as.numeric</span>(</span>
+<span id="cb479-308"><a href="#cb479-308" aria-hidden="true" tabindex="-1"></a>    <span class="fu">difftime</span>(<span class="fu">Sys.time</span>(), .t0_phase34, <span class="at">units =</span> <span class="st">"mins"</span>)), <span class="dv">1</span>)</span>
+<span id="cb479-309"><a href="#cb479-309" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-310"><a href="#cb479-310" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb479-311"><a href="#cb479-311" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(</span>
+<span id="cb479-312"><a href="#cb479-312" aria-hidden="true" tabindex="-1"></a>    <span class="st">"PART A COMPLETE. Total computation time: %.1f minutes."</span>, elapsed_total</span>
+<span id="cb479-313"><a href="#cb479-313" aria-hidden="true" tabindex="-1"></a>  ))</span>
+<span id="cb479-314"><a href="#cb479-314" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
+<span id="cb479-315"><a href="#cb479-315" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-316"><a href="#cb479-316" aria-hidden="true" tabindex="-1"></a>}  <span class="co"># end of computation block</span></span>
+<span id="cb479-317"><a href="#cb479-317" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-318"><a href="#cb479-318" aria-hidden="true" tabindex="-1"></a><span class="co"># Derive grid dimensions from cached lat_arc / lon_vec</span></span>
+<span id="cb479-319"><a href="#cb479-319" aria-hidden="true" tabindex="-1"></a>n_lat <span class="ot">&lt;-</span> <span class="fu">length</span>(lat_arc)</span>
+<span id="cb479-320"><a href="#cb479-320" aria-hidden="true" tabindex="-1"></a>n_lon <span class="ot">&lt;-</span> <span class="fu">length</span>(lon_vec)</span>
+<span id="cb479-321"><a href="#cb479-321" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-322"><a href="#cb479-322" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-323"><a href="#cb479-323" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb479-324"><a href="#cb479-324" aria-hidden="true" tabindex="-1"></a><span class="co"># PART B: FIGURES (always runs — uses cached or freshly computed results)</span></span>
+<span id="cb479-325"><a href="#cb479-325" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb479-326"><a href="#cb479-326" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-327"><a href="#cb479-327" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"PHASE 3.4 PART B: GENERATING FIGURES"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:39 | +0.0 min] PHASE 3.4 PART B: GENERATING FIGURES</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb481"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb481-1"><a href="#cb481-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb483"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb483-1"><a href="#cb483-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Print field significance summary ─────────────────────────────────────────</span></span>
+<span id="cb483-2"><a href="#cb483-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"FIELD SIGNIFICANCE SUMMARY</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>FIELD SIGNIFICANCE SUMMARY</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb485"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb485-1"><a href="#cb485-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"  Rejection fraction: observed % with local p &lt; 0.05 vs 5% null expectation</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Rejection fraction: observed % with local p &lt; 0.05 vs 5% null expectation</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb487"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb487-1"><a href="#cb487-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"  ratio_to_null: observed rejections / expected under H0 (values &gt;&gt; 1 = field significance)</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  ratio_to_null: observed rejections / expected under H0 (values &gt;&gt; 1 = field significance)</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb489"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb489-1"><a href="#cb489-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"-"</span>, <span class="dv">90</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb491"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb491-1"><a href="#cb491-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(field_sig_summary, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>          variable period n_total n_local_sig pct_local ratio_to_null    min_p
+ eke_synoptic_mean Annual  172800       13588      7.86          1.57 3.46e-06
+ eke_synoptic_mean    DJF  172800       14108      8.16          1.63 6.50e-05
+ eke_synoptic_mean    MAM  172800       27253     15.77          3.15 1.91e-05
+ eke_synoptic_mean    JJA  172800        2680      1.55          0.31 1.19e-07
+ eke_synoptic_mean    SON  172800        9223      5.34          1.07 9.06e-06
+           eke_p90 Annual  172800        7388      4.28          0.86 8.34e-07
+           eke_p90    DJF  172800       15652      9.06          1.81 4.69e-06
+           eke_p90    MAM  172800       22305     12.91          2.58 2.03e-06
+           eke_p90    JJA  172800        2491      1.44          0.29 0.00e+00
+           eke_p90    SON  172800        6745      3.90          0.78 1.11e-05
+           eke_p95 Annual  172800        5277      3.05          0.61 3.58e-07
+           eke_p95    DJF  172800       15459      8.95          1.79 1.57e-05
+           eke_p95    MAM  172800       17665     10.22          2.04 2.26e-06
+           eke_p95    JJA  172800        2733      1.58          0.32 7.15e-07
+           eke_p95    SON  172800        4556      2.64          0.53 1.59e-04
+           eke_p99 Annual  172800        6705      3.88          0.78 1.82e-05
+           eke_p99    DJF  172800       15915      9.21          1.84 2.05e-04
+           eke_p99    MAM  172800       15632      9.05          1.81 1.65e-05
+           eke_p99    JJA  172800        3392      1.96          0.39 7.15e-07
+           eke_p99    SON  172800        3257      1.88          0.38 9.54e-06
+   exceed_p95_freq Annual  172800        6712      3.88          0.78 1.19e-07
+   exceed_p95_freq    DJF  172800       16961      9.82          1.96 1.53e-07
+   exceed_p95_freq    MAM  172800       16228      9.39          1.88 1.00e-05
+   exceed_p95_freq    JJA  172800        3195      1.85          0.37 2.38e-07
+   exceed_p95_freq    SON  172800        4331      2.51          0.50 3.91e-05</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb493"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb493-1"><a href="#cb493-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb494"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb494-1"><a href="#cb494-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B1: Cartographic setup ─────────────────────────────────────────────────</span></span>
+<span id="cb494-2"><a href="#cb494-2" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"B1: Setting up cartographic elements..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:39 | +0.0 min] B1: Setting up cartographic elements...</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb496"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb496-1"><a href="#cb496-1" aria-hidden="true" tabindex="-1"></a>arctic_crs  <span class="ot">&lt;-</span> <span class="st">"+proj=laea +lat_0=90 +lon_0=0"</span></span>
+<span id="cb496-2"><a href="#cb496-2" aria-hidden="true" tabindex="-1"></a>view_radius <span class="ot">&lt;-</span> <span class="dv">3330000</span>   <span class="co"># clips at ~60 N data boundary</span></span>
+<span id="cb496-3"><a href="#cb496-3" aria-hidden="true" tabindex="-1"></a>plot_radius <span class="ot">&lt;-</span> <span class="dv">3600000</span>   <span class="co"># space for labels</span></span>
+<span id="cb496-4"><a href="#cb496-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-5"><a href="#cb496-5" aria-hidden="true" tabindex="-1"></a>wrap_data <span class="ot">&lt;-</span> <span class="cf">function</span>(mat) {</span>
+<span id="cb496-6"><a href="#cb496-6" aria-hidden="true" tabindex="-1"></a>  mat[, <span class="fu">c</span>(<span class="fu">which</span>(lon_vec <span class="sc">&gt;=</span> <span class="dv">0</span>), <span class="fu">which</span>(lon_vec <span class="sc">&lt;</span> <span class="dv">0</span>))]</span>
+<span id="cb496-7"><a href="#cb496-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb496-8"><a href="#cb496-8" aria-hidden="true" tabindex="-1"></a>lon_wrapped <span class="ot">&lt;-</span> <span class="fu">c</span>(lon_vec[lon_vec <span class="sc">&gt;=</span> <span class="dv">0</span>], lon_vec[lon_vec <span class="sc">&lt;</span> <span class="dv">0</span>] <span class="sc">+</span> <span class="dv">360</span>)</span>
+<span id="cb496-9"><a href="#cb496-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-10"><a href="#cb496-10" aria-hidden="true" tabindex="-1"></a>world       <span class="ot">&lt;-</span> <span class="fu">ne_countries</span>(<span class="at">scale =</span> <span class="st">"medium"</span>, <span class="at">returnclass =</span> <span class="st">"sf"</span>)</span>
+<span id="cb496-11"><a href="#cb496-11" aria-hidden="true" tabindex="-1"></a>world_polar <span class="ot">&lt;-</span> <span class="fu">st_transform</span>(world, <span class="at">crs =</span> arctic_crs)</span>
+<span id="cb496-12"><a href="#cb496-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-13"><a href="#cb496-13" aria-hidden="true" tabindex="-1"></a>graticules <span class="ot">&lt;-</span> <span class="fu">st_graticule</span>(</span>
+<span id="cb496-14"><a href="#cb496-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">lon =</span> <span class="fu">seq</span>(<span class="sc">-</span><span class="dv">180</span>, <span class="dv">180</span>, <span class="at">by =</span> <span class="dv">60</span>),</span>
+<span id="cb496-15"><a href="#cb496-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">lat =</span> <span class="fu">c</span>(<span class="dv">60</span>, <span class="dv">70</span>, <span class="dv">80</span>),</span>
+<span id="cb496-16"><a href="#cb496-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">crs =</span> <span class="dv">4326</span></span>
+<span id="cb496-17"><a href="#cb496-17" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="at">crs =</span> arctic_crs)</span>
+<span id="cb496-18"><a href="#cb496-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-19"><a href="#cb496-19" aria-hidden="true" tabindex="-1"></a>lat_labels <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">lon =</span> <span class="dv">180</span>, <span class="at">lat =</span> <span class="fu">c</span>(<span class="dv">60</span>, <span class="dv">70</span>, <span class="dv">80</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb496-20"><a href="#cb496-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_as_sf</span>(<span class="at">coords =</span> <span class="fu">c</span>(<span class="st">"lon"</span>, <span class="st">"lat"</span>), <span class="at">crs =</span> <span class="dv">4326</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb496-21"><a href="#cb496-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_transform</span>(<span class="at">crs =</span> arctic_crs)</span>
+<span id="cb496-22"><a href="#cb496-22" aria-hidden="true" tabindex="-1"></a>lat_labels<span class="sc">$</span>label <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"60\u00b0N"</span>, <span class="st">"70\u00b0N"</span>, <span class="st">"80\u00b0N"</span>)</span>
+<span id="cb496-23"><a href="#cb496-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-24"><a href="#cb496-24" aria-hidden="true" tabindex="-1"></a>lon_labels <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">lon =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">300</span>, <span class="at">by =</span> <span class="dv">60</span>), <span class="at">lat =</span> <span class="dv">58</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb496-25"><a href="#cb496-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_as_sf</span>(<span class="at">coords =</span> <span class="fu">c</span>(<span class="st">"lon"</span>, <span class="st">"lat"</span>), <span class="at">crs =</span> <span class="dv">4326</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb496-26"><a href="#cb496-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_transform</span>(<span class="at">crs =</span> arctic_crs)</span>
+<span id="cb496-27"><a href="#cb496-27" aria-hidden="true" tabindex="-1"></a>lon_labels<span class="sc">$</span>label <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"0\u00b0"</span>, <span class="st">"60\u00b0E"</span>, <span class="st">"120\u00b0E"</span>,</span>
+<span id="cb496-28"><a href="#cb496-28" aria-hidden="true" tabindex="-1"></a>                       <span class="st">"180\u00b0"</span>, <span class="st">"120\u00b0W"</span>, <span class="st">"60\u00b0W"</span>)</span>
+<span id="cb496-29"><a href="#cb496-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-30"><a href="#cb496-30" aria-hidden="true" tabindex="-1"></a>circle_mask <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(<span class="fu">st_point</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">crs =</span> arctic_crs) <span class="sc">%&gt;%</span></span>
+<span id="cb496-31"><a href="#cb496-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_buffer</span>(<span class="at">dist =</span> view_radius)</span>
+<span id="cb496-32"><a href="#cb496-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-33"><a href="#cb496-33" aria-hidden="true" tabindex="-1"></a>square_box <span class="ot">&lt;-</span> <span class="fu">st_as_sfc</span>(<span class="fu">st_bbox</span>(</span>
+<span id="cb496-34"><a href="#cb496-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">c</span>(<span class="at">xmin =</span> <span class="sc">-</span>plot_radius, <span class="at">xmax =</span> plot_radius,</span>
+<span id="cb496-35"><a href="#cb496-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">ymin =</span> <span class="sc">-</span>plot_radius, <span class="at">ymax =</span> plot_radius),</span>
+<span id="cb496-36"><a href="#cb496-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">crs =</span> arctic_crs</span>
+<span id="cb496-37"><a href="#cb496-37" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb496-38"><a href="#cb496-38" aria-hidden="true" tabindex="-1"></a>inverse_mask <span class="ot">&lt;-</span> <span class="fu">st_difference</span>(square_box, circle_mask)</span>
+<span id="cb496-39"><a href="#cb496-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb496-40"><a href="#cb496-40" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"  Cartographic elements ready."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:40 | +0.0 min]   Cartographic elements ready.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb498"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb498-1"><a href="#cb498-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B2: Plotting helpers ───────────────────────────────────────────────────</span></span>
+<span id="cb498-2"><a href="#cb498-2" aria-hidden="true" tabindex="-1"></a>make_stars_polar <span class="ot">&lt;-</span> <span class="cf">function</span>(mat, <span class="at">varname =</span> <span class="st">"value"</span>) {</span>
+<span id="cb498-3"><a href="#cb498-3" aria-hidden="true" tabindex="-1"></a>  mat_wrap <span class="ot">&lt;-</span> <span class="fu">wrap_data</span>(mat)</span>
+<span id="cb498-4"><a href="#cb498-4" aria-hidden="true" tabindex="-1"></a>  mat_wrap <span class="ot">&lt;-</span> <span class="fu">t</span>(mat_wrap)   <span class="co"># [lat, lon] -&gt; [lon, lat] for stars x/y convention</span></span>
+<span id="cb498-5"><a href="#cb498-5" aria-hidden="true" tabindex="-1"></a>  dims <span class="ot">&lt;-</span> <span class="fu">st_dimensions</span>(<span class="at">x =</span> lon_wrapped, <span class="at">y =</span> lat_arc)</span>
+<span id="cb498-6"><a href="#cb498-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_as_stars</span>(<span class="fu">setNames</span>(<span class="fu">list</span>(mat_wrap), varname), <span class="at">dimensions =</span> dims) <span class="sc">%&gt;%</span></span>
+<span id="cb498-7"><a href="#cb498-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">st_set_crs</span>(<span class="dv">4326</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb498-8"><a href="#cb498-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">st_warp</span>(<span class="at">crs =</span> arctic_crs) <span class="sc">%&gt;%</span></span>
+<span id="cb498-9"><a href="#cb498-9" aria-hidden="true" tabindex="-1"></a>    { .[circle_mask] }</span>
+<span id="cb498-10"><a href="#cb498-10" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb498-11"><a href="#cb498-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-12"><a href="#cb498-12" aria-hidden="true" tabindex="-1"></a>make_panel <span class="ot">&lt;-</span> <span class="cf">function</span>(stars_obj, fill_var, fill_scale, panel_title,</span>
+<span id="cb498-13"><a href="#cb498-13" aria-hidden="true" tabindex="-1"></a>                       <span class="at">sig_contour =</span> <span class="cn">NULL</span>) {</span>
+<span id="cb498-14"><a href="#cb498-14" aria-hidden="true" tabindex="-1"></a>  p <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb498-15"><a href="#cb498-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_stars</span>(<span class="at">data =</span> stars_obj, <span class="fu">aes</span>(<span class="at">fill =</span> .data[[fill_var]]),</span>
+<span id="cb498-16"><a href="#cb498-16" aria-hidden="true" tabindex="-1"></a>               <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb498-17"><a href="#cb498-17" aria-hidden="true" tabindex="-1"></a>    fill_scale <span class="sc">+</span></span>
+<span id="cb498-18"><a href="#cb498-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> world_polar, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"black"</span>,</span>
+<span id="cb498-19"><a href="#cb498-19" aria-hidden="true" tabindex="-1"></a>            <span class="at">linewidth =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
+<span id="cb498-20"><a href="#cb498-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> graticules, <span class="at">color =</span> <span class="st">"grey50"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>,</span>
+<span id="cb498-21"><a href="#cb498-21" aria-hidden="true" tabindex="-1"></a>            <span class="at">linewidth =</span> <span class="fl">0.25</span>) <span class="sc">+</span></span>
+<span id="cb498-22"><a href="#cb498-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> inverse_mask, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">color =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb498-23"><a href="#cb498-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lat_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
+<span id="cb498-24"><a href="#cb498-24" aria-hidden="true" tabindex="-1"></a>                 <span class="at">size =</span> <span class="fl">2.3</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">hjust =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb498-25"><a href="#cb498-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lon_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
+<span id="cb498-26"><a href="#cb498-26" aria-hidden="true" tabindex="-1"></a>                 <span class="at">size =</span> <span class="fl">2.3</span>, <span class="at">color =</span> <span class="st">"black"</span>)</span>
+<span id="cb498-27"><a href="#cb498-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-28"><a href="#cb498-28" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Significance overlay: convert raster to sf polygons to avoid scale conflicts with the slope fill layer</span></span>
+<span id="cb498-29"><a href="#cb498-29" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(sig_contour)) {</span>
+<span id="cb498-30"><a href="#cb498-30" aria-hidden="true" tabindex="-1"></a>    sig_contour[[<span class="dv">1</span>]] <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(</span>
+<span id="cb498-31"><a href="#cb498-31" aria-hidden="true" tabindex="-1"></a>      <span class="sc">!</span><span class="fu">is.na</span>(sig_contour[[<span class="dv">1</span>]]) <span class="sc">&amp;</span> sig_contour[[<span class="dv">1</span>]] <span class="sc">&gt;=</span> <span class="fl">0.5</span>, <span class="dv">1</span>L, <span class="cn">NA_integer_</span></span>
+<span id="cb498-32"><a href="#cb498-32" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb498-33"><a href="#cb498-33" aria-hidden="true" tabindex="-1"></a>    sig_sf <span class="ot">&lt;-</span> <span class="fu">st_as_sf</span>(sig_contour, <span class="at">na.rm =</span> <span class="cn">TRUE</span>, <span class="at">merge =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb498-34"><a href="#cb498-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">nrow</span>(sig_sf) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb498-35"><a href="#cb498-35" aria-hidden="true" tabindex="-1"></a>      p <span class="ot">&lt;-</span> p <span class="sc">+</span></span>
+<span id="cb498-36"><a href="#cb498-36" aria-hidden="true" tabindex="-1"></a>        <span class="fu">geom_sf</span>(<span class="at">data =</span> sig_sf, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">alpha =</span> <span class="fl">0.2</span>, <span class="at">color =</span> <span class="st">"blue4"</span>)</span>
+<span id="cb498-37"><a href="#cb498-37" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb498-38"><a href="#cb498-38" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb498-39"><a href="#cb498-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-40"><a href="#cb498-40" aria-hidden="true" tabindex="-1"></a>  p <span class="sc">+</span></span>
+<span id="cb498-41"><a href="#cb498-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_sf</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius),</span>
+<span id="cb498-42"><a href="#cb498-42" aria-hidden="true" tabindex="-1"></a>             <span class="at">ylim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius),</span>
+<span id="cb498-43"><a href="#cb498-43" aria-hidden="true" tabindex="-1"></a>             <span class="at">expand =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb498-44"><a href="#cb498-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> panel_title) <span class="sc">+</span></span>
+<span id="cb498-45"><a href="#cb498-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_void</span>(<span class="at">base_size =</span> <span class="dv">11</span>) <span class="sc">+</span></span>
+<span id="cb498-46"><a href="#cb498-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(</span>
+<span id="cb498-47"><a href="#cb498-47" aria-hidden="true" tabindex="-1"></a>      <span class="at">plot.title        =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">hjust =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
+<span id="cb498-48"><a href="#cb498-48" aria-hidden="true" tabindex="-1"></a>      <span class="at">legend.position   =</span> <span class="st">"right"</span>,</span>
+<span id="cb498-49"><a href="#cb498-49" aria-hidden="true" tabindex="-1"></a>      <span class="at">legend.key.width  =</span> <span class="fu">unit</span>(<span class="fl">0.5</span>, <span class="st">"cm"</span>),</span>
+<span id="cb498-50"><a href="#cb498-50" aria-hidden="true" tabindex="-1"></a>      <span class="at">legend.key.height =</span> <span class="fu">unit</span>(<span class="fl">1.5</span>, <span class="st">"cm"</span>),</span>
+<span id="cb498-51"><a href="#cb498-51" aria-hidden="true" tabindex="-1"></a>      <span class="at">panel.background  =</span> <span class="fu">element_rect</span>(<span class="at">fill =</span> <span class="st">"grey95"</span>, <span class="at">color =</span> <span class="cn">NA</span>),</span>
+<span id="cb498-52"><a href="#cb498-52" aria-hidden="true" tabindex="-1"></a>      <span class="at">plot.margin       =</span> <span class="fu">margin</span>(<span class="dv">5</span>, <span class="dv">5</span>, <span class="dv">5</span>, <span class="dv">5</span>)</span>
+<span id="cb498-53"><a href="#cb498-53" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb498-54"><a href="#cb498-54" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb498-55"><a href="#cb498-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-56"><a href="#cb498-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-57"><a href="#cb498-57" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B3: Figure configuration per variable ──────────────────────────────────</span></span>
+<span id="cb498-58"><a href="#cb498-58" aria-hidden="true" tabindex="-1"></a>var_plot_config <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb498-59"><a href="#cb498-59" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_synoptic_mean =</span> <span class="fu">list</span>(</span>
+<span id="cb498-60"><a href="#cb498-60" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_annual   =</span> <span class="st">"Fig3.5a_Annual_Trend_Map_EKE_synoptic.png"</span>,</span>
+<span id="cb498-61"><a href="#cb498-61" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_seasonal =</span> <span class="st">"Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png"</span>,</span>
+<span id="cb498-62"><a href="#cb498-62" aria-hidden="true" tabindex="-1"></a>    <span class="at">unit_expr    =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta) <span class="sc">~</span> <span class="st">"["</span> <span class="sc">*</span> m<span class="sc">^</span><span class="dv">2</span> <span class="sc">*</span> s<span class="sc">^</span>{<span class="sc">-</span><span class="dv">2</span>} <span class="sc">*</span> decade<span class="sc">^</span>{<span class="sc">-</span><span class="dv">1</span>} <span class="sc">*</span> <span class="st">"]"</span>)</span>
+<span id="cb498-63"><a href="#cb498-63" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb498-64"><a href="#cb498-64" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p90 =</span> <span class="fu">list</span>(</span>
+<span id="cb498-65"><a href="#cb498-65" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_annual   =</span> <span class="st">"Fig3.6a_Annual_Trend_Map_P90.png"</span>,</span>
+<span id="cb498-66"><a href="#cb498-66" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_seasonal =</span> <span class="st">"Fig3.6b_Seasonal_Trend_Maps_P90.png"</span>,</span>
+<span id="cb498-67"><a href="#cb498-67" aria-hidden="true" tabindex="-1"></a>    <span class="at">unit_expr    =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta) <span class="sc">~</span> <span class="st">"["</span> <span class="sc">*</span> m<span class="sc">^</span><span class="dv">2</span> <span class="sc">*</span> s<span class="sc">^</span>{<span class="sc">-</span><span class="dv">2</span>} <span class="sc">*</span> decade<span class="sc">^</span>{<span class="sc">-</span><span class="dv">1</span>} <span class="sc">*</span> <span class="st">"]"</span>)</span>
+<span id="cb498-68"><a href="#cb498-68" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb498-69"><a href="#cb498-69" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p95 =</span> <span class="fu">list</span>(</span>
+<span id="cb498-70"><a href="#cb498-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_annual   =</span> <span class="st">"Fig3.7a_Annual_Trend_Map_P95.png"</span>,</span>
+<span id="cb498-71"><a href="#cb498-71" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_seasonal =</span> <span class="st">"Fig3.7b_Seasonal_Trend_Maps_P95.png"</span>,</span>
+<span id="cb498-72"><a href="#cb498-72" aria-hidden="true" tabindex="-1"></a>    <span class="at">unit_expr    =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta) <span class="sc">~</span> <span class="st">"["</span> <span class="sc">*</span> m<span class="sc">^</span><span class="dv">2</span> <span class="sc">*</span> s<span class="sc">^</span>{<span class="sc">-</span><span class="dv">2</span>} <span class="sc">*</span> decade<span class="sc">^</span>{<span class="sc">-</span><span class="dv">1</span>} <span class="sc">*</span> <span class="st">"]"</span>)</span>
+<span id="cb498-73"><a href="#cb498-73" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb498-74"><a href="#cb498-74" aria-hidden="true" tabindex="-1"></a>  <span class="at">eke_p99 =</span> <span class="fu">list</span>(</span>
+<span id="cb498-75"><a href="#cb498-75" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_annual   =</span> <span class="st">"Fig3.8a_Annual_Trend_Map_P99.png"</span>,</span>
+<span id="cb498-76"><a href="#cb498-76" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_seasonal =</span> <span class="st">"Fig3.8b_Seasonal_Trend_Maps_P99.png"</span>,</span>
+<span id="cb498-77"><a href="#cb498-77" aria-hidden="true" tabindex="-1"></a>    <span class="at">unit_expr    =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta) <span class="sc">~</span> <span class="st">"["</span> <span class="sc">*</span> m<span class="sc">^</span><span class="dv">2</span> <span class="sc">*</span> s<span class="sc">^</span>{<span class="sc">-</span><span class="dv">2</span>} <span class="sc">*</span> decade<span class="sc">^</span>{<span class="sc">-</span><span class="dv">1</span>} <span class="sc">*</span> <span class="st">"]"</span>)</span>
+<span id="cb498-78"><a href="#cb498-78" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb498-79"><a href="#cb498-79" aria-hidden="true" tabindex="-1"></a>  <span class="at">exceed_p95_freq =</span> <span class="fu">list</span>(</span>
+<span id="cb498-80"><a href="#cb498-80" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_annual   =</span> <span class="st">"Fig3.9a_Annual_Trend_Map_ExceedFreq.png"</span>,</span>
+<span id="cb498-81"><a href="#cb498-81" aria-hidden="true" tabindex="-1"></a>    <span class="at">fig_seasonal =</span> <span class="st">"Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png"</span>,</span>
+<span id="cb498-82"><a href="#cb498-82" aria-hidden="true" tabindex="-1"></a>    <span class="at">unit_expr    =</span> <span class="fu">expression</span>(<span class="fu">hat</span>(beta) <span class="sc">~</span> <span class="st">"[decade"</span> <span class="sc">^</span>{<span class="sc">-</span><span class="dv">1</span>} <span class="sc">*</span> <span class="st">"]"</span>)</span>
+<span id="cb498-83"><a href="#cb498-83" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb498-84"><a href="#cb498-84" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb498-85"><a href="#cb498-85" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-86"><a href="#cb498-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-87"><a href="#cb498-87" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B4: Generate figures ───────────────────────────────────────────────────</span></span>
+<span id="cb498-88"><a href="#cb498-88" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (vname <span class="cf">in</span> <span class="fu">names</span>(spatial_results)) {</span>
+<span id="cb498-89"><a href="#cb498-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-90"><a href="#cb498-90" aria-hidden="true" tabindex="-1"></a>  cfg <span class="ot">&lt;-</span> var_plot_config[[vname]]</span>
+<span id="cb498-91"><a href="#cb498-91" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">is.null</span>(cfg)) {</span>
+<span id="cb498-92"><a href="#cb498-92" aria-hidden="true" tabindex="-1"></a>    <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"  WARNING: No plot config for %s — skipping."</span>, vname))</span>
+<span id="cb498-93"><a href="#cb498-93" aria-hidden="true" tabindex="-1"></a>    <span class="cf">next</span></span>
+<span id="cb498-94"><a href="#cb498-94" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb498-95"><a href="#cb498-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-96"><a href="#cb498-96" aria-hidden="true" tabindex="-1"></a>  res <span class="ot">&lt;-</span> spatial_results[[vname]]</span>
+<span id="cb498-97"><a href="#cb498-97" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-98"><a href="#cb498-98" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">rep</span>(<span class="st">"-"</span>, <span class="dv">50</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb498-99"><a href="#cb498-99" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"  Plotting: %s"</span>, vname))</span>
+<span id="cb498-100"><a href="#cb498-100" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-101"><a href="#cb498-101" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ── Annual map ─────────────────────────────────────────────────────────</span></span>
+<span id="cb498-102"><a href="#cb498-102" aria-hidden="true" tabindex="-1"></a>  slope_ann  <span class="ot">&lt;-</span> res<span class="sc">$</span>annual<span class="sc">$</span>slope</span>
+<span id="cb498-103"><a href="#cb498-103" aria-hidden="true" tabindex="-1"></a>  sig_ann    <span class="ot">&lt;-</span> res<span class="sc">$</span>annual<span class="sc">$</span>sig_local   <span class="co"># &lt;-- local p &lt; 0.05 (NOT FDR)</span></span>
+<span id="cb498-104"><a href="#cb498-104" aria-hidden="true" tabindex="-1"></a>  slope_lim  <span class="ot">&lt;-</span> <span class="fu">quantile</span>(<span class="fu">abs</span>(slope_ann), <span class="fl">0.99</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb498-105"><a href="#cb498-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-106"><a href="#cb498-106" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Rejection fraction for subtitle</span></span>
+<span id="cb498-107"><a href="#cb498-107" aria-hidden="true" tabindex="-1"></a>  n_sig_ann  <span class="ot">&lt;-</span> <span class="fu">sum</span>(sig_ann, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb498-108"><a href="#cb498-108" aria-hidden="true" tabindex="-1"></a>  n_tot_ann  <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(res<span class="sc">$</span>annual<span class="sc">$</span>p_local))</span>
+<span id="cb498-109"><a href="#cb498-109" aria-hidden="true" tabindex="-1"></a>  pct_ann    <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">*</span> n_sig_ann <span class="sc">/</span> n_tot_ann, <span class="dv">1</span>)</span>
+<span id="cb498-110"><a href="#cb498-110" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-111"><a href="#cb498-111" aria-hidden="true" tabindex="-1"></a>  slope_stars <span class="ot">&lt;-</span> <span class="fu">make_stars_polar</span>(slope_ann, <span class="st">"slope"</span>)</span>
+<span id="cb498-112"><a href="#cb498-112" aria-hidden="true" tabindex="-1"></a>  sig_stars   <span class="ot">&lt;-</span> <span class="fu">make_stars_polar</span>(</span>
+<span id="cb498-113"><a href="#cb498-113" aria-hidden="true" tabindex="-1"></a>    <span class="fu">matrix</span>(<span class="fu">as.integer</span>(sig_ann), n_lat, n_lon), <span class="st">"sig_mask"</span></span>
+<span id="cb498-114"><a href="#cb498-114" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb498-115"><a href="#cb498-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-116"><a href="#cb498-116" aria-hidden="true" tabindex="-1"></a>  fill_scale <span class="ot">&lt;-</span> <span class="fu">scale_fill_distiller</span>(</span>
+<span id="cb498-117"><a href="#cb498-117" aria-hidden="true" tabindex="-1"></a>    <span class="at">name      =</span> cfg<span class="sc">$</span>unit_expr,</span>
+<span id="cb498-118"><a href="#cb498-118" aria-hidden="true" tabindex="-1"></a>    <span class="at">palette   =</span> <span class="st">"RdBu"</span>,</span>
+<span id="cb498-119"><a href="#cb498-119" aria-hidden="true" tabindex="-1"></a>    <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>,</span>
+<span id="cb498-120"><a href="#cb498-120" aria-hidden="true" tabindex="-1"></a>    <span class="at">limits    =</span> <span class="fu">c</span>(<span class="sc">-</span>slope_lim, slope_lim),</span>
+<span id="cb498-121"><a href="#cb498-121" aria-hidden="true" tabindex="-1"></a>    <span class="at">na.value  =</span> <span class="st">"transparent"</span>,</span>
+<span id="cb498-122"><a href="#cb498-122" aria-hidden="true" tabindex="-1"></a>    <span class="at">oob       =</span> scales<span class="sc">::</span>squish</span>
+<span id="cb498-123"><a href="#cb498-123" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb498-124"><a href="#cb498-124" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-125"><a href="#cb498-125" aria-hidden="true" tabindex="-1"></a>  p_ann <span class="ot">&lt;-</span> <span class="fu">make_panel</span>(</span>
+<span id="cb498-126"><a href="#cb498-126" aria-hidden="true" tabindex="-1"></a>    <span class="at">stars_obj   =</span> slope_stars,</span>
+<span id="cb498-127"><a href="#cb498-127" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill_var    =</span> <span class="st">"slope"</span>,</span>
+<span id="cb498-128"><a href="#cb498-128" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill_scale  =</span> fill_scale,</span>
+<span id="cb498-129"><a href="#cb498-129" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel_title =</span> <span class="fu">parse</span>(<span class="at">text =</span> <span class="fu">paste0</span>(</span>
+<span id="cb498-130"><a href="#cb498-130" aria-hidden="true" tabindex="-1"></a>      <span class="st">'bold("Annual Sen</span><span class="sc">\'</span><span class="st">s slope") ~ '</span>, VAR_LABELS_SHORT[[vname]],</span>
+<span id="cb498-131"><a href="#cb498-131" aria-hidden="true" tabindex="-1"></a>      <span class="st">' ~ "(1958\u20132025)"'</span></span>
+<span id="cb498-132"><a href="#cb498-132" aria-hidden="true" tabindex="-1"></a>    ))[[<span class="dv">1</span>]],</span>
+<span id="cb498-133"><a href="#cb498-133" aria-hidden="true" tabindex="-1"></a>    <span class="at">sig_contour =</span> sig_stars</span>
+<span id="cb498-134"><a href="#cb498-134" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb498-135"><a href="#cb498-135" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">subtitle =</span> <span class="fu">glue</span>(</span>
+<span id="cb498-136"><a href="#cb498-136" aria-hidden="true" tabindex="-1"></a>      <span class="st">"PWMK | Blue contours: local p &lt; {ALPHA_LOCAL} "</span>,</span>
+<span id="cb498-137"><a href="#cb498-137" aria-hidden="true" tabindex="-1"></a>      <span class="st">"({pct_ann}% of grid points; {ALPHA_LOCAL*100}% expected under H\u2080)"</span></span>
+<span id="cb498-138"><a href="#cb498-138" aria-hidden="true" tabindex="-1"></a>    )) <span class="sc">+</span></span>
+<span id="cb498-139"><a href="#cb498-139" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(<span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">8</span>, <span class="at">colour =</span> <span class="st">"grey40"</span>, <span class="at">hjust =</span> <span class="fl">0.5</span>))</span>
+<span id="cb498-140"><a href="#cb498-140" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-141"><a href="#cb498-141" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggsave</span>(<span class="fu">file.path</span>(FIG_PHASE3, cfg<span class="sc">$</span>fig_annual),</span>
+<span id="cb498-142"><a href="#cb498-142" aria-hidden="true" tabindex="-1"></a>         p_ann, <span class="at">width =</span> <span class="dv">8</span>, <span class="at">height =</span> <span class="dv">8</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">bg =</span> <span class="st">"white"</span>)</span>
+<span id="cb498-143"><a href="#cb498-143" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"    Saved: %s"</span>, cfg<span class="sc">$</span>fig_annual))</span>
+<span id="cb498-144"><a href="#cb498-144" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-145"><a href="#cb498-145" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rm</span>(slope_stars, sig_stars, p_ann)</span>
+<span id="cb498-146"><a href="#cb498-146" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-147"><a href="#cb498-147" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ── Seasonal maps (2x2) ────────────────────────────────────────────────</span></span>
+<span id="cb498-148"><a href="#cb498-148" aria-hidden="true" tabindex="-1"></a>  all_slopes_seas <span class="ot">&lt;-</span> <span class="fu">unlist</span>(<span class="fu">lapply</span>(res<span class="sc">$</span>seasonal, <span class="cf">function</span>(x) x<span class="sc">$</span>slope))</span>
+<span id="cb498-149"><a href="#cb498-149" aria-hidden="true" tabindex="-1"></a>  slope_lim_seas  <span class="ot">&lt;-</span> <span class="fu">quantile</span>(<span class="fu">abs</span>(all_slopes_seas), <span class="fl">0.99</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb498-150"><a href="#cb498-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-151"><a href="#cb498-151" aria-hidden="true" tabindex="-1"></a>  season_panels <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb498-152"><a href="#cb498-152" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-153"><a href="#cb498-153" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (seas <span class="cf">in</span> SEASONS) {</span>
+<span id="cb498-154"><a href="#cb498-154" aria-hidden="true" tabindex="-1"></a>    sr    <span class="ot">&lt;-</span> res<span class="sc">$</span>seasonal[[seas]]</span>
+<span id="cb498-155"><a href="#cb498-155" aria-hidden="true" tabindex="-1"></a>    sl_st <span class="ot">&lt;-</span> <span class="fu">make_stars_polar</span>(sr<span class="sc">$</span>slope, <span class="st">"slope"</span>)</span>
+<span id="cb498-156"><a href="#cb498-156" aria-hidden="true" tabindex="-1"></a>    sg_st <span class="ot">&lt;-</span> <span class="fu">make_stars_polar</span>(</span>
+<span id="cb498-157"><a href="#cb498-157" aria-hidden="true" tabindex="-1"></a>      <span class="fu">matrix</span>(<span class="fu">as.integer</span>(sr<span class="sc">$</span>sig_local), n_lat, n_lon), <span class="st">"sig_mask"</span>  <span class="co"># &lt;-- local p</span></span>
+<span id="cb498-158"><a href="#cb498-158" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb498-159"><a href="#cb498-159" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-160"><a href="#cb498-160" aria-hidden="true" tabindex="-1"></a>    fill_s <span class="ot">&lt;-</span> <span class="fu">scale_fill_distiller</span>(</span>
+<span id="cb498-161"><a href="#cb498-161" aria-hidden="true" tabindex="-1"></a>      <span class="at">name      =</span> cfg<span class="sc">$</span>unit_expr,</span>
+<span id="cb498-162"><a href="#cb498-162" aria-hidden="true" tabindex="-1"></a>      <span class="at">palette   =</span> <span class="st">"RdBu"</span>,</span>
+<span id="cb498-163"><a href="#cb498-163" aria-hidden="true" tabindex="-1"></a>      <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>,</span>
+<span id="cb498-164"><a href="#cb498-164" aria-hidden="true" tabindex="-1"></a>      <span class="at">limits    =</span> <span class="fu">c</span>(<span class="sc">-</span>slope_lim_seas, slope_lim_seas),</span>
+<span id="cb498-165"><a href="#cb498-165" aria-hidden="true" tabindex="-1"></a>      <span class="at">na.value  =</span> <span class="st">"transparent"</span>,</span>
+<span id="cb498-166"><a href="#cb498-166" aria-hidden="true" tabindex="-1"></a>      <span class="at">oob       =</span> scales<span class="sc">::</span>squish</span>
+<span id="cb498-167"><a href="#cb498-167" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb498-168"><a href="#cb498-168" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-169"><a href="#cb498-169" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Rejection fraction for this season</span></span>
+<span id="cb498-170"><a href="#cb498-170" aria-hidden="true" tabindex="-1"></a>    n_sig_s <span class="ot">&lt;-</span> <span class="fu">sum</span>(sr<span class="sc">$</span>sig_local, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb498-171"><a href="#cb498-171" aria-hidden="true" tabindex="-1"></a>    n_tot_s <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="sc">!</span><span class="fu">is.na</span>(sr<span class="sc">$</span>p_local))</span>
+<span id="cb498-172"><a href="#cb498-172" aria-hidden="true" tabindex="-1"></a>    pct_s   <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">*</span> n_sig_s <span class="sc">/</span> n_tot_s, <span class="dv">1</span>)</span>
+<span id="cb498-173"><a href="#cb498-173" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-174"><a href="#cb498-174" aria-hidden="true" tabindex="-1"></a>    season_panels[[seas]] <span class="ot">&lt;-</span> <span class="fu">make_panel</span>(</span>
+<span id="cb498-175"><a href="#cb498-175" aria-hidden="true" tabindex="-1"></a>      <span class="at">stars_obj   =</span> sl_st,</span>
+<span id="cb498-176"><a href="#cb498-176" aria-hidden="true" tabindex="-1"></a>      <span class="at">fill_var    =</span> <span class="st">"slope"</span>,</span>
+<span id="cb498-177"><a href="#cb498-177" aria-hidden="true" tabindex="-1"></a>      <span class="at">fill_scale  =</span> fill_s,</span>
+<span id="cb498-178"><a href="#cb498-178" aria-hidden="true" tabindex="-1"></a>      <span class="at">panel_title =</span> <span class="fu">paste0</span>(<span class="fu">unname</span>(SEASON_NAMES[seas]), <span class="st">" ("</span>, pct_s, <span class="st">"%)"</span>),</span>
+<span id="cb498-179"><a href="#cb498-179" aria-hidden="true" tabindex="-1"></a>      <span class="at">sig_contour =</span> sg_st</span>
+<span id="cb498-180"><a href="#cb498-180" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb498-181"><a href="#cb498-181" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb498-182"><a href="#cb498-182" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-183"><a href="#cb498-183" aria-hidden="true" tabindex="-1"></a>  fig_seas <span class="ot">&lt;-</span> (season_panels[[<span class="st">"DJF"</span>]] <span class="sc">+</span> season_panels[[<span class="st">"MAM"</span>]] <span class="sc">+</span></span>
+<span id="cb498-184"><a href="#cb498-184" aria-hidden="true" tabindex="-1"></a>                season_panels[[<span class="st">"JJA"</span>]] <span class="sc">+</span> season_panels[[<span class="st">"SON"</span>]]) <span class="sc">+</span></span>
+<span id="cb498-185"><a href="#cb498-185" aria-hidden="true" tabindex="-1"></a>    <span class="fu">plot_layout</span>(<span class="at">ncol =</span> <span class="dv">2</span>, <span class="at">guides =</span> <span class="st">"collect"</span>) <span class="sc">+</span></span>
+<span id="cb498-186"><a href="#cb498-186" aria-hidden="true" tabindex="-1"></a>    <span class="fu">plot_annotation</span>(</span>
+<span id="cb498-187"><a href="#cb498-187" aria-hidden="true" tabindex="-1"></a>      <span class="at">title =</span> <span class="fu">paste0</span>(<span class="st">"Seasonal Spatial Trends: Sen\u2019s Slope of "</span>,</span>
+<span id="cb498-188"><a href="#cb498-188" aria-hidden="true" tabindex="-1"></a>                     VAR_LABELS_PLAIN[[vname]], <span class="st">" (1958\u20132025)"</span>),</span>
+<span id="cb498-189"><a href="#cb498-189" aria-hidden="true" tabindex="-1"></a>      <span class="at">subtitle =</span> <span class="fu">glue</span>(</span>
+<span id="cb498-190"><a href="#cb498-190" aria-hidden="true" tabindex="-1"></a>        <span class="st">"PWMK | Blue contours: local p &lt; {ALPHA_LOCAL} "</span>,</span>
+<span id="cb498-191"><a href="#cb498-191" aria-hidden="true" tabindex="-1"></a>        <span class="st">"| Parenthetical % = rejection fraction "</span>,</span>
+<span id="cb498-192"><a href="#cb498-192" aria-hidden="true" tabindex="-1"></a>        <span class="st">"(5% expected under H\u2080) | Shared colour scale"</span></span>
+<span id="cb498-193"><a href="#cb498-193" aria-hidden="true" tabindex="-1"></a>      ),</span>
+<span id="cb498-194"><a href="#cb498-194" aria-hidden="true" tabindex="-1"></a>      <span class="at">theme =</span> <span class="fu">theme</span>(</span>
+<span id="cb498-195"><a href="#cb498-195" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.title    =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">14</span>, <span class="at">hjust =</span> <span class="fl">0.5</span>),</span>
+<span id="cb498-196"><a href="#cb498-196" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">9</span>, <span class="at">colour =</span> <span class="st">"grey40"</span>, <span class="at">hjust =</span> <span class="fl">0.5</span>)</span>
+<span id="cb498-197"><a href="#cb498-197" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb498-198"><a href="#cb498-198" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb498-199"><a href="#cb498-199" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-200"><a href="#cb498-200" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggsave</span>(<span class="fu">file.path</span>(FIG_PHASE3, cfg<span class="sc">$</span>fig_seasonal),</span>
+<span id="cb498-201"><a href="#cb498-201" aria-hidden="true" tabindex="-1"></a>         fig_seas, <span class="at">width =</span> <span class="dv">14</span>, <span class="at">height =</span> <span class="dv">14</span>, <span class="at">dpi =</span> <span class="dv">300</span>, <span class="at">bg =</span> <span class="st">"white"</span>)</span>
+<span id="cb498-202"><a href="#cb498-202" aria-hidden="true" tabindex="-1"></a>  <span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"    Saved: %s"</span>, cfg<span class="sc">$</span>fig_seasonal))</span>
+<span id="cb498-203"><a href="#cb498-203" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb498-204"><a href="#cb498-204" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rm</span>(season_panels, fig_seas)</span>
+<span id="cb498-205"><a href="#cb498-205" aria-hidden="true" tabindex="-1"></a>  <span class="fu">gc</span>(<span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb498-206"><a href="#cb498-206" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+[02:30:40 | +0.0 min]   Plotting: eke_synoptic_mean</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:42 | +0.1 min]     Saved: Fig3.5a_Annual_Trend_Map_EKE_synoptic.png</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:53 | +0.2 min]     Saved: Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+[02:30:53 | +0.2 min]   Plotting: eke_p90</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:30:55 | +0.3 min]     Saved: Fig3.6a_Annual_Trend_Map_P90.png</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:06 | +0.4 min]     Saved: Fig3.6b_Seasonal_Trend_Maps_P90.png
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+[02:31:06 | +0.5 min]   Plotting: eke_p95</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:08 | +0.5 min]     Saved: Fig3.7a_Annual_Trend_Map_P95.png</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:19 | +0.7 min]     Saved: Fig3.7b_Seasonal_Trend_Maps_P95.png
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+[02:31:19 | +0.7 min]   Plotting: eke_p99</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:21 | +0.7 min]     Saved: Fig3.8a_Annual_Trend_Map_P99.png</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:31 | +0.9 min]     Saved: Fig3.8b_Seasonal_Trend_Maps_P99.png
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+[02:31:31 | +0.9 min]   Plotting: exceed_p95_freq</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:33 | +0.9 min]     Saved: Fig3.9a_Annual_Trend_Map_ExceedFreq.png</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:42 | +1.1 min]     Saved: Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb510"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb510-1"><a href="#cb510-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb510-2"><a href="#cb510-2" aria-hidden="true" tabindex="-1"></a><span class="co"># FINAL STATUS</span></span>
+<span id="cb510-3"><a href="#cb510-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb510-4"><a href="#cb510-4" aria-hidden="true" tabindex="-1"></a>elapsed_total <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">as.numeric</span>(</span>
+<span id="cb510-5"><a href="#cb510-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">difftime</span>(<span class="fu">Sys.time</span>(), .t0_phase34, <span class="at">units =</span> <span class="st">"mins"</span>)), <span class="dv">1</span>)</span>
+<span id="cb510-6"><a href="#cb510-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb510-7"><a href="#cb510-7" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+ = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb512"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb512-1"><a href="#cb512-1" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"PHASE 3.4 COMPLETE. Total time: %.1f minutes."</span>, elapsed_total))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[02:31:43 | +1.1 min] PHASE 3.4 COMPLETE. Total time: 1.1 minutes.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb514"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb514-1"><a href="#cb514-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Results: %s</span><span class="sc">\n</span><span class="st">"</span>, RESULTS_FILE))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Results: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Data/processed/analysis_ready/Phase3_4_Spatial_Results.RData</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb516"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb516-1"><a href="#cb516-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Variables: %s</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">paste</span>(<span class="fu">names</span>(spatial_results), <span class="at">collapse =</span> <span class="st">", "</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Variables: eke_synoptic_mean, eke_p90, eke_p95, eke_p99, exceed_p95_freq</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb518"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb518-1"><a href="#cb518-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Figures: %s</span><span class="sc">\n</span><span class="st">"</span>, FIG_PHASE3))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Figures: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures/Phase3_Trends</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb520"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb520-1"><a href="#cb520-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>= = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = </code></pre>
 </div>
 </div>
 </section>
