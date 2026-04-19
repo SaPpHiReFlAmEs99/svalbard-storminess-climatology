@@ -2989,7 +2989,7 @@ for (var in ALL_VARS) {
   #   2. If φ̂₁ ≤ 0.05, compute trend directly via Sen's slope.
   #   3. Otherwise, pre-whiten: x'_t = x_t − φ̂₁ · x_{t−1}.
   #   4. Estimate Sen's slope β̂ from the pre-whitened series.
-  #   5. Remove β̂ from the original series to obtain detrended residuals.
+  #   5. Remove β̂ from the original series to obtain detrended residuals.z
   #   6. Re-estimate φ̂₁ from the detrended residuals.
   #   7. Repeat steps 3–6 until both β̂ and φ̂₁ change by less than 1%
   #      between consecutive iterations (typically 3–12 runs; recorded
@@ -4150,6 +4150,19 @@ make_stars_polar <- function(mat, varname = "value") {
     { .[circle_mask] }
 }
 
+# Return 7 symmetric breaks (including 0) whose step is the nearest multiple
+# of 5e-max_dec to (lim / 3).  This guarantees every tick ends in 0 or 5 and
+# has at most max_dec decimal places.  oob = squish on the scale handles the
+# rare case where the rounded step pushes the outermost break past slope_lim_var.
+pretty_breaks_sym <- function(lim, n = 7L, max_dec = 3L) {
+  half_n   <- (n - 1L) / 2L                      # = 3 for n = 7
+  raw_step <- lim / half_n
+  unit     <- 5 * 10^(-max_dec)                  # smallest "nice" step
+  nice_step <- round(raw_step / unit) * unit
+  if (nice_step <= 0) nice_step <- unit           # safeguard against underflow
+  seq(-half_n * nice_step, half_n * nice_step, by = nice_step)
+}
+
 make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
                        sig_contour = NULL) {
   p <- ggplot() +
@@ -4200,27 +4213,32 @@ var_plot_config <- list(
   eke_synoptic_mean = list(
     fig_annual   = "Fig3.5a_Annual_Trend_Map_EKE_synoptic.png",
     fig_seasonal = "Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    max_dec      = 3L
   ),
   eke_p90 = list(
     fig_annual   = "Fig3.6a_Annual_Trend_Map_P90.png",
     fig_seasonal = "Fig3.6b_Seasonal_Trend_Maps_P90.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    max_dec      = 3L
   ),
   eke_p95 = list(
     fig_annual   = "Fig3.7a_Annual_Trend_Map_P95.png",
     fig_seasonal = "Fig3.7b_Seasonal_Trend_Maps_P95.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    max_dec      = 3L
   ),
   eke_p99 = list(
     fig_annual   = "Fig3.8a_Annual_Trend_Map_P99.png",
     fig_seasonal = "Fig3.8b_Seasonal_Trend_Maps_P99.png",
-    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]")
+    unit_expr    = expression(hat(beta) ~ "[" * m^2 * s^{-2} * decade^{-1} * "]"),
+    max_dec      = 3L
   ),
   exceed_p95_freq = list(
     fig_annual   = "Fig3.9a_Annual_Trend_Map_ExceedFreq.png",
     fig_seasonal = "Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png",
-    unit_expr    = expression(hat(beta) ~ "[decade" ^{-1} * "]")
+    unit_expr    = expression(hat(beta) ~ "[decade" ^{-1} * "]"),
+    max_dec      = 4L   # smaller magnitudes need one extra decimal place
   )
 )
 
@@ -4239,10 +4257,20 @@ for (vname in names(spatial_results)) {
   cat("\n", rep("-", 50), "\n")
   progress_msg(sprintf("  Plotting: %s", vname))
 
+  # ── Unified colour-scale limit (annual + all four seasons) ─────────────
+  # Pool all slopes for this variable across every period so that the
+  # annual map and the seasonal 2x2 panel share an identical colour range.
+  # The 0.99 quantile of the combined set is used so that a handful of
+  # extreme grid-point values do not collapse the palette for everything
+  # else (oob = scales::squish handles the residual outliers).
+  all_slopes_var <- c(res$annual$slope,
+                      unlist(lapply(res$seasonal, function(x) x$slope)))
+  slope_lim_var  <- quantile(abs(all_slopes_var), 0.99, na.rm = TRUE)
+  breaks_var     <- pretty_breaks_sym(slope_lim_var, n = 7L, max_dec = cfg$max_dec)
+
   # ── Annual map ─────────────────────────────────────────────────────────
   slope_ann  <- res$annual$slope
   sig_ann    <- res$annual$sig_local   # <-- local p < 0.05 (NOT FDR)
-  slope_lim  <- quantile(abs(slope_ann), 0.99, na.rm = TRUE)
 
   # Rejection fraction for subtitle
   n_sig_ann  <- sum(sig_ann, na.rm = TRUE)
@@ -4258,7 +4286,9 @@ for (vname in names(spatial_results)) {
     name      = cfg$unit_expr,
     palette   = "RdBu",
     direction = -1,
-    limits    = c(-slope_lim, slope_lim),
+    limits    = range(breaks_var),   # span the 7 breaks exactly; no break is dropped
+    breaks    = breaks_var,
+    labels    = scales::label_number(accuracy = 5 * 10^(-cfg$max_dec)),
     na.value  = "transparent",
     oob       = scales::squish
   )
@@ -4286,9 +4316,6 @@ for (vname in names(spatial_results)) {
   rm(slope_stars, sig_stars, p_ann)
 
   # ── Seasonal maps (2x2) ────────────────────────────────────────────────
-  all_slopes_seas <- unlist(lapply(res$seasonal, function(x) x$slope))
-  slope_lim_seas  <- quantile(abs(all_slopes_seas), 0.99, na.rm = TRUE)
-
   season_panels <- list()
 
   for (seas in SEASONS) {
@@ -4302,7 +4329,9 @@ for (vname in names(spatial_results)) {
       name      = cfg$unit_expr,
       palette   = "RdBu",
       direction = -1,
-      limits    = c(-slope_lim_seas, slope_lim_seas),
+      limits    = range(breaks_var),   # same limits as annual; no break is dropped
+      breaks    = breaks_var,
+      labels    = scales::label_number(accuracy = 5 * 10^(-cfg$max_dec)),
       na.value  = "transparent",
       oob       = scales::squish
     )
@@ -4325,8 +4354,11 @@ for (vname in names(spatial_results)) {
                 season_panels[["JJA"]] + season_panels[["SON"]]) +
     plot_layout(ncol = 2, guides = "collect") +
     plot_annotation(
-      title = paste0("Seasonal Spatial Trends: Sen\u2019s Slope of ",
-                     VAR_LABELS_PLAIN[[vname]], " (1958\u20132025)"),
+      title = parse(text = paste0(
+        'bold("Seasonal Spatial Trends:")~"Sen\u2019s Slope of "~',
+        VAR_LABELS_SHORT[[vname]],
+        '~"(1958\u20132025)"'
+      ))[[1]],
       subtitle = glue(
         "PWMK | Blue contours: local p < {ALPHA_LOCAL} ",
         "| Parenthetical % = rejection fraction ",
@@ -4359,4 +4391,4 @@ cat(sprintf("  Results: %s\n", RESULTS_FILE))
 cat(sprintf("  Variables: %s\n", paste(names(spatial_results), collapse = ", ")))
 cat(sprintf("  Figures: %s\n", FIG_PHASE3))
 cat(rep("=", 70), "\n")
-```
+```
