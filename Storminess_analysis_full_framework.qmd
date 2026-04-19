@@ -4258,14 +4258,17 @@ for (vname in names(spatial_results)) {
   progress_msg(sprintf("  Plotting: %s", vname))
 
   # ── Unified colour-scale limit (annual + all four seasons) ─────────────
-  # Pool all slopes for this variable across every period so that the
-  # annual map and the seasonal 2x2 panel share an identical colour range.
-  # The 0.99 quantile of the combined set is used so that a handful of
-  # extreme grid-point values do not collapse the palette for everything
-  # else (oob = scales::squish handles the residual outliers).
-  all_slopes_var <- c(res$annual$slope,
-                      unlist(lapply(res$seasonal, function(x) x$slope)))
-  slope_lim_var  <- quantile(abs(all_slopes_var), 0.99, na.rm = TRUE)
+  # Take the MAXIMUM of the five per-period 0.99 quantiles rather than the
+  # 0.99 quantile of the pooled distribution.  Pooling mixes annual slopes
+  # (12-month averages, small variance) with seasonal slopes (3-month
+  # averages, much larger variance): a season like DJF can have 5-10% of
+  # its own values above the pooled 0.99 quantile, producing large solid
+  # colour patches.  Using the per-period max ensures that within any
+  # individual panel at most ~1% of its own grid points are squished.
+  slope_lim_var <- max(
+    quantile(abs(res$annual$slope), 0.99, na.rm = TRUE),
+    sapply(res$seasonal, function(x) quantile(abs(x$slope), 0.99, na.rm = TRUE))
+  )
   breaks_var     <- pretty_breaks_sym(slope_lim_var, n = 7L, max_dec = cfg$max_dec)
 
   # ── Annual map ─────────────────────────────────────────────────────────
