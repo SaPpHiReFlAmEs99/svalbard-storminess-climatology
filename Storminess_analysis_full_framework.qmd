@@ -4257,23 +4257,14 @@ for (vname in names(spatial_results)) {
   cat("\n", rep("-", 50), "\n")
   progress_msg(sprintf("  Plotting: %s", vname))
 
-  # ── Unified colour-scale limit (annual + all four seasons) ─────────────
-  # Take the MAXIMUM of the five per-period 0.99 quantiles rather than the
-  # 0.99 quantile of the pooled distribution.  Pooling mixes annual slopes
-  # (12-month averages, small variance) with seasonal slopes (3-month
-  # averages, much larger variance): a season like DJF can have 5-10% of
-  # its own values above the pooled 0.99 quantile, producing large solid
-  # colour patches.  Using the per-period max ensures that within any
-  # individual panel at most ~1% of its own grid points are squished.
-  slope_lim_var <- max(
-    quantile(abs(res$annual$slope), 0.99, na.rm = TRUE),
-    sapply(res$seasonal, function(x) quantile(abs(x$slope), 0.99, na.rm = TRUE))
-  )
-  breaks_var     <- pretty_breaks_sym(slope_lim_var, n = 7L, max_dec = cfg$max_dec)
-
   # ── Annual map ─────────────────────────────────────────────────────────
-  slope_ann  <- res$annual$slope
-  sig_ann    <- res$annual$sig_local   # <-- local p < 0.05 (NOT FDR)
+  # Independent scale: annual slopes (12-month averages) have inherently
+  # smaller variance than seasonal slopes (3-month averages), so a shared
+  # scale would wash out the annual map.
+  slope_ann     <- res$annual$slope
+  sig_ann       <- res$annual$sig_local   # <-- local p < 0.05 (NOT FDR)
+  slope_lim_ann <- max(abs(slope_ann), na.rm = TRUE)
+  breaks_ann    <- pretty_breaks_sym(slope_lim_ann, n = 7L, max_dec = cfg$max_dec)
 
   # Rejection fraction for subtitle
   n_sig_ann  <- sum(sig_ann, na.rm = TRUE)
@@ -4289,8 +4280,8 @@ for (vname in names(spatial_results)) {
     name      = cfg$unit_expr,
     palette   = "RdBu",
     direction = -1,
-    limits    = range(breaks_var),   # span the 7 breaks exactly; no break is dropped
-    breaks    = breaks_var,
+    limits    = range(breaks_ann),
+    breaks    = breaks_ann,
     labels    = scales::label_number(accuracy = 5 * 10^(-cfg$max_dec)),
     na.value  = "transparent",
     oob       = scales::squish
@@ -4319,6 +4310,13 @@ for (vname in names(spatial_results)) {
   rm(slope_stars, sig_stars, p_ann)
 
   # ── Seasonal maps (2x2) ────────────────────────────────────────────────
+  # Shared scale across all four seasons: true max of absolute slopes
+  # across every season, so panels are directly comparable in magnitude.
+  slope_lim_seas <- max(
+    sapply(res$seasonal, function(x) max(abs(x$slope), na.rm = TRUE))
+  )
+  breaks_seas <- pretty_breaks_sym(slope_lim_seas, n = 7L, max_dec = cfg$max_dec)
+
   season_panels <- list()
 
   for (seas in SEASONS) {
@@ -4332,8 +4330,8 @@ for (vname in names(spatial_results)) {
       name      = cfg$unit_expr,
       palette   = "RdBu",
       direction = -1,
-      limits    = range(breaks_var),   # same limits as annual; no break is dropped
-      breaks    = breaks_var,
+      limits    = range(breaks_seas),
+      breaks    = breaks_seas,
       labels    = scales::label_number(accuracy = 5 * 10^(-cfg$max_dec)),
       na.value  = "transparent",
       oob       = scales::squish
