@@ -4309,10 +4309,21 @@ for (vname in names(spatial_results)) {
       "PWMK | Blue contours: local p < {ALPHA_LOCAL} ",
       "({pct_ann}% of grid points; {ALPHA_LOCAL*100}% expected under H\u2080)"
     )) +
-    theme(plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40", hjust = 0.5))
+    theme(
+      plot.subtitle     = element_text(size = SUBTITLE_SIZE, colour = "grey40",
+                                       hjust = 0.5, margin = margin(b = 15)),
+      legend.position   = "bottom",
+      legend.direction  = "horizontal",
+      legend.title.position = "top",
+      legend.title      = element_text(size = BASE_SIZE, hjust = 0.5),
+      legend.key.width  = unit(3.0, "cm"),
+      legend.key.height = unit(0.5, "cm"),
+      plot.margin       = margin(10, 10, 10, 10)
+    ) +
+    guides(fill = guide_colorbar(title.position = "top", title.hjust = 0.5))
 
   ggsave(file.path(FIG_PHASE3, cfg$fig_annual),
-         p_ann, width = 10, height = 10, dpi = 300, bg = "white")
+         p_ann, width = 10, height = 11, dpi = 300, bg = "white")
   progress_msg(sprintf("    Saved: %s", cfg$fig_annual))
 
   rm(slope_stars, sig_stars, p_ann)
@@ -4359,9 +4370,28 @@ for (vname in names(spatial_results)) {
     )
   }
 
+  # Style the legend as a horizontal bottom bar on each panel;
+  # patchwork's guides="collect" will merge them into one.
+  legend_style <- theme(
+    legend.direction      = "horizontal",
+    legend.title.position = "top",
+    legend.title          = element_text(size = BASE_SIZE, hjust = 0.5),
+    legend.key.width      = unit(3.0, "cm"),
+    legend.key.height     = unit(0.5, "cm")
+  )
+  legend_guide <- guides(fill = guide_colorbar(title.position = "top",
+                                               title.hjust = 0.5))
+
+  for (seas in names(season_panels)) {
+    season_panels[[seas]] <- season_panels[[seas]] + legend_style + legend_guide
+  }
+
+  # Use guide_area() to place the collected legend in its own bottom row
   fig_seas <- (season_panels[["DJF"]] + season_panels[["MAM"]] +
-                season_panels[["JJA"]] + season_panels[["SON"]]) +
-    plot_layout(ncol = 2, guides = "collect") +
+                season_panels[["JJA"]] + season_panels[["SON"]] +
+                guide_area()) +
+    plot_layout(design = "AB\nCD\nEE", guides = "collect",
+                heights = c(1, 1, 0.12)) +
     plot_annotation(
       title = parse(text = paste0(
         'bold("Seasonal Spatial Trends: Sen\u2019s Slope of "~',
@@ -4375,12 +4405,13 @@ for (vname in names(spatial_results)) {
       ),
       theme = theme(
         plot.title    = element_text(face = "bold", size = TITLE_SIZE, hjust = 0.5),
-        plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40", hjust = 0.5)
+        plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40",
+                                     hjust = 0.5, margin = margin(b = 10))
       )
     )
 
   ggsave(file.path(FIG_PHASE3, cfg$fig_seasonal),
-         fig_seas, width = 14, height = 14, dpi = 300, bg = "white")
+         fig_seas, width = 14, height = 15, dpi = 300, bg = "white")
   progress_msg(sprintf("    Saved: %s", cfg$fig_seasonal))
 
   rm(season_panels, fig_seas)
