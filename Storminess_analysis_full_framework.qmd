@@ -137,14 +137,14 @@ ALL_VARS <- c(METRIC_NAMES, ENERGY_VARS)
 
 # Labels for figures (native plotmath)
 VAR_LABELS <- c(
-  "eke_synoptic_mean" = "Mean~EKE[synoptic]~(m^2/s^2)",
-  "eke_p90"           = "P90~EKE~(m^2/s^2)",
-  "eke_p95"           = "P95~EKE~(m^2/s^2)",
-  "eke_p99"           = "P99~EKE~(m^2/s^2)",
-  "exceed_p95_freq"   = "P95~Exceedance~Frequency",
-  "tke"               = "TKE~(m^2/s^2)",
-  "mke"               = "MKE~(m^2/s^2)",
-  "eke_budget"        = "EKE[budget]~(m^2/s^2)"
+  "eke_synoptic_mean" = '"Mean EKE"[synoptic]~(m^2/s^2)',
+  "eke_p90"           = '"P90 EKE"~(m^2/s^2)',
+  "eke_p95"           = '"P95 EKE"~(m^2/s^2)',
+  "eke_p99"           = '"P99 EKE"~(m^2/s^2)',
+  "exceed_p95_freq"   = '"P95 Exceedance Frequency"',
+  "tke"               = '"TKE"~(m^2/s^2)',
+  "mke"               = '"MKE"~(m^2/s^2)',
+  "eke_budget"        = '"EKE"[budget]~(m^2/s^2)'
 )
 
 # Simple labels for table output (plain text, no Unicode superscripts)
@@ -197,6 +197,12 @@ DECADES    <- 10      # Slope conversion factor: per year → per decade
 B_FALLBACK <- 3L      # MBB block length fallback when pwsd() returns b < 1
                       # b = 3 exceeds typical annual ACF decorrelation time
                       # while preserving ~23 non-overlapping blocks (N/b, N=68)
+
+# Plotting parameters
+BASE_SIZE      <- 16  # ggplot2 base_size for all theme_*() calls
+                      # Controls axis text, axis titles, strip text, legend text.
+TITLE_SIZE     <- 20  # plot.title size (bold) — must exceed BASE_SIZE
+SUBTITLE_SIZE  <- 15  # plot.subtitle size
 
 
 # ── 6. COLOUR PALETTES ────────────────────────────────────────────────────────
@@ -1394,9 +1400,9 @@ p1 <- ggplot(ts_long, aes(x = date, y = value, color = metric)) +
     x = NULL,
     y = NULL
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title = element_text(face = "bold", size = TITLE_SIZE),
     strip.text = element_text(face = "bold", hjust = 0),
     strip.background = element_rect(fill = "gray95"),
     panel.grid.minor = element_blank()
@@ -1471,34 +1477,34 @@ storm_df_season <- storm_df %>%
 p3a <- ggplot(storm_df_season, aes(x = season, y = eke_synoptic_mean, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = parse(text = VAR_LABELS[["eke_synoptic_mean"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["eke_synoptic_mean"]], ")"))[[1]],
        y = expression("m"^2*"/s"^2), x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p3b <- ggplot(storm_df_season, aes(x = season, y = eke_p95, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = parse(text = VAR_LABELS[["eke_p95"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["eke_p95"]], ")"))[[1]],
        y = expression("m"^2*"/s"^2), x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p3c <- ggplot(storm_df_season, aes(x = season, y = eke_p99, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = parse(text = VAR_LABELS[["eke_p99"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["eke_p99"]], ")"))[[1]],
        y = expression("m"^2*"/s"^2), x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p3d <- ggplot(storm_df_season, aes(x = season, y = exceed_p95_freq, fill = season)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.8, outlier.alpha = 0.5) +
   geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", linewidth = 0.8) +
   scale_fill_manual(values = season_colors, guide = "none") +
-  labs(title = parse(text = VAR_LABELS[["exceed_p95_freq"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["exceed_p95_freq"]], ")"))[[1]],
        y = "Fraction", x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p3_combined <- (p3a | p3b | p3c | p3d) +
@@ -1506,8 +1512,8 @@ p3_combined <- (p3a | p3b | p3c | p3d) +
     title = "Seasonal Distribution of Storminess Metrics",
     subtitle = "Pan-Arctic (≥60°N) | 1958–2025 | Red dashed line = climatological 5% threshold",
     theme = theme(
-      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 11, hjust = 0.5)
+      plot.title = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
     )
   )
 
@@ -1542,10 +1548,10 @@ p4a <- ggplot(monthly_clim, aes(x = month)) +
   geom_line(aes(y = eke_synoptic_mean_avg), color = "#0072B2", linewidth = 1.2) +
   geom_point(aes(y = eke_synoptic_mean_avg), color = "#0072B2", size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = parse(text = VAR_LABELS[["eke_synoptic_mean"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["eke_synoptic_mean"]], ")"))[[1]],
        y = expression("m"^2*"/s"^2),
        x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 # Plot for P95 EKE
@@ -1556,10 +1562,10 @@ p4b <- ggplot(monthly_clim, aes(x = month)) +
   geom_line(aes(y = eke_p95_avg), color = "#009E73", linewidth = 1.2) +
   geom_point(aes(y = eke_p95_avg), color = "#009E73", size = 3) +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = parse(text = VAR_LABELS[["eke_p95"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["eke_p95"]], ")"))[[1]],
        y = expression("m"^2*"/s"^2),
        x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 # Plot for Exceedance Frequency
@@ -1571,10 +1577,10 @@ p4c <- ggplot(monthly_clim, aes(x = month)) +
   geom_point(aes(y = exceed_freq_avg), color = "#D55E00", size = 3) +
   geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
   scale_x_continuous(breaks = 1:12, labels = month.abb) +
-  labs(title = parse(text = VAR_LABELS[["exceed_p95_freq"]])[[1]],
+  labs(title = parse(text = paste0("bold(", VAR_LABELS[["exceed_p95_freq"]], ")"))[[1]],
        y = "Fraction",
        x = NULL) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p4_combined <- (p4a | p4b | p4c) +
@@ -1582,8 +1588,8 @@ p4_combined <- (p4a | p4b | p4c) +
     title = "Climatological Seasonal Cycle of Storminess Metrics",
     subtitle = "Pan-Arctic (≥60°N) | 1958–2025 mean ± 1 SD",
     theme = theme(
-      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 11, hjust = 0.5)
+      plot.title = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
     )
   )
 
@@ -1643,14 +1649,14 @@ p5 <- ggplot(stl_long, aes(x = date, y = value)) +
   facet_wrap(~ component_label, ncol = 1, scales = "free_y") +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
   labs(
-    title = parse(text = paste0('"STL Decomposition: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"(Primary Metric)"'))[[1]],
+    title = parse(text = paste0('bold("STL Decomposition: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"(Primary Metric)")'))[[1]],
     subtitle = "Pan-Arctic (≥60°N) | Seasonal-Trend decomposition using LOESS",
     x = NULL,
     y = expression("m"^2*"/s"^2)
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title = element_text(face = "bold", size = TITLE_SIZE),
     strip.text = element_text(face = "bold", hjust = 0),
     strip.background = element_rect(fill = "gray95"),
     panel.grid.minor = element_blank()
@@ -1858,14 +1864,14 @@ cat(sprintf("  P95/Mean ratio — median: %.2f, range: [%.2f, %.2f]\n",
 cat("\n--- Generating Figure 6a: Spatial Climatology 2x2 (Mean / P90 / P95 / Exceedance) ---\n")
 
 # Helper: shared theme for every panel in this figure
-panel_theme <- theme_void(base_size = 12) +
+panel_theme <- theme_void(base_size = BASE_SIZE) +
   theme(
-    plot.title        = element_text(face = "bold", hjust = 0.5, size = 13),
+    plot.title        = element_text(face = "bold", hjust = 0.5, size = TITLE_SIZE),
     legend.position   = "right",
-    legend.key.width  = unit(0.5, "cm"),
-    legend.key.height = unit(1.5, "cm"),
+    legend.key.width  = unit(0.6, "cm"),
+    legend.key.height = unit(2.0, "cm"),
     panel.background  = element_rect(fill = "gray95", color = NA),
-    plot.margin       = margin(5, 5, 5, 5)
+    plot.margin       = margin(10, 15, 10, 15)
   )
 
 # Shared scale spec used for all three EKE intensity panels
@@ -1891,7 +1897,7 @@ p6a_mean <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('"(a) "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]]))[[1]]) +
+  labs(title = parse(text = paste0('bold("(a) "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], ')'))[[1]]) +
   panel_theme
 
 # --- Panel (b): P90 EKE ---
@@ -1907,7 +1913,7 @@ p6a_p90 <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('"(b) "~', VAR_LABELS_SHORT[["eke_p90"]]))[[1]]) +
+  labs(title = parse(text = paste0('bold("(b) "~', VAR_LABELS_SHORT[["eke_p90"]], ')'))[[1]]) +
   panel_theme
 
 # --- Panel (c): P95 EKE ---
@@ -1923,7 +1929,7 @@ p6a_p95 <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('"(c) "~', VAR_LABELS_SHORT[["eke_p95"]]))[[1]]) +
+  labs(title = parse(text = paste0('bold("(c) "~', VAR_LABELS_SHORT[["eke_p95"]], ')'))[[1]]) +
   panel_theme
 
 # --- Panel (d): P99 EKE ---
@@ -1939,7 +1945,7 @@ p6a_p99 <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('"(d) "~', VAR_LABELS_SHORT[["eke_p99"]]))[[1]]) +
+  labs(title = parse(text = paste0('bold("(d) "~', VAR_LABELS_SHORT[["eke_p99"]], ')'))[[1]]) +
   panel_theme
 
 # --- Assemble 2×2 ---
@@ -1951,8 +1957,8 @@ fig6a <- (p6a_mean | p6a_p90) / (p6a_p95 | p6a_p99) +
     title    = "Spatial Climatology of EKE (1958–2025)",
     subtitle = "Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Shared colour scale for all panels",
     theme = theme(
-      plot.title    = element_text(size = 16, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 12, hjust = 0.5)
+      plot.title    = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
     )
   )
 
@@ -1985,15 +1991,15 @@ p6b_ratio <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('"(a) P95 / Mean "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"Ratio"'))[[1]]) +
-  theme_void(base_size = 12) +
+  labs(title = parse(text = paste0('bold("(a) P95 / Mean "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"Ratio")'))[[1]]) +
+  theme_void(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = TITLE_SIZE),
     legend.position = "right",
-    legend.key.width  = unit(0.5, "cm"),
-    legend.key.height = unit(1.5, "cm"),
+    legend.key.width  = unit(0.6, "cm"),
+    legend.key.height = unit(2.0, "cm"),
     panel.background = element_rect(fill = "gray95", color = NA),
-    plot.margin = margin(5, 5, 5, 5)
+    plot.margin = margin(10, 15, 10, 15)
   )
 
 # --- Panel (b): P95 Exceedance Frequency ---
@@ -2013,15 +2019,15 @@ p6b_exceed <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('"(b) "~', VAR_LABELS_SHORT[["exceed_p95_freq"]]))[[1]]) +
-  theme_void(base_size = 12) +
+  labs(title = parse(text = paste0('bold("(b) "~', VAR_LABELS_SHORT[["exceed_p95_freq"]], ')'))[[1]]) +
+  theme_void(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = TITLE_SIZE),
     legend.position = "right",
-    legend.key.width  = unit(0.5, "cm"),
-    legend.key.height = unit(1.5, "cm"),
+    legend.key.width  = unit(0.6, "cm"),
+    legend.key.height = unit(2.0, "cm"),
     panel.background = element_rect(fill = "gray95", color = NA),
-    plot.margin = margin(5, 5, 5, 5)
+    plot.margin = margin(10, 15, 10, 15)
   )
 
 # --- Combine ---
@@ -2032,8 +2038,8 @@ fig6b <- p6b_ratio + p6b_exceed +
     title    = "Spatial Climatology of Storminess Distribution Properties (1958–2025)",
     subtitle = "Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection",
     theme = theme(
-      plot.title    = element_text(size = 16, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 12, hjust = 0.5)
+      plot.title    = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
     )
   )
 
@@ -2082,9 +2088,9 @@ p7 <- ggplot(dist_data, aes(x = value, fill = metric)) +
     x = "Value",
     y = "Density"
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title = element_text(face = "bold", size = TITLE_SIZE),
     strip.text = element_text(face = "bold")
   )
 
@@ -2137,7 +2143,7 @@ p8 <- ggplot(cor_long, aes(x = col_var, y = fct_rev(row_var), fill = correlation
     subtitle = "Pan-Arctic (≥60°N) | 1958–2025",
     x = NULL, y = NULL
   ) +
-  theme_minimal(base_size = 12) +
+  theme_minimal(base_size = BASE_SIZE) +
   theme(
     axis.text.x   = element_text(angle = 45, hjust = 1),
     axis.text.y   = element_text(hjust = 1),
@@ -2174,30 +2180,30 @@ p9a <- ggplot(storm_df_anom, aes(x = date, y = eke_synoptic_mean_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#0072B2", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
-  labs(title = parse(text = paste0(VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"Anomaly"'))[[1]],
+  labs(title = parse(text = paste0('bold(', VAR_LABELS_SHORT[["eke_synoptic_mean"]], '~"Anomaly")'))[[1]],
        y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p9b <- ggplot(storm_df_anom, aes(x = date, y = eke_p95_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#009E73", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "#D55E00", se = FALSE, linewidth = 0.8) +
-  labs(title = parse(text = paste0(VAR_LABELS_SHORT[["eke_p95"]], '~"Anomaly"'))[[1]],
+  labs(title = parse(text = paste0('bold(', VAR_LABELS_SHORT[["eke_p95"]], '~"Anomaly")'))[[1]],
        y = expression("Anomaly [m"^2*"/s"^2*"]"), x = NULL) +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p9c <- ggplot(storm_df_anom, aes(x = date, y = exceed_freq_anom)) +
   geom_hline(yintercept = 0, color = "gray50") +
   geom_line(color = "#D55E00", alpha = 0.5, linewidth = 0.3) +
   geom_smooth(method = "loess", span = 0.1, color = "black", se = FALSE, linewidth = 0.8) +
-  labs(title = parse(text = paste0(VAR_LABELS_SHORT[["exceed_p95_freq"]], '~"Anomaly"'))[[1]],
+  labs(title = parse(text = paste0('bold(', VAR_LABELS_SHORT[["exceed_p95_freq"]], '~"Anomaly")'))[[1]],
        y = "Anomaly [fraction]", x = NULL) +
   scale_x_date(date_breaks = "10 years", date_labels = "%Y") +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
 p9_combined <- (p9a / p9b / p9c) +
@@ -2205,8 +2211,8 @@ p9_combined <- (p9a / p9b / p9c) +
     title = "Deseasonalized Storminess Anomalies",
     subtitle = "Pan-Arctic (≥60°N) | Monthly anomalies from 1958–2025 climatology",
     theme = theme(
-      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 11, hjust = 0.5)
+      plot.title = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
     )
   )
 
@@ -2257,14 +2263,14 @@ p10 <- ggplot(seasonal_by_decade, aes(x = month, y = eke_synoptic_mean_avg,
   scale_color_viridis_d(option = "plasma", name = "Decade", end = 0.9) +
   
   labs(
-    title = parse(text = paste0('"Evolution of the Seasonal Cycle: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]]))[[1]],
+    title = parse(text = paste0('bold("Evolution of the Seasonal Cycle: "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], ')'))[[1]],
     subtitle = "Pan-Arctic (≥60°N) | Has the seasonal pattern changed over time?",
     x = NULL,
     y = parse(text = VAR_LABELS[["eke_synoptic_mean"]])[[1]]
   ) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title = element_text(face = "bold", size = TITLE_SIZE),
     legend.position = "right"
   )
 
@@ -2290,14 +2296,14 @@ p10b <- ggplot(seasonal_exceed_decade, aes(x = month, y = exceed_avg,
   scale_color_viridis_d(option = "plasma", name = "Decade", end = 0.9) +
   
   labs(
-    title = parse(text = paste0('"Evolution of the Seasonal Cycle: "~', VAR_LABELS_SHORT[["exceed_p95_freq"]]))[[1]],
+    title = parse(text = paste0('bold("Evolution of the Seasonal Cycle: "~', VAR_LABELS_SHORT[["exceed_p95_freq"]], ')'))[[1]],
     subtitle = "Pan-Arctic (≥60°N) | Dashed line = climatological 5%",
     x = NULL,
     y = "Exceedance Frequency"
   ) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title = element_text(face = "bold", size = 14),
+    plot.title = element_text(face = "bold", size = TITLE_SIZE),
     legend.position = "right"
   )
 
@@ -2559,9 +2565,9 @@ p2_1 <- ggplot(energy_stack, aes(x = year, y = value, fill = component)) +
     x = NULL,
     y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
   ) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title    = element_text(face = "bold", size = 14),
+    plot.title    = element_text(face = "bold", size = TITLE_SIZE),
     legend.position = "bottom"
   )
 
@@ -2630,9 +2636,9 @@ p2_2 <- ggplot(seasonal_long, aes(x = month, y = value, color = component)) +
     x = NULL,
     y = expression("Kinetic Energy [m"^2*"/s"^2*"]")
   ) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title    = element_text(face = "bold", size = 14),
+    plot.title    = element_text(face = "bold", size = TITLE_SIZE),
     legend.position = "bottom"
   )
 
@@ -2686,12 +2692,12 @@ p_scatter <- ggplot(storm_df, aes(x = eke_budget, y = eke_synoptic_mean)) +
            label = sprintf("r = %.3f", eke_cor),
            hjust = 0, size = 4, fontface = "bold") +
   labs(
-    title = parse(text = paste0('"(a) "~EKE[budget]~"vs"~EKE[synoptic]'))[[1]],
+    title = parse(text = paste0('bold("(a) "~EKE[budget]~"vs"~EKE[synoptic])'))[[1]],
     x = expression("EKE"["budget"]*" (all sub-monthly variance) [m"^2*"/s"^2*"]"),
     y = expression("EKE"["synoptic"]*" (1.2–6 day bandpass) [m"^2*"/s"^2*"]")
   ) +
-  theme_bw(base_size = 11) +
-  theme(plot.title = element_text(face = "bold", size = 12))
+  theme_bw(base_size = BASE_SIZE) +
+  theme(plot.title = element_text(face = "bold", size = TITLE_SIZE))
 
 # Panel (b): Annual time series
 comparison_annual <- energy_annual %>%
@@ -2713,9 +2719,9 @@ p_ts <- ggplot(comparison_annual, aes(x = year, y = value, color = type)) +
     x = NULL,
     y = expression("EKE [m"^2*"/s"^2*"]")
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title    = element_text(face = "bold", size = 12),
+    plot.title    = element_text(face = "bold", size = TITLE_SIZE),
     legend.position = "bottom"
   )
 
@@ -2726,8 +2732,8 @@ p2_3 <- p_scatter + p_ts +
     title    = "Comparison of EKE Definitions",
     subtitle = "Budget EKE captures all variance; Synoptic EKE isolates 1.2–6 day storm band",
     theme = theme(
-      plot.title    = element_text(size = 14, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 11, hjust = 0.5)
+      plot.title    = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
     )
   )
 
@@ -3137,12 +3143,12 @@ p_annual <- ggplot(annual_long, aes(x = year, y = value)) +
     x = NULL,
     y = "Annual mean value"
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title       = element_text(face = "bold", size = 13),
-    plot.subtitle    = element_text(size = 9, colour = "grey40"),
+    plot.title       = element_text(face = "bold", size = TITLE_SIZE),
+    plot.subtitle    = element_text(size = SUBTITLE_SIZE, colour = "grey40"),
     legend.position  = "bottom",
-    strip.text = element_text(face = "bold", size = 9),
+    strip.text = element_text(face = "bold"),
     panel.grid.minor = element_blank()
   )
 
@@ -3190,10 +3196,10 @@ p_forest <- ggplot(forest_df,
     x = "Sen\u2019s slope [units per decade]",
     y = NULL
   ) +
-  theme_bw(base_size = 12) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title       = element_text(face = "bold", size = 13),
-    plot.subtitle    = element_text(size = 9, colour = "grey40"),
+    plot.title       = element_text(face = "bold", size = TITLE_SIZE),
+    plot.subtitle    = element_text(size = SUBTITLE_SIZE, colour = "grey40"),
     legend.position  = "bottom",
     panel.grid.minor = element_blank()
   ) +
@@ -3477,12 +3483,12 @@ p_forest_seas <- ggplot(
     x = "Sen\u2019s slope [units per decade]",
     y = NULL
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title       = element_text(face = "bold", size = 13),
-    plot.subtitle    = element_text(size = 9,  colour = "grey40"),
+    plot.title       = element_text(face = "bold", size = TITLE_SIZE),
+    plot.subtitle    = element_text(size = SUBTITLE_SIZE, colour = "grey40"),
     legend.position  = "bottom",
-    strip.text       = element_text(face = "bold", size = 10),
+    strip.text       = element_text(face = "bold"),
     panel.grid.minor = element_blank()
   )
 
@@ -3559,12 +3565,12 @@ p_series_seas <- ggplot(
     x = NULL,
     y = "Seasonal mean value"
   ) +
-  theme_bw(base_size = 11) +
+  theme_bw(base_size = BASE_SIZE) +
   theme(
-    plot.title       = element_text(face = "bold", size = 13),
-    plot.subtitle    = element_text(size = 9, colour = "grey40"),
+    plot.title       = element_text(face = "bold", size = TITLE_SIZE),
+    plot.subtitle    = element_text(size = SUBTITLE_SIZE, colour = "grey40"),
     legend.position  = "bottom",
-    strip.text       = element_text(face = "bold", size = 9),
+    strip.text       = element_text(face = "bold"),
     panel.grid.minor = element_blank()
   ) +
   guides(
@@ -4175,9 +4181,9 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
             linewidth = 0.25) +
     geom_sf(data = inverse_mask, fill = "white", color = NA) +
     geom_sf_text(data = lat_labels, aes(label = label),
-                 size = 2.3, color = "black", hjust = 1.2) +
+                 size = 4, color = "black", hjust = 1.2) +     # 4 mm ≈ 11.3 pt
     geom_sf_text(data = lon_labels, aes(label = label),
-                 size = 2.3, color = "black")
+                 size = 4, color = "black")                     # 4 mm ≈ 11.3 pt
 
   # Significance overlay: convert raster to sf polygons to avoid scale conflicts with the slope fill layer
   if (!is.null(sig_contour)) {
@@ -4196,14 +4202,16 @@ make_panel <- function(stars_obj, fill_var, fill_scale, panel_title,
              ylim = c(-plot_radius, plot_radius),
              expand = FALSE) +
     labs(title = panel_title) +
-    theme_void(base_size = 11) +
+    theme_void(base_size = BASE_SIZE) +
     theme(
-      plot.title        = element_text(face = "bold", hjust = 0.5, size = 12),
+      plot.title        = element_text(face = "bold", hjust = 0.5, size = TITLE_SIZE),
       legend.position   = "right",
-      legend.key.width  = unit(0.5, "cm"),
-      legend.key.height = unit(1.5, "cm"),
+      legend.title      = element_text(size = BASE_SIZE),
+      legend.text       = element_text(size = BASE_SIZE - 2),
+      legend.key.width  = unit(0.6, "cm"),
+      legend.key.height = unit(2.0, "cm"),
       panel.background  = element_rect(fill = "grey95", color = NA),
-      plot.margin       = margin(5, 5, 5, 5)
+      plot.margin       = margin(10, 15, 10, 15)
     )
 }
 
@@ -4292,8 +4300,8 @@ for (vname in names(spatial_results)) {
     fill_var    = "slope",
     fill_scale  = fill_scale,
     panel_title = parse(text = paste0(
-      'bold("Annual Sen\'s slope") ~ ', VAR_LABELS_SHORT[[vname]],
-      ' ~ "(1958\u20132025)"'
+      'bold("Annual Sen\'s slope"~', VAR_LABELS_SHORT[[vname]],
+      '~"(1958\u20132025)")'
     ))[[1]],
     sig_contour = sig_stars
   ) +
@@ -4301,10 +4309,10 @@ for (vname in names(spatial_results)) {
       "PWMK | Blue contours: local p < {ALPHA_LOCAL} ",
       "({pct_ann}% of grid points; {ALPHA_LOCAL*100}% expected under H\u2080)"
     )) +
-    theme(plot.subtitle = element_text(size = 8, colour = "grey40", hjust = 0.5))
+    theme(plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40", hjust = 0.5))
 
   ggsave(file.path(FIG_PHASE3, cfg$fig_annual),
-         p_ann, width = 8, height = 8, dpi = 300, bg = "white")
+         p_ann, width = 10, height = 10, dpi = 300, bg = "white")
   progress_msg(sprintf("    Saved: %s", cfg$fig_annual))
 
   rm(slope_stars, sig_stars, p_ann)
@@ -4356,9 +4364,9 @@ for (vname in names(spatial_results)) {
     plot_layout(ncol = 2, guides = "collect") +
     plot_annotation(
       title = parse(text = paste0(
-        'bold("Seasonal Spatial Trends:")~"Sen\u2019s Slope of "~',
+        'bold("Seasonal Spatial Trends: Sen\u2019s Slope of "~',
         VAR_LABELS_SHORT[[vname]],
-        '~"(1958\u20132025)"'
+        '~"(1958\u20132025)")'
       ))[[1]],
       subtitle = glue(
         "PWMK | Blue contours: local p < {ALPHA_LOCAL} ",
@@ -4366,8 +4374,8 @@ for (vname in names(spatial_results)) {
         "(5% expected under H\u2080) | Shared colour scale"
       ),
       theme = theme(
-        plot.title    = element_text(face = "bold", size = 14, hjust = 0.5),
-        plot.subtitle = element_text(size = 9, colour = "grey40", hjust = 0.5)
+        plot.title    = element_text(face = "bold", size = TITLE_SIZE, hjust = 0.5),
+        plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40", hjust = 0.5)
       )
     )
 
