@@ -1403,7 +1403,7 @@ p1 <- ggplot(ts_long, aes(x = date, y = value, color = metric)) +
   theme_bw(base_size = BASE_SIZE) +
   theme(
     plot.title = element_text(face = "bold", size = TITLE_SIZE),
-    strip.text = element_text(face = "bold", hjust = 0),
+    strip.text = element_text(hjust = 0),
     strip.background = element_rect(fill = "gray95"),
     panel.grid.minor = element_blank()
   )
@@ -1824,18 +1824,35 @@ cat("  Cartographic elements created\n")
 # STEP 4: Compute derived fields
 # ==========================================================================
 
-# --- 0a. Shared colour limits for Mean EKE and P95 EKE ---
-shared_max <- max(
+# --- 0a. Per-group colour limits (each figure section uses its own scale) ---
+# Fig 6a: EKE_synoptic + P95 share one scale
+syn_p95_max    <- ceiling(max(
   max(clim_polar_masked[["eke_synoptic_mean"]], na.rm = TRUE),
-  max(clim_polar_masked[["eke_p90"]],           na.rm = TRUE),
-  max(clim_polar_masked[["eke_p95"]],           na.rm = TRUE),
-  max(clim_polar_masked[["eke_p99"]],           na.rm = TRUE)
-)
-shared_max_round <- ceiling(shared_max / 10) * 10
-shared_breaks    <- seq(0, shared_max_round, length.out = 5)
+  max(clim_polar_masked[["eke_p95"]],           na.rm = TRUE)
+) / 10) * 10
+syn_p95_breaks <- seq(0, syn_p95_max, length.out = 5)
 
-cat(sprintf("  Shared EKE colour limits: [0, %d]\n", shared_max_round))
-cat(sprintf("  Legend breaks: %s\n", paste(shared_breaks, collapse = ", ")))
+# Fig 6b: P90 independent scale
+p90_max    <- ceiling(max(clim_polar_masked[["eke_p90"]], na.rm = TRUE) / 10) * 10
+p90_breaks <- seq(0, p90_max, length.out = 5)
+
+# Fig 6c: P99 independent scale
+p99_max    <- ceiling(max(clim_polar_masked[["eke_p99"]], na.rm = TRUE) / 10) * 10
+p99_breaks <- seq(0, p99_max, length.out = 5)
+
+# Standalone individual scales (each variable on its own range)
+syn_max        <- ceiling(max(clim_polar_masked[["eke_synoptic_mean"]], na.rm = TRUE) / 10) * 10
+syn_breaks     <- seq(0, syn_max, length.out = 5)
+
+p95_max        <- ceiling(max(clim_polar_masked[["eke_p95"]], na.rm = TRUE) / 10) * 10
+p95_breaks     <- seq(0, p95_max, length.out = 5)
+
+cat(sprintf("  EKE_synoptic + P95 shared limits: [0, %d] | breaks: %s\n",
+            syn_p95_max, paste(syn_p95_breaks, collapse = ", ")))
+cat(sprintf("  P90 limits: [0, %d] | breaks: %s\n",
+            p90_max, paste(p90_breaks, collapse = ", ")))
+cat(sprintf("  P99 limits: [0, %d] | breaks: %s\n",
+            p99_max, paste(p99_breaks, collapse = ", ")))
 
 # --- 0b. Compute P95/Mean ratio and rebuild stars object ---
 climatology_maps_full[["p95_mean_ratio"]] <-
@@ -1859,9 +1876,9 @@ cat(sprintf("  P95/Mean ratio — median: %.2f, range: [%.2f, %.2f]\n",
             median_ratio, ratio_range[1], ratio_range[2]))
 
 
-# FIGURE 6a: MEAN EKE + P90 EKE + P95 EKE + EXCEEDANCE FREQUENCY  (2×2 layout)
+# FIGURE 6a: MEAN EKE + P95 EKE (1×2, shared colourbar, 5 ticks)
 # ==========================================================================
-cat("\n--- Generating Figure 6a: Spatial Climatology 2x2 (Mean / P90 / P95 / Exceedance) ---\n")
+cat("\n--- Generating Figure 6a: Spatial Climatology Mean EKE + P95 EKE ---\n")
 
 # Helper: shared theme for every panel in this figure
 panel_theme <- theme_void(base_size = BASE_SIZE) +
@@ -1874,20 +1891,46 @@ panel_theme <- theme_void(base_size = BASE_SIZE) +
     plot.margin       = margin(10, 15, 10, 15)
   )
 
-# Shared scale spec used for all three EKE intensity panels
-eke_scale <- scale_fill_viridis(
+eke_scale_syn <- scale_fill_viridis(
   name     = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
   option   = "C",
   na.value = "transparent",
-  limits   = c(0, shared_max_round),
-  breaks   = shared_breaks,
+  limits   = c(0, syn_max),
+  breaks   = syn_breaks,
+  oob      = scales::squish
+)
+
+eke_scale_p95_fig6a <- scale_fill_viridis(
+  name     = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+  option   = "C",
+  na.value = "transparent",
+  limits   = c(0, p95_max),
+  breaks   = p95_breaks,
+  oob      = scales::squish
+)
+
+eke_scale_p90 <- scale_fill_viridis(
+  name     = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+  option   = "C",
+  na.value = "transparent",
+  limits   = c(0, p90_max),
+  breaks   = p90_breaks,
+  oob      = scales::squish
+)
+
+eke_scale_p99 <- scale_fill_viridis(
+  name     = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+  option   = "C",
+  na.value = "transparent",
+  limits   = c(0, p99_max),
+  breaks   = p99_breaks,
   oob      = scales::squish
 )
 
 # --- Panel (a): Mean EKE ---
 p6a_mean <- ggplot() +
   geom_stars(data = clim_polar_masked, aes(fill = eke_synoptic_mean), na.rm = TRUE) +
-  eke_scale +
+  eke_scale_syn +
   geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
   geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
   geom_sf(data = inverse_mask, fill = "white", color = NA) +
@@ -1900,26 +1943,10 @@ p6a_mean <- ggplot() +
   labs(title = parse(text = paste0('bold("(a) "~', VAR_LABELS_SHORT[["eke_synoptic_mean"]], ')'))[[1]]) +
   panel_theme
 
-# --- Panel (b): P90 EKE ---
-p6a_p90 <- ggplot() +
-  geom_stars(data = clim_polar_masked, aes(fill = eke_p90), na.rm = TRUE) +
-  eke_scale +
-  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
-  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-  geom_sf(data = inverse_mask, fill = "white", color = NA) +
-  geom_sf_text(data = lat_labels, aes(label = label),
-               size = 2.5, color = "black", hjust = 1.2) +
-  geom_sf_text(data = lon_labels, aes(label = label),
-               size = 2.5, color = "black") +
-  coord_sf(xlim = c(-plot_radius, plot_radius),
-           ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('bold("(b) "~', VAR_LABELS_SHORT[["eke_p90"]], ')'))[[1]]) +
-  panel_theme
-
-# --- Panel (c): P95 EKE ---
+# --- Panel (b): P95 EKE ---
 p6a_p95 <- ggplot() +
   geom_stars(data = clim_polar_masked, aes(fill = eke_p95), na.rm = TRUE) +
-  eke_scale +
+  eke_scale_p95_fig6a +
   geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
   geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
   geom_sf(data = inverse_mask, fill = "white", color = NA) +
@@ -1929,33 +1956,14 @@ p6a_p95 <- ggplot() +
                size = 2.5, color = "black") +
   coord_sf(xlim = c(-plot_radius, plot_radius),
            ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('bold("(c) "~', VAR_LABELS_SHORT[["eke_p95"]], ')'))[[1]]) +
+  labs(title = parse(text = paste0('bold("(b) "~', VAR_LABELS_SHORT[["eke_p95"]], ')'))[[1]]) +
   panel_theme
 
-# --- Panel (d): P99 EKE ---
-p6a_p99 <- ggplot() +
-  geom_stars(data = clim_polar_masked, aes(fill = eke_p99), na.rm = TRUE) +
-  eke_scale +
-  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
-  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
-  geom_sf(data = inverse_mask, fill = "white", color = NA) +
-  geom_sf_text(data = lat_labels, aes(label = label),
-               size = 2.5, color = "black", hjust = 1.2) +
-  geom_sf_text(data = lon_labels, aes(label = label),
-               size = 2.5, color = "black") +
-  coord_sf(xlim = c(-plot_radius, plot_radius),
-           ylim = c(-plot_radius, plot_radius), expand = FALSE) +
-  labs(title = parse(text = paste0('bold("(d) "~', VAR_LABELS_SHORT[["eke_p99"]], ')'))[[1]]) +
-  panel_theme
-
-# --- Assemble 2×2 ---
-# guides = "collect" merges the three identical EKE colourbars into one;
-# the exceedance panel keeps its own separate legend.
-fig6a <- (p6a_mean | p6a_p90) / (p6a_p95 | p6a_p99) +
-  plot_layout(guides = "collect") +
+fig6a <- (p6a_mean | p6a_p95) +
+  plot_layout() +
   plot_annotation(
     title    = "Spatial Climatology of EKE (1958–2025)",
-    subtitle = "Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Shared colour scale for all panels",
+    subtitle = "Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Independent colour scales",
     theme = theme(
       plot.title    = element_text(size = TITLE_SIZE, face = "bold", hjust = 0.5),
       plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5)
@@ -1963,9 +1971,64 @@ fig6a <- (p6a_mean | p6a_p90) / (p6a_p95 | p6a_p99) +
   )
 
 print(fig6a)
+ggsave(file.path(fig_dir, "Fig06a_EKE_Synoptic_P95_Climatology.png"),
+       fig6a, width = 14, height = 7, dpi = 300, bg = "white")
 
-ggsave(file.path(fig_dir, "Fig06a_EKE_Intensity_Climatology.png"),
-       fig6a, width = 14, height = 14, dpi = 300, bg = "white")
+
+# FIGURE 6b: P90 EKE (standalone)
+# ==========================================================================
+cat("\n--- Generating Figure 6b: Spatial Climatology P90 EKE ---\n")
+
+p6b_p90 <- ggplot() +
+  geom_stars(data = clim_polar_masked, aes(fill = eke_p90), na.rm = TRUE) +
+  eke_scale_p90 +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label),
+               size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label),
+               size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius),
+           ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(
+    title    = parse(text = paste0('bold(', VAR_LABELS_SHORT[["eke_p90"]], ')'))[[1]],
+    subtitle = "Spatial Climatology (1958–2025) | Pan-Arctic (≥55°N)"
+  ) +
+  panel_theme +
+  theme(plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5))
+
+print(p6b_p90)
+ggsave(file.path(fig_dir, "Fig06b_EKE_P90_Climatology.png"),
+       p6b_p90, width = 8, height = 8, dpi = 300, bg = "white")
+
+
+# FIGURE 6c: P99 EKE (standalone)
+# ==========================================================================
+cat("\n--- Generating Figure 6c: Spatial Climatology P99 EKE ---\n")
+
+p6c_p99 <- ggplot() +
+  geom_stars(data = clim_polar_masked, aes(fill = eke_p99), na.rm = TRUE) +
+  eke_scale_p99 +
+  geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+  geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+  geom_sf(data = inverse_mask, fill = "white", color = NA) +
+  geom_sf_text(data = lat_labels, aes(label = label),
+               size = 2.5, color = "black", hjust = 1.2) +
+  geom_sf_text(data = lon_labels, aes(label = label),
+               size = 2.5, color = "black") +
+  coord_sf(xlim = c(-plot_radius, plot_radius),
+           ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+  labs(
+    title    = parse(text = paste0('bold(', VAR_LABELS_SHORT[["eke_p99"]], ')'))[[1]],
+    subtitle = "Spatial Climatology (1958–2025) | Pan-Arctic (≥55°N)"
+  ) +
+  panel_theme +
+  theme(plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5))
+
+print(p6c_p99)
+ggsave(file.path(fig_dir, "Fig06c_EKE_P99_Climatology.png"),
+       p6c_p99, width = 8, height = 8, dpi = 300, bg = "white")
 
 
 # FIGURE 6b: P95/MEAN RATIO + EXCEEDANCE FREQUENCY
@@ -2049,16 +2112,80 @@ ggsave(file.path(fig_dir, "Fig06b_EKE_Distribution_Climatology.png"),
        fig6b, width = 14, height = 7, dpi = 300, bg = "white")
 
 
-# Also save individual high-res versions
+# STANDALONE INDIVIDUAL FIGURES (each variable, own colourbar)
 # ==========================================================================
-ggsave(file.path(fig_dir, "Fig06a1_MeanEKE_Polar.png"),
-       p6a_mean, width = 8, height = 8, dpi = 300, bg = "white")
-ggsave(file.path(fig_dir, "Fig06a2_P90EKE_Polar.png"),
-       p6a_p90, width = 8, height = 8, dpi = 300, bg = "white")
-ggsave(file.path(fig_dir, "Fig06a3_P95EKE_Polar.png"),
-       p6a_p95, width = 8, height = 8, dpi = 300, bg = "white")
-ggsave(file.path(fig_dir, "Fig06a4_P99EKE_Polar.png"),
-       p6a_p99, width = 8, height = 8, dpi = 300, bg = "white")
+# Each panel is rebuilt with its own independent scale so the colourbar
+# reflects that variable's own data range, not the shared Fig06a range.
+cat("\n--- Generating standalone individual spatial climatology figures ---\n")
+
+make_standalone <- function(fill_var, scale_obj, label_expr) {
+  ggplot() +
+    geom_stars(data = clim_polar_masked, aes(fill = .data[[fill_var]]), na.rm = TRUE) +
+    scale_obj +
+    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+    geom_sf(data = inverse_mask, fill = "white", color = NA) +
+    geom_sf_text(data = lat_labels, aes(label = label),
+                 size = 2.5, color = "black", hjust = 1.2) +
+    geom_sf_text(data = lon_labels, aes(label = label),
+                 size = 2.5, color = "black") +
+    coord_sf(xlim = c(-plot_radius, plot_radius),
+             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+    labs(
+      title    = parse(text = paste0("bold(", label_expr, ")"))[[1]],
+      subtitle = "Spatial Climatology (1958–2025) | Pan-Arctic (≥55°N)"
+    ) +
+    panel_theme +
+    theme(plot.subtitle = element_text(size = SUBTITLE_SIZE, hjust = 0.5))
+}
+
+# EKE_synoptic — own scale
+p_solo_syn <- make_standalone(
+  "eke_synoptic_mean",
+  scale_fill_viridis(name = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+                     option = "C", na.value = "transparent",
+                     limits = c(0, syn_max), breaks = syn_breaks,
+                     oob = scales::squish),
+  VAR_LABELS_SHORT[["eke_synoptic_mean"]]
+)
+ggsave(file.path(fig_dir, "Fig06_solo_EKE_synoptic.png"),
+       p_solo_syn, width = 8, height = 8, dpi = 300, bg = "white")
+
+# P90 — own scale
+p_solo_p90 <- make_standalone(
+  "eke_p90",
+  scale_fill_viridis(name = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+                     option = "C", na.value = "transparent",
+                     limits = c(0, p90_max), breaks = p90_breaks,
+                     oob = scales::squish),
+  VAR_LABELS_SHORT[["eke_p90"]]
+)
+ggsave(file.path(fig_dir, "Fig06_solo_EKE_P90.png"),
+       p_solo_p90, width = 8, height = 8, dpi = 300, bg = "white")
+
+# P95 — own scale
+p_solo_p95 <- make_standalone(
+  "eke_p95",
+  scale_fill_viridis(name = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+                     option = "C", na.value = "transparent",
+                     limits = c(0, p95_max), breaks = p95_breaks,
+                     oob = scales::squish),
+  VAR_LABELS_SHORT[["eke_p95"]]
+)
+ggsave(file.path(fig_dir, "Fig06_solo_EKE_P95.png"),
+       p_solo_p95, width = 8, height = 8, dpi = 300, bg = "white")
+
+# P99 — own scale
+p_solo_p99 <- make_standalone(
+  "eke_p99",
+  scale_fill_viridis(name = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+                     option = "C", na.value = "transparent",
+                     limits = c(0, p99_max), breaks = p99_breaks,
+                     oob = scales::squish),
+  VAR_LABELS_SHORT[["eke_p99"]]
+)
+ggsave(file.path(fig_dir, "Fig06_solo_EKE_P99.png"),
+       p_solo_p99, width = 8, height = 8, dpi = 300, bg = "white")
 ggsave(file.path(fig_dir, "Fig06b1_P95MeanRatio_Polar.png"),
        p6b_ratio, width = 8, height = 8, dpi = 300, bg = "white")
 ggsave(file.path(fig_dir, "Fig06b2_ExceedFreq_Polar.png"),
@@ -2235,11 +2362,11 @@ storm_df_decade <- storm_df %>%
       year >= 1990 & year < 2000 ~ "1990-1999",
       year >= 2000 & year < 2010 ~ "2000-2009",
       year >= 2010 & year < 2020 ~ "2010-2019",
-      year >= 2020              ~ "2020-2024"
+      year >= 2020              ~ "2020-2025"
     ),
     decade = factor(decade, levels = c(
       "1958-1969", "1970-1979", "1980-1989", "1990-1999",
-      "2000-2009", "2010-2019", "2020-2024"
+      "2000-2009", "2010-2019", "2020-2025"
     ))
   )
 
