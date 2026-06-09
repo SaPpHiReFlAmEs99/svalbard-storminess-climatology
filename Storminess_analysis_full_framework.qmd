@@ -941,7 +941,6 @@ cat("Verification: Exceedance Frequency During Reference Period\n")
 cat(rep("-", 40), "\n\n")
 
 if ("exceed_p95_freq" %in% names(storm_df)) {
- # Filter to reference period (1981-2010)
  ref_period_idx <- storm_df$year >= REFERENCE_PERIOD[1] & 
                    storm_df$year <= REFERENCE_PERIOD[2]
  
@@ -3074,28 +3073,39 @@ get_block_length <- function(x) {
 }
 
 # ── Moving Blocks Bootstrap 95% CI on Sen's slope ─────────────────────────
-# tsboot() (boot package) resamples fixed-length contiguous blocks, preserving
-# within-block autocorrelation structure (Künsch 1989).
-# Percentile CI from empirical bootstrap distribution: no normality assumed.
-# N_BOOT and ALPHA are defined in the setup chunk.
-mbb_ci <- function(x, b) {
-  set.seed(42)   # reproducibility
+# WHY: A CI for the slope must describe sampling variability of the slope
+# ESTIMATE, so each bootstrap replicate must preserve the time ordering and
+# recompute the slope on the true time axis. We therefore (a) fit Sen's slope
+# + an intercept on the real data, (b) block-resample the RESIDUALS (the
+# quantity whose autocorrelation we want to retain), (c) re-impose the fitted
+# trend on the original years, and (d) recompute Sen's slope. The resulting
+# distribution is centered on beta_hat, and its percentiles form a valid CI.
+
+mbb_ci <- function(x, b, years = seq_along(x)) {
+  n     <- length(x)
+  t     <- years - mean(years)                 # centred time axis (numerical stability)
+  beta  <- sen_slope(x)                         # point estimate (per time unit)
+  # Theil-Sen intercept (median of x_i - beta * t_i), the standard companion estimator
+  alpha <- median(x - beta * t)
+  resid <- x - (alpha + beta * t)               # residuals carry the autocorrelation
+
+  # Block-resample residuals with fixed block length b (Kuensch 1989).
+  # tsboot(sim="fixed") on the RESIDUALS is correct here, because residuals are
+  # (approximately) trend-free and we are bootstrapping their dependence structure.
+  set.seed(42)
   boot_res <- tsboot(
-    tseries   = x,
-    statistic = function(d, ...) sen_slope(d),
-    R         = N_BOOT,
-    l         = b,
-    sim       = "fixed"
+    tseries   = resid,
+    statistic = function(r_star, ...) {
+      x_star <- alpha + beta * t + r_star       # rebuild on the ORIGINAL time axis
+      sen_slope(x_star)
+    },
+    R   = N_BOOT,
+    l   = b,
+    sim = "fixed"
   )
-  ci <- quantile(boot_res$t,
-                 probs = c(ALPHA / 2, 1 - ALPHA / 2),
-                 na.rm = TRUE)
-  list(
-    lower     = unname(ci[1]),
-    upper     = unname(ci[2]),
-    b_used    = b,
-    boot_dist = as.vector(boot_res$t)
-  )
+  ci <- quantile(boot_res$t, probs = c(ALPHA/2, 1 - ALPHA/2), na.rm = TRUE)
+  list(lower = unname(ci[1]), upper = unname(ci[2]),
+       b_used = b, boot_dist = as.vector(boot_res$t))
 }
 ```
 
@@ -4558,4 +4568,4 @@ cat(sprintf("  Results: %s\n", RESULTS_FILE))
 cat(sprintf("  Variables: %s\n", paste(names(spatial_results), collapse = ", ")))
 cat(sprintf("  Figures: %s\n", FIG_PHASE3))
 cat(rep("=", 70), "\n")
-```
+```

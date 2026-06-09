@@ -467,15 +467,15 @@ window.Quarto = {
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Project root:     %s</span><span class="sc">\n</span><span class="st">"</span>, here<span class="sc">::</span><span class="fu">here</span>()))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
-Project root:     C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology</code></pre>
+Project root:     C:/Users/franc/Documents/svalbard-storminess-climatology</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Data directory:   %s</span><span class="sc">\n</span><span class="st">"</span>, DATA_DIRECTORY))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Data directory:   C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Data/processed</code></pre>
+<pre><code>Data directory:   C:/Users/franc/Documents/svalbard-storminess-climatology/Data/processed</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Figures root:     %s</span><span class="sc">\n</span><span class="st">"</span>, FIGURES_DIR))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Figures root:     C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures</code></pre>
+<pre><code>Figures root:     C:/Users/franc/Documents/svalbard-storminess-climatology/Figures</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Analysis period:  Dec %d – Dec %d (817 months)</span><span class="sc">\n</span><span class="st">"</span>,</span>
 <span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>            ANALYSIS_START_YEAR, ANALYSIS_END_YEAR))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -627,7 +627,7 @@ Project root:     C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-sto
 </div>
 <div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">glue</span>(<span class="st">"  {METRICS_FILE}</span><span class="sc">\n\n</span><span class="st">"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Data/processed/ERA5_storminess_metrics_monthly.nc</code></pre>
+<pre><code>C:/Users/franc/Documents/svalbard-storminess-climatology/Data/processed/ERA5_storminess_metrics_monthly.nc</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Open NetCDF and inspect structure ---</span></span>
 <span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>nc <span class="ot">&lt;-</span> <span class="fu">nc_open</span>(METRICS_FILE)</span>
@@ -1289,26 +1289,25 @@ Expected (by definition of P95): ~0.05 (5%)
 <pre><code>- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - </code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb128"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb128-1"><a href="#cb128-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="st">"exceed_p95_freq"</span> <span class="sc">%in%</span> <span class="fu">names</span>(storm_df)) {</span>
-<span id="cb128-2"><a href="#cb128-2" aria-hidden="true" tabindex="-1"></a> <span class="co"># Filter to reference period (1981-2010)</span></span>
-<span id="cb128-3"><a href="#cb128-3" aria-hidden="true" tabindex="-1"></a> ref_period_idx <span class="ot">&lt;-</span> storm_df<span class="sc">$</span>year <span class="sc">&gt;=</span> REFERENCE_PERIOD[<span class="dv">1</span>] <span class="sc">&amp;</span> </span>
-<span id="cb128-4"><a href="#cb128-4" aria-hidden="true" tabindex="-1"></a>                   storm_df<span class="sc">$</span>year <span class="sc">&lt;=</span> REFERENCE_PERIOD[<span class="dv">2</span>]</span>
-<span id="cb128-5"><a href="#cb128-5" aria-hidden="true" tabindex="-1"></a> </span>
-<span id="cb128-6"><a href="#cb128-6" aria-hidden="true" tabindex="-1"></a> ref_exceed_freq <span class="ot">&lt;-</span> <span class="fu">mean</span>(storm_df<span class="sc">$</span>exceed_p95_freq[ref_period_idx], <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb128-7"><a href="#cb128-7" aria-hidden="true" tabindex="-1"></a> </span>
-<span id="cb128-8"><a href="#cb128-8" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Reference period: %d-%d</span><span class="sc">\n</span><span class="st">"</span>, REFERENCE_PERIOD[<span class="dv">1</span>], REFERENCE_PERIOD[<span class="dv">2</span>]))</span>
-<span id="cb128-9"><a href="#cb128-9" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Mean exceedance frequency: %.4f (%.2f%%)</span><span class="sc">\n</span><span class="st">"</span>, </span>
-<span id="cb128-10"><a href="#cb128-10" aria-hidden="true" tabindex="-1"></a>             ref_exceed_freq, ref_exceed_freq <span class="sc">*</span> <span class="dv">100</span>))</span>
-<span id="cb128-11"><a href="#cb128-11" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Expected (by definition of P95): ~0.05 (5%%)</span><span class="sc">\n</span><span class="st">"</span>))</span>
-<span id="cb128-12"><a href="#cb128-12" aria-hidden="true" tabindex="-1"></a> </span>
-<span id="cb128-13"><a href="#cb128-13" aria-hidden="true" tabindex="-1"></a> <span class="cf">if</span> (<span class="fu">abs</span>(ref_exceed_freq <span class="sc">-</span> <span class="fl">0.05</span>) <span class="sc">&lt;</span> <span class="fl">0.01</span>) {</span>
-<span id="cb128-14"><a href="#cb128-14" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cat</span>(<span class="st">"✓ VERIFICATION PASSED: Exceedance frequency is approximately 5%%</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb128-15"><a href="#cb128-15" aria-hidden="true" tabindex="-1"></a> } <span class="cf">else</span> {</span>
-<span id="cb128-16"><a href="#cb128-16" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cat</span>(<span class="st">"⚠ WARNING: Exceedance frequency deviates from expected 5%%</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb128-17"><a href="#cb128-17" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cat</span>(<span class="st">"  This may indicate an issue with the P95 climatology calculation</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb128-18"><a href="#cb128-18" aria-hidden="true" tabindex="-1"></a> }</span>
-<span id="cb128-19"><a href="#cb128-19" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
-<span id="cb128-20"><a href="#cb128-20" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="st">"  (exceed_p95_freq not available for verification)</span><span class="sc">\n</span><span class="st">"</span>)</span>
-<span id="cb128-21"><a href="#cb128-21" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb128-2"><a href="#cb128-2" aria-hidden="true" tabindex="-1"></a> ref_period_idx <span class="ot">&lt;-</span> storm_df<span class="sc">$</span>year <span class="sc">&gt;=</span> REFERENCE_PERIOD[<span class="dv">1</span>] <span class="sc">&amp;</span> </span>
+<span id="cb128-3"><a href="#cb128-3" aria-hidden="true" tabindex="-1"></a>                   storm_df<span class="sc">$</span>year <span class="sc">&lt;=</span> REFERENCE_PERIOD[<span class="dv">2</span>]</span>
+<span id="cb128-4"><a href="#cb128-4" aria-hidden="true" tabindex="-1"></a> </span>
+<span id="cb128-5"><a href="#cb128-5" aria-hidden="true" tabindex="-1"></a> ref_exceed_freq <span class="ot">&lt;-</span> <span class="fu">mean</span>(storm_df<span class="sc">$</span>exceed_p95_freq[ref_period_idx], <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb128-6"><a href="#cb128-6" aria-hidden="true" tabindex="-1"></a> </span>
+<span id="cb128-7"><a href="#cb128-7" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Reference period: %d-%d</span><span class="sc">\n</span><span class="st">"</span>, REFERENCE_PERIOD[<span class="dv">1</span>], REFERENCE_PERIOD[<span class="dv">2</span>]))</span>
+<span id="cb128-8"><a href="#cb128-8" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Mean exceedance frequency: %.4f (%.2f%%)</span><span class="sc">\n</span><span class="st">"</span>, </span>
+<span id="cb128-9"><a href="#cb128-9" aria-hidden="true" tabindex="-1"></a>             ref_exceed_freq, ref_exceed_freq <span class="sc">*</span> <span class="dv">100</span>))</span>
+<span id="cb128-10"><a href="#cb128-10" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Expected (by definition of P95): ~0.05 (5%%)</span><span class="sc">\n</span><span class="st">"</span>))</span>
+<span id="cb128-11"><a href="#cb128-11" aria-hidden="true" tabindex="-1"></a> </span>
+<span id="cb128-12"><a href="#cb128-12" aria-hidden="true" tabindex="-1"></a> <span class="cf">if</span> (<span class="fu">abs</span>(ref_exceed_freq <span class="sc">-</span> <span class="fl">0.05</span>) <span class="sc">&lt;</span> <span class="fl">0.01</span>) {</span>
+<span id="cb128-13"><a href="#cb128-13" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cat</span>(<span class="st">"✓ VERIFICATION PASSED: Exceedance frequency is approximately 5%%</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb128-14"><a href="#cb128-14" aria-hidden="true" tabindex="-1"></a> } <span class="cf">else</span> {</span>
+<span id="cb128-15"><a href="#cb128-15" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cat</span>(<span class="st">"⚠ WARNING: Exceedance frequency deviates from expected 5%%</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb128-16"><a href="#cb128-16" aria-hidden="true" tabindex="-1"></a>   <span class="fu">cat</span>(<span class="st">"  This may indicate an issue with the P95 climatology calculation</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb128-17"><a href="#cb128-17" aria-hidden="true" tabindex="-1"></a> }</span>
+<span id="cb128-18"><a href="#cb128-18" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb128-19"><a href="#cb128-19" aria-hidden="true" tabindex="-1"></a> <span class="fu">cat</span>(<span class="st">"  (exceed_p95_freq not available for verification)</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb128-20"><a href="#cb128-20" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Reference period: 1961-1990
 Mean exceedance frequency: 0.0500 (5.00%)
@@ -1845,12 +1844,12 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb182-39"><a href="#cb182-39" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb182-40"><a href="#cb182-40" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Saved to: %s</span><span class="sc">\n</span><span class="st">"</span>, PHASE1_DATA))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Saved to: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Data/processed/analysis_ready/Phase1_Prepared_Data.RData</code></pre>
+<pre><code>Saved to: C:/Users/franc/Documents/svalbard-storminess-climatology/Data/processed/analysis_ready/Phase1_Prepared_Data.RData</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb184"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb184-1"><a href="#cb184-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(storm_df, <span class="fu">file.path</span>(OUTPUT_DATA_DIR, <span class="st">"storm_metrics_panarctic_monthly.csv"</span>))</span>
 <span id="cb184-2"><a href="#cb184-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"Saved CSV: %s</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">file.path</span>(OUTPUT_DATA_DIR, <span class="st">"storm_metrics_panarctic_monthly.csv"</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Saved CSV: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Data/processed/analysis_ready/storm_metrics_panarctic_monthly.csv</code></pre>
+<pre><code>Saved CSV: C:/Users/franc/Documents/svalbard-storminess-climatology/Data/processed/analysis_ready/storm_metrics_panarctic_monthly.csv</code></pre>
 </div>
 </div>
 <div class="cell">
@@ -2473,77 +2472,86 @@ eke_budget       0.724          0.071             10.252   817   372.153        
 <span id="cb230-9"><a href="#cb230-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.margin       =</span> <span class="fu">margin</span>(<span class="dv">10</span>, <span class="dv">15</span>, <span class="dv">10</span>, <span class="dv">15</span>)</span>
 <span id="cb230-10"><a href="#cb230-10" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb230-11"><a href="#cb230-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-12"><a href="#cb230-12" aria-hidden="true" tabindex="-1"></a>eke_scale_syn_p95 <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
+<span id="cb230-12"><a href="#cb230-12" aria-hidden="true" tabindex="-1"></a>eke_scale_syn <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
 <span id="cb230-13"><a href="#cb230-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">name     =</span> <span class="fu">expression</span>(<span class="fu">atop</span>(<span class="st">"EKE"</span>, <span class="st">"[m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"]"</span>)),</span>
 <span id="cb230-14"><a href="#cb230-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">option   =</span> <span class="st">"C"</span>,</span>
 <span id="cb230-15"><a href="#cb230-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">na.value =</span> <span class="st">"transparent"</span>,</span>
-<span id="cb230-16"><a href="#cb230-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, syn_p95_max),</span>
-<span id="cb230-17"><a href="#cb230-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> syn_p95_breaks,</span>
+<span id="cb230-16"><a href="#cb230-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, syn_max),</span>
+<span id="cb230-17"><a href="#cb230-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> syn_breaks,</span>
 <span id="cb230-18"><a href="#cb230-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">oob      =</span> scales<span class="sc">::</span>squish</span>
 <span id="cb230-19"><a href="#cb230-19" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb230-20"><a href="#cb230-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-21"><a href="#cb230-21" aria-hidden="true" tabindex="-1"></a>eke_scale_p90 <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
+<span id="cb230-21"><a href="#cb230-21" aria-hidden="true" tabindex="-1"></a>eke_scale_p95_fig6a <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
 <span id="cb230-22"><a href="#cb230-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">name     =</span> <span class="fu">expression</span>(<span class="fu">atop</span>(<span class="st">"EKE"</span>, <span class="st">"[m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"]"</span>)),</span>
 <span id="cb230-23"><a href="#cb230-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">option   =</span> <span class="st">"C"</span>,</span>
 <span id="cb230-24"><a href="#cb230-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">na.value =</span> <span class="st">"transparent"</span>,</span>
-<span id="cb230-25"><a href="#cb230-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, p90_max),</span>
-<span id="cb230-26"><a href="#cb230-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> p90_breaks,</span>
+<span id="cb230-25"><a href="#cb230-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, p95_max),</span>
+<span id="cb230-26"><a href="#cb230-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> p95_breaks,</span>
 <span id="cb230-27"><a href="#cb230-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">oob      =</span> scales<span class="sc">::</span>squish</span>
 <span id="cb230-28"><a href="#cb230-28" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb230-29"><a href="#cb230-29" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-30"><a href="#cb230-30" aria-hidden="true" tabindex="-1"></a>eke_scale_p99 <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
+<span id="cb230-30"><a href="#cb230-30" aria-hidden="true" tabindex="-1"></a>eke_scale_p90 <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
 <span id="cb230-31"><a href="#cb230-31" aria-hidden="true" tabindex="-1"></a>  <span class="at">name     =</span> <span class="fu">expression</span>(<span class="fu">atop</span>(<span class="st">"EKE"</span>, <span class="st">"[m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"]"</span>)),</span>
 <span id="cb230-32"><a href="#cb230-32" aria-hidden="true" tabindex="-1"></a>  <span class="at">option   =</span> <span class="st">"C"</span>,</span>
 <span id="cb230-33"><a href="#cb230-33" aria-hidden="true" tabindex="-1"></a>  <span class="at">na.value =</span> <span class="st">"transparent"</span>,</span>
-<span id="cb230-34"><a href="#cb230-34" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, p99_max),</span>
-<span id="cb230-35"><a href="#cb230-35" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> p99_breaks,</span>
+<span id="cb230-34"><a href="#cb230-34" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, p90_max),</span>
+<span id="cb230-35"><a href="#cb230-35" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> p90_breaks,</span>
 <span id="cb230-36"><a href="#cb230-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">oob      =</span> scales<span class="sc">::</span>squish</span>
 <span id="cb230-37"><a href="#cb230-37" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb230-38"><a href="#cb230-38" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-39"><a href="#cb230-39" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Panel (a): Mean EKE ---</span></span>
-<span id="cb230-40"><a href="#cb230-40" aria-hidden="true" tabindex="-1"></a>p6a_mean <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
-<span id="cb230-41"><a href="#cb230-41" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_stars</span>(<span class="at">data =</span> clim_polar_masked, <span class="fu">aes</span>(<span class="at">fill =</span> eke_synoptic_mean), <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
-<span id="cb230-42"><a href="#cb230-42" aria-hidden="true" tabindex="-1"></a>  eke_scale_syn_p95 <span class="sc">+</span></span>
-<span id="cb230-43"><a href="#cb230-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> world_polar, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
-<span id="cb230-44"><a href="#cb230-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> graticules, <span class="at">color =</span> <span class="st">"gray50"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.25</span>) <span class="sc">+</span></span>
-<span id="cb230-45"><a href="#cb230-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> inverse_mask, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">color =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb230-46"><a href="#cb230-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lat_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
-<span id="cb230-47"><a href="#cb230-47" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">hjust =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
-<span id="cb230-48"><a href="#cb230-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lon_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
-<span id="cb230-49"><a href="#cb230-49" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb230-50"><a href="#cb230-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius),</span>
-<span id="cb230-51"><a href="#cb230-51" aria-hidden="true" tabindex="-1"></a>           <span class="at">ylim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius), <span class="at">expand =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
-<span id="cb230-52"><a href="#cb230-52" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="fu">parse</span>(<span class="at">text =</span> <span class="fu">paste0</span>(<span class="st">'bold("(a) "~'</span>, VAR_LABELS_SHORT[[<span class="st">"eke_synoptic_mean"</span>]], <span class="st">')'</span>))[[<span class="dv">1</span>]]) <span class="sc">+</span></span>
-<span id="cb230-53"><a href="#cb230-53" aria-hidden="true" tabindex="-1"></a>  panel_theme</span>
-<span id="cb230-54"><a href="#cb230-54" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-55"><a href="#cb230-55" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Panel (b): P95 EKE ---</span></span>
-<span id="cb230-56"><a href="#cb230-56" aria-hidden="true" tabindex="-1"></a>p6a_p95 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
-<span id="cb230-57"><a href="#cb230-57" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_stars</span>(<span class="at">data =</span> clim_polar_masked, <span class="fu">aes</span>(<span class="at">fill =</span> eke_p95), <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
-<span id="cb230-58"><a href="#cb230-58" aria-hidden="true" tabindex="-1"></a>  eke_scale_syn_p95 <span class="sc">+</span></span>
-<span id="cb230-59"><a href="#cb230-59" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> world_polar, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
-<span id="cb230-60"><a href="#cb230-60" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> graticules, <span class="at">color =</span> <span class="st">"gray50"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.25</span>) <span class="sc">+</span></span>
-<span id="cb230-61"><a href="#cb230-61" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> inverse_mask, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">color =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
-<span id="cb230-62"><a href="#cb230-62" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lat_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
-<span id="cb230-63"><a href="#cb230-63" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">hjust =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
-<span id="cb230-64"><a href="#cb230-64" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lon_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
-<span id="cb230-65"><a href="#cb230-65" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb230-66"><a href="#cb230-66" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius),</span>
-<span id="cb230-67"><a href="#cb230-67" aria-hidden="true" tabindex="-1"></a>           <span class="at">ylim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius), <span class="at">expand =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
-<span id="cb230-68"><a href="#cb230-68" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="fu">parse</span>(<span class="at">text =</span> <span class="fu">paste0</span>(<span class="st">'bold("(b) "~'</span>, VAR_LABELS_SHORT[[<span class="st">"eke_p95"</span>]], <span class="st">')'</span>))[[<span class="dv">1</span>]]) <span class="sc">+</span></span>
-<span id="cb230-69"><a href="#cb230-69" aria-hidden="true" tabindex="-1"></a>  panel_theme</span>
-<span id="cb230-70"><a href="#cb230-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-71"><a href="#cb230-71" aria-hidden="true" tabindex="-1"></a>fig6a <span class="ot">&lt;-</span> (p6a_mean <span class="sc">|</span> p6a_p95) <span class="sc">+</span></span>
-<span id="cb230-72"><a href="#cb230-72" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_layout</span>(<span class="at">guides =</span> <span class="st">"collect"</span>) <span class="sc">+</span></span>
-<span id="cb230-73"><a href="#cb230-73" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_annotation</span>(</span>
-<span id="cb230-74"><a href="#cb230-74" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Spatial Climatology of EKE (1958–2025)"</span>,</span>
-<span id="cb230-75"><a href="#cb230-75" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Shared colour scale"</span>,</span>
-<span id="cb230-76"><a href="#cb230-76" aria-hidden="true" tabindex="-1"></a>    <span class="at">theme =</span> <span class="fu">theme</span>(</span>
-<span id="cb230-77"><a href="#cb230-77" aria-hidden="true" tabindex="-1"></a>      <span class="at">plot.title    =</span> <span class="fu">element_text</span>(<span class="at">size =</span> TITLE_SIZE, <span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">hjust =</span> <span class="fl">0.5</span>),</span>
-<span id="cb230-78"><a href="#cb230-78" aria-hidden="true" tabindex="-1"></a>      <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> SUBTITLE_SIZE, <span class="at">hjust =</span> <span class="fl">0.5</span>)</span>
-<span id="cb230-79"><a href="#cb230-79" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb230-80"><a href="#cb230-80" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb230-81"><a href="#cb230-81" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb230-82"><a href="#cb230-82" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fig6a)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb230-39"><a href="#cb230-39" aria-hidden="true" tabindex="-1"></a>eke_scale_p99 <span class="ot">&lt;-</span> <span class="fu">scale_fill_viridis</span>(</span>
+<span id="cb230-40"><a href="#cb230-40" aria-hidden="true" tabindex="-1"></a>  <span class="at">name     =</span> <span class="fu">expression</span>(<span class="fu">atop</span>(<span class="st">"EKE"</span>, <span class="st">"[m"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"/s"</span><span class="sc">^</span><span class="dv">2</span><span class="sc">*</span><span class="st">"]"</span>)),</span>
+<span id="cb230-41"><a href="#cb230-41" aria-hidden="true" tabindex="-1"></a>  <span class="at">option   =</span> <span class="st">"C"</span>,</span>
+<span id="cb230-42"><a href="#cb230-42" aria-hidden="true" tabindex="-1"></a>  <span class="at">na.value =</span> <span class="st">"transparent"</span>,</span>
+<span id="cb230-43"><a href="#cb230-43" aria-hidden="true" tabindex="-1"></a>  <span class="at">limits   =</span> <span class="fu">c</span>(<span class="dv">0</span>, p99_max),</span>
+<span id="cb230-44"><a href="#cb230-44" aria-hidden="true" tabindex="-1"></a>  <span class="at">breaks   =</span> p99_breaks,</span>
+<span id="cb230-45"><a href="#cb230-45" aria-hidden="true" tabindex="-1"></a>  <span class="at">oob      =</span> scales<span class="sc">::</span>squish</span>
+<span id="cb230-46"><a href="#cb230-46" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb230-47"><a href="#cb230-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb230-48"><a href="#cb230-48" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Panel (a): Mean EKE ---</span></span>
+<span id="cb230-49"><a href="#cb230-49" aria-hidden="true" tabindex="-1"></a>p6a_mean <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb230-50"><a href="#cb230-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_stars</span>(<span class="at">data =</span> clim_polar_masked, <span class="fu">aes</span>(<span class="at">fill =</span> eke_synoptic_mean), <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb230-51"><a href="#cb230-51" aria-hidden="true" tabindex="-1"></a>  eke_scale_syn <span class="sc">+</span></span>
+<span id="cb230-52"><a href="#cb230-52" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> world_polar, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
+<span id="cb230-53"><a href="#cb230-53" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> graticules, <span class="at">color =</span> <span class="st">"gray50"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.25</span>) <span class="sc">+</span></span>
+<span id="cb230-54"><a href="#cb230-54" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> inverse_mask, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">color =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb230-55"><a href="#cb230-55" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lat_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
+<span id="cb230-56"><a href="#cb230-56" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">hjust =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb230-57"><a href="#cb230-57" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lon_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
+<span id="cb230-58"><a href="#cb230-58" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb230-59"><a href="#cb230-59" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius),</span>
+<span id="cb230-60"><a href="#cb230-60" aria-hidden="true" tabindex="-1"></a>           <span class="at">ylim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius), <span class="at">expand =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb230-61"><a href="#cb230-61" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="fu">parse</span>(<span class="at">text =</span> <span class="fu">paste0</span>(<span class="st">'bold("(a) "~'</span>, VAR_LABELS_SHORT[[<span class="st">"eke_synoptic_mean"</span>]], <span class="st">')'</span>))[[<span class="dv">1</span>]]) <span class="sc">+</span></span>
+<span id="cb230-62"><a href="#cb230-62" aria-hidden="true" tabindex="-1"></a>  panel_theme</span>
+<span id="cb230-63"><a href="#cb230-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb230-64"><a href="#cb230-64" aria-hidden="true" tabindex="-1"></a><span class="co"># --- Panel (b): P95 EKE ---</span></span>
+<span id="cb230-65"><a href="#cb230-65" aria-hidden="true" tabindex="-1"></a>p6a_p95 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb230-66"><a href="#cb230-66" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_stars</span>(<span class="at">data =</span> clim_polar_masked, <span class="fu">aes</span>(<span class="at">fill =</span> eke_p95), <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb230-67"><a href="#cb230-67" aria-hidden="true" tabindex="-1"></a>  eke_scale_p95_fig6a <span class="sc">+</span></span>
+<span id="cb230-68"><a href="#cb230-68" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> world_polar, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.2</span>) <span class="sc">+</span></span>
+<span id="cb230-69"><a href="#cb230-69" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> graticules, <span class="at">color =</span> <span class="st">"gray50"</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">linewidth =</span> <span class="fl">0.25</span>) <span class="sc">+</span></span>
+<span id="cb230-70"><a href="#cb230-70" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf</span>(<span class="at">data =</span> inverse_mask, <span class="at">fill =</span> <span class="st">"white"</span>, <span class="at">color =</span> <span class="cn">NA</span>) <span class="sc">+</span></span>
+<span id="cb230-71"><a href="#cb230-71" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lat_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
+<span id="cb230-72"><a href="#cb230-72" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">hjust =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb230-73"><a href="#cb230-73" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_sf_text</span>(<span class="at">data =</span> lon_labels, <span class="fu">aes</span>(<span class="at">label =</span> label),</span>
+<span id="cb230-74"><a href="#cb230-74" aria-hidden="true" tabindex="-1"></a>               <span class="at">size =</span> <span class="fl">2.5</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb230-75"><a href="#cb230-75" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_sf</span>(<span class="at">xlim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius),</span>
+<span id="cb230-76"><a href="#cb230-76" aria-hidden="true" tabindex="-1"></a>           <span class="at">ylim =</span> <span class="fu">c</span>(<span class="sc">-</span>plot_radius, plot_radius), <span class="at">expand =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb230-77"><a href="#cb230-77" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="fu">parse</span>(<span class="at">text =</span> <span class="fu">paste0</span>(<span class="st">'bold("(b) "~'</span>, VAR_LABELS_SHORT[[<span class="st">"eke_p95"</span>]], <span class="st">')'</span>))[[<span class="dv">1</span>]]) <span class="sc">+</span></span>
+<span id="cb230-78"><a href="#cb230-78" aria-hidden="true" tabindex="-1"></a>  panel_theme</span>
+<span id="cb230-79"><a href="#cb230-79" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb230-80"><a href="#cb230-80" aria-hidden="true" tabindex="-1"></a>fig6a <span class="ot">&lt;-</span> (p6a_mean <span class="sc">|</span> p6a_p95) <span class="sc">+</span></span>
+<span id="cb230-81"><a href="#cb230-81" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_layout</span>() <span class="sc">+</span></span>
+<span id="cb230-82"><a href="#cb230-82" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_annotation</span>(</span>
+<span id="cb230-83"><a href="#cb230-83" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Spatial Climatology of EKE (1958–2025)"</span>,</span>
+<span id="cb230-84"><a href="#cb230-84" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Independent colour scales"</span>,</span>
+<span id="cb230-85"><a href="#cb230-85" aria-hidden="true" tabindex="-1"></a>    <span class="at">theme =</span> <span class="fu">theme</span>(</span>
+<span id="cb230-86"><a href="#cb230-86" aria-hidden="true" tabindex="-1"></a>      <span class="at">plot.title    =</span> <span class="fu">element_text</span>(<span class="at">size =</span> TITLE_SIZE, <span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">hjust =</span> <span class="fl">0.5</span>),</span>
+<span id="cb230-87"><a href="#cb230-87" aria-hidden="true" tabindex="-1"></a>      <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> SUBTITLE_SIZE, <span class="at">hjust =</span> <span class="fl">0.5</span>)</span>
+<span id="cb230-88"><a href="#cb230-88" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb230-89"><a href="#cb230-89" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb230-90"><a href="#cb230-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb230-91"><a href="#cb230-91" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fig6a)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -2997,11 +3005,11 @@ exceed_p95_freq               0.984   0.985   0.983   0.969           1.000</cod
 <span id="cb254-8"><a href="#cb254-8" aria-hidden="true" tabindex="-1"></a>      year <span class="sc">&gt;=</span> <span class="dv">1990</span> <span class="sc">&amp;</span> year <span class="sc">&lt;</span> <span class="dv">2000</span> <span class="sc">~</span> <span class="st">"1990-1999"</span>,</span>
 <span id="cb254-9"><a href="#cb254-9" aria-hidden="true" tabindex="-1"></a>      year <span class="sc">&gt;=</span> <span class="dv">2000</span> <span class="sc">&amp;</span> year <span class="sc">&lt;</span> <span class="dv">2010</span> <span class="sc">~</span> <span class="st">"2000-2009"</span>,</span>
 <span id="cb254-10"><a href="#cb254-10" aria-hidden="true" tabindex="-1"></a>      year <span class="sc">&gt;=</span> <span class="dv">2010</span> <span class="sc">&amp;</span> year <span class="sc">&lt;</span> <span class="dv">2020</span> <span class="sc">~</span> <span class="st">"2010-2019"</span>,</span>
-<span id="cb254-11"><a href="#cb254-11" aria-hidden="true" tabindex="-1"></a>      year <span class="sc">&gt;=</span> <span class="dv">2020</span>              <span class="sc">~</span> <span class="st">"2020-2024"</span></span>
+<span id="cb254-11"><a href="#cb254-11" aria-hidden="true" tabindex="-1"></a>      year <span class="sc">&gt;=</span> <span class="dv">2020</span>              <span class="sc">~</span> <span class="st">"2020-2025"</span></span>
 <span id="cb254-12"><a href="#cb254-12" aria-hidden="true" tabindex="-1"></a>    ),</span>
 <span id="cb254-13"><a href="#cb254-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">decade =</span> <span class="fu">factor</span>(decade, <span class="at">levels =</span> <span class="fu">c</span>(</span>
 <span id="cb254-14"><a href="#cb254-14" aria-hidden="true" tabindex="-1"></a>      <span class="st">"1958-1969"</span>, <span class="st">"1970-1979"</span>, <span class="st">"1980-1989"</span>, <span class="st">"1990-1999"</span>,</span>
-<span id="cb254-15"><a href="#cb254-15" aria-hidden="true" tabindex="-1"></a>      <span class="st">"2000-2009"</span>, <span class="st">"2010-2019"</span>, <span class="st">"2020-2024"</span></span>
+<span id="cb254-15"><a href="#cb254-15" aria-hidden="true" tabindex="-1"></a>      <span class="st">"2000-2009"</span>, <span class="st">"2010-2019"</span>, <span class="st">"2020-2025"</span></span>
 <span id="cb254-16"><a href="#cb254-16" aria-hidden="true" tabindex="-1"></a>    ))</span>
 <span id="cb254-17"><a href="#cb254-17" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb254-18"><a href="#cb254-18" aria-hidden="true" tabindex="-1"></a></span>
@@ -3140,7 +3148,7 @@ exceed_p95_freq               0.984   0.985   0.983   0.969           1.000</cod
 <div class="sourceCode cell-code" id="cb284"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb284-1"><a href="#cb284-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">All figures saved to: %s</span><span class="sc">\n</span><span class="st">"</span>, fig_dir))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
-All figures saved to: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures/Phase1_Diagnostics</code></pre>
+All figures saved to: C:/Users/franc/Documents/svalbard-storminess-climatology/Figures/Phase1_Diagnostics</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb286"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb286-1"><a href="#cb286-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Key findings from diagnostic plots:</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -3719,7 +3727,7 @@ Generated Figures:</code></pre>
 <div class="sourceCode cell-code" id="cb386"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb386-1"><a href="#cb386-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">All figures saved to: %s</span><span class="sc">\n</span><span class="st">"</span>, fig_dir))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
-All figures saved to: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures/Phase2_Energy_Budget</code></pre>
+All figures saved to: C:/Users/franc/Documents/svalbard-storminess-climatology/Figures/Phase2_Energy_Budget</code></pre>
 </div>
 </div>
 </section>
@@ -3928,29 +3936,40 @@ All figures saved to: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard
 <span id="cb413-48"><a href="#cb413-48" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb413-49"><a href="#cb413-49" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb413-50"><a href="#cb413-50" aria-hidden="true" tabindex="-1"></a><span class="co"># ── Moving Blocks Bootstrap 95% CI on Sen's slope ─────────────────────────</span></span>
-<span id="cb413-51"><a href="#cb413-51" aria-hidden="true" tabindex="-1"></a><span class="co"># tsboot() (boot package) resamples fixed-length contiguous blocks, preserving</span></span>
-<span id="cb413-52"><a href="#cb413-52" aria-hidden="true" tabindex="-1"></a><span class="co"># within-block autocorrelation structure (Künsch 1989).</span></span>
-<span id="cb413-53"><a href="#cb413-53" aria-hidden="true" tabindex="-1"></a><span class="co"># Percentile CI from empirical bootstrap distribution: no normality assumed.</span></span>
-<span id="cb413-54"><a href="#cb413-54" aria-hidden="true" tabindex="-1"></a><span class="co"># N_BOOT and ALPHA are defined in the setup chunk.</span></span>
-<span id="cb413-55"><a href="#cb413-55" aria-hidden="true" tabindex="-1"></a>mbb_ci <span class="ot">&lt;-</span> <span class="cf">function</span>(x, b) {</span>
-<span id="cb413-56"><a href="#cb413-56" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set.seed</span>(<span class="dv">42</span>)   <span class="co"># reproducibility</span></span>
-<span id="cb413-57"><a href="#cb413-57" aria-hidden="true" tabindex="-1"></a>  boot_res <span class="ot">&lt;-</span> <span class="fu">tsboot</span>(</span>
-<span id="cb413-58"><a href="#cb413-58" aria-hidden="true" tabindex="-1"></a>    <span class="at">tseries   =</span> x,</span>
-<span id="cb413-59"><a href="#cb413-59" aria-hidden="true" tabindex="-1"></a>    <span class="at">statistic =</span> <span class="cf">function</span>(d, ...) <span class="fu">sen_slope</span>(d),</span>
-<span id="cb413-60"><a href="#cb413-60" aria-hidden="true" tabindex="-1"></a>    <span class="at">R         =</span> N_BOOT,</span>
-<span id="cb413-61"><a href="#cb413-61" aria-hidden="true" tabindex="-1"></a>    <span class="at">l         =</span> b,</span>
-<span id="cb413-62"><a href="#cb413-62" aria-hidden="true" tabindex="-1"></a>    <span class="at">sim       =</span> <span class="st">"fixed"</span></span>
-<span id="cb413-63"><a href="#cb413-63" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb413-64"><a href="#cb413-64" aria-hidden="true" tabindex="-1"></a>  ci <span class="ot">&lt;-</span> <span class="fu">quantile</span>(boot_res<span class="sc">$</span>t,</span>
-<span id="cb413-65"><a href="#cb413-65" aria-hidden="true" tabindex="-1"></a>                 <span class="at">probs =</span> <span class="fu">c</span>(ALPHA <span class="sc">/</span> <span class="dv">2</span>, <span class="dv">1</span> <span class="sc">-</span> ALPHA <span class="sc">/</span> <span class="dv">2</span>),</span>
-<span id="cb413-66"><a href="#cb413-66" aria-hidden="true" tabindex="-1"></a>                 <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb413-67"><a href="#cb413-67" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(</span>
-<span id="cb413-68"><a href="#cb413-68" aria-hidden="true" tabindex="-1"></a>    <span class="at">lower     =</span> <span class="fu">unname</span>(ci[<span class="dv">1</span>]),</span>
-<span id="cb413-69"><a href="#cb413-69" aria-hidden="true" tabindex="-1"></a>    <span class="at">upper     =</span> <span class="fu">unname</span>(ci[<span class="dv">2</span>]),</span>
-<span id="cb413-70"><a href="#cb413-70" aria-hidden="true" tabindex="-1"></a>    <span class="at">b_used    =</span> b,</span>
-<span id="cb413-71"><a href="#cb413-71" aria-hidden="true" tabindex="-1"></a>    <span class="at">boot_dist =</span> <span class="fu">as.vector</span>(boot_res<span class="sc">$</span>t)</span>
-<span id="cb413-72"><a href="#cb413-72" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb413-73"><a href="#cb413-73" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb413-51"><a href="#cb413-51" aria-hidden="true" tabindex="-1"></a><span class="co"># WHY: A CI for the slope must describe sampling variability of the slope</span></span>
+<span id="cb413-52"><a href="#cb413-52" aria-hidden="true" tabindex="-1"></a><span class="co"># ESTIMATE, so each bootstrap replicate must preserve the time ordering and</span></span>
+<span id="cb413-53"><a href="#cb413-53" aria-hidden="true" tabindex="-1"></a><span class="co"># recompute the slope on the true time axis. We therefore (a) fit Sen's slope</span></span>
+<span id="cb413-54"><a href="#cb413-54" aria-hidden="true" tabindex="-1"></a><span class="co"># + an intercept on the real data, (b) block-resample the RESIDUALS (the</span></span>
+<span id="cb413-55"><a href="#cb413-55" aria-hidden="true" tabindex="-1"></a><span class="co"># quantity whose autocorrelation we want to retain), (c) re-impose the fitted</span></span>
+<span id="cb413-56"><a href="#cb413-56" aria-hidden="true" tabindex="-1"></a><span class="co"># trend on the original years, and (d) recompute Sen's slope. The resulting</span></span>
+<span id="cb413-57"><a href="#cb413-57" aria-hidden="true" tabindex="-1"></a><span class="co"># distribution is centered on beta_hat, and its percentiles form a valid CI.</span></span>
+<span id="cb413-58"><a href="#cb413-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb413-59"><a href="#cb413-59" aria-hidden="true" tabindex="-1"></a>mbb_ci <span class="ot">&lt;-</span> <span class="cf">function</span>(x, b, <span class="at">years =</span> <span class="fu">seq_along</span>(x)) {</span>
+<span id="cb413-60"><a href="#cb413-60" aria-hidden="true" tabindex="-1"></a>  n     <span class="ot">&lt;-</span> <span class="fu">length</span>(x)</span>
+<span id="cb413-61"><a href="#cb413-61" aria-hidden="true" tabindex="-1"></a>  t     <span class="ot">&lt;-</span> years <span class="sc">-</span> <span class="fu">mean</span>(years)                 <span class="co"># centred time axis (numerical stability)</span></span>
+<span id="cb413-62"><a href="#cb413-62" aria-hidden="true" tabindex="-1"></a>  beta  <span class="ot">&lt;-</span> <span class="fu">sen_slope</span>(x)                         <span class="co"># point estimate (per time unit)</span></span>
+<span id="cb413-63"><a href="#cb413-63" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Theil-Sen intercept (median of x_i - beta * t_i), the standard companion estimator</span></span>
+<span id="cb413-64"><a href="#cb413-64" aria-hidden="true" tabindex="-1"></a>  alpha <span class="ot">&lt;-</span> <span class="fu">median</span>(x <span class="sc">-</span> beta <span class="sc">*</span> t)</span>
+<span id="cb413-65"><a href="#cb413-65" aria-hidden="true" tabindex="-1"></a>  resid <span class="ot">&lt;-</span> x <span class="sc">-</span> (alpha <span class="sc">+</span> beta <span class="sc">*</span> t)               <span class="co"># residuals carry the autocorrelation</span></span>
+<span id="cb413-66"><a href="#cb413-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb413-67"><a href="#cb413-67" aria-hidden="true" tabindex="-1"></a>  <span class="co"># Block-resample residuals with fixed block length b (Kuensch 1989).</span></span>
+<span id="cb413-68"><a href="#cb413-68" aria-hidden="true" tabindex="-1"></a>  <span class="co"># tsboot(sim="fixed") on the RESIDUALS is correct here, because residuals are</span></span>
+<span id="cb413-69"><a href="#cb413-69" aria-hidden="true" tabindex="-1"></a>  <span class="co"># (approximately) trend-free and we are bootstrapping their dependence structure.</span></span>
+<span id="cb413-70"><a href="#cb413-70" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb413-71"><a href="#cb413-71" aria-hidden="true" tabindex="-1"></a>  boot_res <span class="ot">&lt;-</span> <span class="fu">tsboot</span>(</span>
+<span id="cb413-72"><a href="#cb413-72" aria-hidden="true" tabindex="-1"></a>    <span class="at">tseries   =</span> resid,</span>
+<span id="cb413-73"><a href="#cb413-73" aria-hidden="true" tabindex="-1"></a>    <span class="at">statistic =</span> <span class="cf">function</span>(r_star, ...) {</span>
+<span id="cb413-74"><a href="#cb413-74" aria-hidden="true" tabindex="-1"></a>      x_star <span class="ot">&lt;-</span> alpha <span class="sc">+</span> beta <span class="sc">*</span> t <span class="sc">+</span> r_star       <span class="co"># rebuild on the ORIGINAL time axis</span></span>
+<span id="cb413-75"><a href="#cb413-75" aria-hidden="true" tabindex="-1"></a>      <span class="fu">sen_slope</span>(x_star)</span>
+<span id="cb413-76"><a href="#cb413-76" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb413-77"><a href="#cb413-77" aria-hidden="true" tabindex="-1"></a>    <span class="at">R   =</span> N_BOOT,</span>
+<span id="cb413-78"><a href="#cb413-78" aria-hidden="true" tabindex="-1"></a>    <span class="at">l   =</span> b,</span>
+<span id="cb413-79"><a href="#cb413-79" aria-hidden="true" tabindex="-1"></a>    <span class="at">sim =</span> <span class="st">"fixed"</span></span>
+<span id="cb413-80"><a href="#cb413-80" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb413-81"><a href="#cb413-81" aria-hidden="true" tabindex="-1"></a>  ci <span class="ot">&lt;-</span> <span class="fu">quantile</span>(boot_res<span class="sc">$</span>t, <span class="at">probs =</span> <span class="fu">c</span>(ALPHA<span class="sc">/</span><span class="dv">2</span>, <span class="dv">1</span> <span class="sc">-</span> ALPHA<span class="sc">/</span><span class="dv">2</span>), <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb413-82"><a href="#cb413-82" aria-hidden="true" tabindex="-1"></a>  <span class="fu">list</span>(<span class="at">lower =</span> <span class="fu">unname</span>(ci[<span class="dv">1</span>]), <span class="at">upper =</span> <span class="fu">unname</span>(ci[<span class="dv">2</span>]),</span>
+<span id="cb413-83"><a href="#cb413-83" aria-hidden="true" tabindex="-1"></a>       <span class="at">b_used =</span> b, <span class="at">boot_dist =</span> <span class="fu">as.vector</span>(boot_res<span class="sc">$</span>t))</span>
+<span id="cb413-84"><a href="#cb413-84" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb414"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb414-1"><a href="#cb414-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
@@ -4044,42 +4063,42 @@ All figures saved to: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard
 <pre><code>  [eke_synoptic_mean]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0250/dec | p = 0.523 | CI [-0.0754, +0.0700] 
+    → slope = +0.0250/dec | p = 0.523 | CI [-0.0406, +0.1066] 
 
   [eke_p90]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0630/dec | p = 0.495 | CI [-0.1839, +0.1721] 
+    → slope = +0.0630/dec | p = 0.495 | CI [-0.0962, +0.2527] 
 
   [eke_p95]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0606/dec | p = 0.552 | CI [-0.2535, +0.2361] 
+    → slope = +0.0606/dec | p = 0.552 | CI [-0.1442, +0.3389] 
 
   [eke_p99]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0668/dec | p = 0.812 | CI [-0.4062, +0.3785] 
+    → slope = +0.0668/dec | p = 0.812 | CI [-0.2598, +0.5157] 
 
   [exceed_p95_freq]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0003/dec | p = 0.530 | CI [-0.0007, +0.0006] 
+    → slope = +0.0003/dec | p = 0.530 | CI [-0.0004, +0.0009] 
 
   [tke]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.1602/dec | p = 0.304 | CI [-0.2281, +0.2232] 
+    → slope = +0.1602/dec | p = 0.304 | CI [-0.0487, +0.3804] 
 
   [mke]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0131/dec | p = 0.880 | CI [-0.1261, +0.1165] 
+    → slope = +0.0131/dec | p = 0.880 | CI [-0.0967, +0.1471] 
 
   [eke_budget]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.1121/dec | p = 0.187 | CI [-0.1381, +0.1350] </code></pre>
+    → slope = +0.1121/dec | p = 0.187 | CI [-0.0408, +0.2322] </code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb422"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb422-1"><a href="#cb422-1" aria-hidden="true" tabindex="-1"></a>results_annual <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(results_list)</span>
 <span id="cb422-2"><a href="#cb422-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -4104,14 +4123,14 @@ All figures saved to: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard
 <span id="cb428-6"><a href="#cb428-6" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>                label      group mean_val slope_dec ci_lower ci_upper p_value
-    Mean EKE_synoptic Storminess  12.2718   0.02498 -0.07544  0.07003  0.5231
-              P90 EKE Storminess  29.4714   0.06303 -0.18392  0.17214  0.4953
-              P95 EKE Storminess  40.7421   0.06063 -0.25348  0.23614  0.5517
-              P99 EKE Storminess  66.3810   0.06680 -0.40620  0.37853  0.8118
- P95 Exceedance Freq. Storminess   0.0504   0.00026 -0.00067  0.00062  0.5302
-                  TKE     Energy  46.9259   0.16024 -0.22807  0.22324  0.3039
-                  MKE     Energy   9.5590   0.01315 -0.12613  0.11652  0.8796
-           EKE_budget     Energy  37.3669   0.11210 -0.13806  0.13503  0.1867
+    Mean EKE_synoptic Storminess  12.2718   0.02498 -0.04058  0.10661  0.5231
+              P90 EKE Storminess  29.4714   0.06303 -0.09618  0.25269  0.4953
+              P95 EKE Storminess  40.7421   0.06063 -0.14424  0.33893  0.5517
+              P99 EKE Storminess  66.3810   0.06680 -0.25979  0.51573  0.8118
+ P95 Exceedance Freq. Storminess   0.0504   0.00026 -0.00036  0.00089  0.5302
+                  TKE     Energy  46.9259   0.16024 -0.04871  0.38038  0.3039
+                  MKE     Energy   9.5590   0.01315 -0.09669  0.14714  0.8796
+           EKE_budget     Energy  37.3669   0.11210 -0.04080  0.23219  0.1867
  significant pct_change b_length
        FALSE       1.36        2
        FALSE       1.43        2
@@ -4495,168 +4514,168 @@ Significant trends (α = 0.05):  storminess 0/5  |  energy 0/3</code></pre>
   [eke_synoptic_mean]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.0566/dec | p = 0.443 | CI [-0.1466, +0.1412] 
+    → slope = -0.0566/dec | p = 0.443 | CI [-0.1984, +0.0868] 
 
   [eke_p90]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.1498/dec | p = 0.475 | CI [-0.3605, +0.3538] 
+    → slope = -0.1498/dec | p = 0.475 | CI [-0.5077, +0.2032] 
 
   [eke_p95]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.2320/dec | p = 0.400 | CI [-0.5257, +0.4928] 
+    → slope = -0.2320/dec | p = 0.400 | CI [-0.7410, +0.2465] 
 
   [eke_p99]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.4497/dec | p = 0.360 | CI [-0.8608, +0.7865] 
+    → slope = -0.4497/dec | p = 0.360 | CI [-1.2962, +0.3178] 
 
   [exceed_p95_freq]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.0005/dec | p = 0.455 | CI [-0.0013, +0.0013] 
+    → slope = -0.0005/dec | p = 0.455 | CI [-0.0018, +0.0007] 
 
   [tke]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.0711/dec | p = 0.676 | CI [-0.3413, +0.3649] 
+    → slope = -0.0711/dec | p = 0.676 | CI [-0.4072, +0.2937] 
 
   [mke]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.1796/dec | p = 0.260 | CI [-0.2656, +0.2755] 
+    → slope = -0.1796/dec | p = 0.260 | CI [-0.3884, +0.1388] 
 
   [eke_budget]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0493/dec | p = 0.755 | CI [-0.2771, +0.2838] 
+    → slope = +0.0493/dec | p = 0.755 | CI [-0.2254, +0.3319] 
 
 
 ── Season: MAM ──────────────────────────────────────
   [eke_synoptic_mean]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.1483/dec | p = 0.021 | CI [-0.1177, +0.1215] ✓ SIGNIFICANT
+    → slope = +0.1483/dec | p = 0.021 | CI [+0.0599, +0.2565] ✓ SIGNIFICANT
 
   [eke_p90]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.3631/dec | p = 0.016 | CI [-0.2802, +0.2911] ✓ SIGNIFICANT
+    → slope = +0.3631/dec | p = 0.016 | CI [+0.1453, +0.6037] ✓ SIGNIFICANT
 
   [eke_p95]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.4552/dec | p = 0.027 | CI [-0.3750, +0.3867] ✓ SIGNIFICANT
+    → slope = +0.4552/dec | p = 0.027 | CI [+0.1801, +0.8230] ✓ SIGNIFICANT
 
   [eke_p99]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.6658/dec | p = 0.063 | CI [-0.6485, +0.6308] 
+    → slope = +0.6658/dec | p = 0.063 | CI [+0.2062, +1.3653] 
 
   [exceed_p95_freq]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0012/dec | p = 0.022 | CI [-0.0010, +0.0010] ✓ SIGNIFICANT
+    → slope = +0.0012/dec | p = 0.022 | CI [+0.0005, +0.0021] ✓ SIGNIFICANT
 
   [tke]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.3823/dec | p = 0.042 | CI [-0.3129, +0.3117] ✓ SIGNIFICANT
+    → slope = +0.3823/dec | p = 0.042 | CI [+0.0967, +0.6864] ✓ SIGNIFICANT
 
   [mke]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.1784/dec | p = 0.078 | CI [-0.1911, +0.1899] 
+    → slope = +0.1784/dec | p = 0.078 | CI [-0.0155, +0.3654] 
 
   [eke_budget]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.1939/dec | p = 0.150 | CI [-0.2508, +0.2544] 
+    → slope = +0.1939/dec | p = 0.150 | CI [-0.0157, +0.4596] 
 
 
 ── Season: JJA ──────────────────────────────────────
   [eke_synoptic_mean]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0279/dec | p = 0.424 | CI [-0.0625, +0.0585] 
+    → slope = +0.0279/dec | p = 0.424 | CI [-0.0365, +0.0881] 
 
   [eke_p90]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0860/dec | p = 0.412 | CI [-0.1553, +0.1582] 
+    → slope = +0.0860/dec | p = 0.412 | CI [-0.0774, +0.2483] 
 
   [eke_p95]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0917/dec | p = 0.349 | CI [-0.2047, +0.2062] 
+    → slope = +0.0917/dec | p = 0.349 | CI [-0.1131, +0.3040] 
 
   [eke_p99]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.1996/dec | p = 0.287 | CI [-0.3254, +0.3063] 
+    → slope = +0.1996/dec | p = 0.287 | CI [-0.1105, +0.4991] 
 
   [exceed_p95_freq]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0004/dec | p = 0.210 | CI [-0.0005, +0.0005] 
+    → slope = +0.0004/dec | p = 0.210 | CI [-0.0001, +0.0009] 
 
   [tke]  N = 68
     Block length via pwsd()... b = 6 years
     MBB CI (R = 2000, b = 6)... done
-    → slope = +0.1768/dec | p = 0.112 | CI [-0.2447, +0.2452] 
+    → slope = +0.1768/dec | p = 0.112 | CI [-0.0441, +0.4102] 
 
   [mke]  N = 68
     Block length via pwsd()... b = 5 years
     MBB CI (R = 2000, b = 5)... done
-    → slope = +0.1356/dec | p = 0.069 | CI [-0.1430, +0.1391] 
+    → slope = +0.1356/dec | p = 0.069 | CI [+0.0118, +0.2577] 
 
   [eke_budget]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0544/dec | p = 0.544 | CI [-0.1366, +0.1359] 
+    → slope = +0.0544/dec | p = 0.544 | CI [-0.0682, +0.2084] 
 
 
 ── Season: SON ──────────────────────────────────────
   [eke_synoptic_mean]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0017/dec | p = 0.979 | CI [-0.1068, +0.0949] 
+    → slope = +0.0017/dec | p = 0.979 | CI [-0.1056, +0.0975] 
 
   [eke_p90]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0366/dec | p = 0.770 | CI [-0.2553, +0.2284] 
+    → slope = +0.0366/dec | p = 0.770 | CI [-0.2476, +0.2350] 
 
   [eke_p95]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.0038/dec | p = 0.979 | CI [-0.3396, +0.3150] 
+    → slope = -0.0038/dec | p = 0.979 | CI [-0.3442, +0.3112] 
 
   [eke_p99]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.0201/dec | p = 0.979 | CI [-0.5924, +0.5390] 
+    → slope = -0.0201/dec | p = 0.979 | CI [-0.6144, +0.5249] 
 
   [exceed_p95_freq]  N = 68
     Block length via pwsd()... b = 2 years
     MBB CI (R = 2000, b = 2)... done
-    → slope = +0.0003/dec | p = 0.626 | CI [-0.0010, +0.0010] 
+    → slope = +0.0003/dec | p = 0.626 | CI [-0.0009, +0.0011] 
 
   [tke]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.0221/dec | p = 0.870 | CI [-0.2502, +0.2453] 
+    → slope = +0.0221/dec | p = 0.870 | CI [-0.2302, +0.2671] 
 
   [mke]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = -0.0395/dec | p = 0.608 | CI [-0.1689, +0.1643] 
+    → slope = -0.0395/dec | p = 0.608 | CI [-0.2117, +0.1302] 
 
   [eke_budget]  N = 68
     Block length via pwsd()... b = 1 years
     MBB CI (R = 2000, b = 1)... done
-    → slope = +0.1467/dec | p = 0.195 | CI [-0.1850, +0.1946] </code></pre>
+    → slope = +0.1467/dec | p = 0.195 | CI [-0.0362, +0.3371] </code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb459"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb459-1"><a href="#cb459-1" aria-hidden="true" tabindex="-1"></a>results_seasonal <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(results_list_seasonal) <span class="sc">%&gt;%</span></span>
 <span id="cb459-2"><a href="#cb459-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">season =</span> <span class="fu">factor</span>(season, <span class="at">levels =</span> SEASONS))</span>
@@ -4684,38 +4703,38 @@ Significant trends (α = 0.05):  storminess 0/5  |  energy 0/3</code></pre>
 <span id="cb465-7"><a href="#cb465-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code> season                label      group slope_dec ci_lower ci_upper p_value
-    DJF           EKE_budget     Energy   0.04934 -0.27709  0.28383  0.7548
-    DJF                  MKE     Energy  -0.17960 -0.26564  0.27550  0.2603
-    DJF                  TKE     Energy  -0.07114 -0.34132  0.36485  0.6758
-    DJF    Mean EKE_synoptic Storminess  -0.05657 -0.14655  0.14116  0.4428
-    DJF              P90 EKE Storminess  -0.14977 -0.36045  0.35383  0.4749
-    DJF              P95 EKE Storminess  -0.23196 -0.52569  0.49276  0.4000
-    DJF P95 Exceedance Freq. Storminess  -0.00052 -0.00133  0.00129  0.4554
-    DJF              P99 EKE Storminess  -0.44969 -0.86079  0.78651  0.3598
-    MAM           EKE_budget     Energy   0.19394 -0.25083  0.25445  0.1500
-    MAM                  MKE     Energy   0.17843 -0.19110  0.18989  0.0780
-    MAM                  TKE     Energy   0.38230 -0.31286  0.31171  0.0419
-    MAM    Mean EKE_synoptic Storminess   0.14832 -0.11775  0.12149  0.0206
-    MAM              P90 EKE Storminess   0.36308 -0.28022  0.29115  0.0158
-    MAM              P95 EKE Storminess   0.45516 -0.37500  0.38672  0.0265
-    MAM P95 Exceedance Freq. Storminess   0.00117 -0.00098  0.00098  0.0218
-    MAM              P99 EKE Storminess   0.66576 -0.64852  0.63081  0.0627
-    JJA           EKE_budget     Energy   0.05444 -0.13664  0.13589  0.5445
-    JJA                  MKE     Energy   0.13564 -0.14298  0.13909  0.0694
-    JJA                  TKE     Energy   0.17683 -0.24468  0.24516  0.1116
-    JJA    Mean EKE_synoptic Storminess   0.02794 -0.06248  0.05850  0.4241
-    JJA              P90 EKE Storminess   0.08603 -0.15533  0.15818  0.4119
-    JJA              P95 EKE Storminess   0.09171 -0.20468  0.20616  0.3488
-    JJA P95 Exceedance Freq. Storminess   0.00040 -0.00048  0.00046  0.2096
-    JJA              P99 EKE Storminess   0.19958 -0.32540  0.30632  0.2873
-    SON           EKE_budget     Energy   0.14667 -0.18502  0.19461  0.1947
-    SON                  MKE     Energy  -0.03955 -0.16890  0.16430  0.6076
-    SON                  TKE     Energy   0.02207 -0.25017  0.24525  0.8697
-    SON    Mean EKE_synoptic Storminess   0.00171 -0.10682  0.09492  0.9789
-    SON              P90 EKE Storminess   0.03659 -0.25532  0.22841  0.7701
-    SON              P95 EKE Storminess  -0.00383 -0.33956  0.31499  0.9789
-    SON P95 Exceedance Freq. Storminess   0.00029 -0.00100  0.00100  0.6262
-    SON              P99 EKE Storminess  -0.02006 -0.59238  0.53898  0.9789
+    DJF           EKE_budget     Energy   0.04934 -0.22543  0.33187  0.7548
+    DJF                  MKE     Energy  -0.17960 -0.38838  0.13880  0.2603
+    DJF                  TKE     Energy  -0.07114 -0.40725  0.29366  0.6758
+    DJF    Mean EKE_synoptic Storminess  -0.05657 -0.19838  0.08679  0.4428
+    DJF              P90 EKE Storminess  -0.14977 -0.50771  0.20324  0.4749
+    DJF              P95 EKE Storminess  -0.23196 -0.74102  0.24650  0.4000
+    DJF P95 Exceedance Freq. Storminess  -0.00052 -0.00184  0.00075  0.4554
+    DJF              P99 EKE Storminess  -0.44969 -1.29621  0.31777  0.3598
+    MAM           EKE_budget     Energy   0.19394 -0.01570  0.45956  0.1500
+    MAM                  MKE     Energy   0.17843 -0.01548  0.36536  0.0780
+    MAM                  TKE     Energy   0.38230  0.09666  0.68639  0.0419
+    MAM    Mean EKE_synoptic Storminess   0.14832  0.05991  0.25651  0.0206
+    MAM              P90 EKE Storminess   0.36308  0.14532  0.60366  0.0158
+    MAM              P95 EKE Storminess   0.45516  0.18009  0.82297  0.0265
+    MAM P95 Exceedance Freq. Storminess   0.00117  0.00046  0.00213  0.0218
+    MAM              P99 EKE Storminess   0.66576  0.20617  1.36533  0.0627
+    JJA           EKE_budget     Energy   0.05444 -0.06821  0.20844  0.5445
+    JJA                  MKE     Energy   0.13564  0.01177  0.25774  0.0694
+    JJA                  TKE     Energy   0.17683 -0.04411  0.41021  0.1116
+    JJA    Mean EKE_synoptic Storminess   0.02794 -0.03648  0.08808  0.4241
+    JJA              P90 EKE Storminess   0.08603 -0.07741  0.24827  0.4119
+    JJA              P95 EKE Storminess   0.09171 -0.11314  0.30400  0.3488
+    JJA P95 Exceedance Freq. Storminess   0.00040 -0.00006  0.00085  0.2096
+    JJA              P99 EKE Storminess   0.19958 -0.11046  0.49905  0.2873
+    SON           EKE_budget     Energy   0.14667 -0.03619  0.33711  0.1947
+    SON                  MKE     Energy  -0.03955 -0.21172  0.13017  0.6076
+    SON                  TKE     Energy   0.02207 -0.23022  0.26705  0.8697
+    SON    Mean EKE_synoptic Storminess   0.00171 -0.10563  0.09746  0.9789
+    SON              P90 EKE Storminess   0.03659 -0.24756  0.23501  0.7701
+    SON              P95 EKE Storminess  -0.00383 -0.34421  0.31118  0.9789
+    SON P95 Exceedance Freq. Storminess   0.00029 -0.00086  0.00113  0.6262
+    SON              P99 EKE Storminess  -0.02006 -0.61445  0.52494  0.9789
  significant pct_change b_length
        FALSE       0.71        1
        FALSE      -8.93        1
@@ -4964,7 +4983,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <pre><code>
 ✓ Phase 3.2 complete.
   Results: Phase3_2_Seasonal_Results.RData
-  Figures: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures/Phase3_Trends</code></pre>
+  Figures: C:/Users/franc/Documents/svalbard-storminess-climatology/Figures/Phase3_Trends</code></pre>
 </div>
 </div>
 </section>
@@ -5134,9 +5153,9 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb487-161"><a href="#cb487-161" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb487-162"><a href="#cb487-162" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:09 | +0.0 min] CACHE HIT: Loading precomputed spatial results from disk.
-[14:25:10 | +0.0 min]   Loaded 5 variable(s): eke_synoptic_mean, eke_p90, eke_p95, eke_p99, exceed_p95_freq
-[14:25:10 | +0.0 min]   All requested variables present. Skipping to PART B (figures).</code></pre>
+<pre><code>[21:29:28 | +0.0 min] CACHE HIT: Loading precomputed spatial results from disk.
+[21:29:29 | +0.0 min]   Loaded 5 variable(s): eke_synoptic_mean, eke_p90, eke_p95, eke_p99, exceed_p95_freq
+[21:29:29 | +0.0 min]   All requested variables present. Skipping to PART B (figures).</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb489"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb489-1"><a href="#cb489-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(RESULTS_FILE) <span class="sc">||</span> FORCE_RECOMPUTE) {</span>
 <span id="cb489-2"><a href="#cb489-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -5466,7 +5485,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb489-326"><a href="#cb489-326" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb489-327"><a href="#cb489-327" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"PHASE 3.4 PART B: GENERATING FIGURES"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:10 | +0.0 min] PHASE 3.4 PART B: GENERATING FIGURES</code></pre>
+<pre><code>[21:29:29 | +0.0 min] PHASE 3.4 PART B: GENERATING FIGURES</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb491"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb491-1"><a href="#cb491-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -5522,7 +5541,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <div class="sourceCode cell-code" id="cb504"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb504-1"><a href="#cb504-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B1: Cartographic setup ─────────────────────────────────────────────────</span></span>
 <span id="cb504-2"><a href="#cb504-2" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"B1: Setting up cartographic elements..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:10 | +0.0 min] B1: Setting up cartographic elements...</code></pre>
+<pre><code>[21:29:30 | +0.0 min] B1: Setting up cartographic elements...</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb506"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb506-1"><a href="#cb506-1" aria-hidden="true" tabindex="-1"></a>arctic_crs  <span class="ot">&lt;-</span> <span class="st">"+proj=laea +lat_0=90 +lon_0=0"</span></span>
 <span id="cb506-2"><a href="#cb506-2" aria-hidden="true" tabindex="-1"></a>view_radius <span class="ot">&lt;-</span> <span class="dv">3330000</span>   <span class="co"># clips at ~60 N data boundary</span></span>
@@ -5565,7 +5584,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb506-39"><a href="#cb506-39" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb506-40"><a href="#cb506-40" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"  Cartographic elements ready."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:10 | +0.0 min]   Cartographic elements ready.</code></pre>
+<pre><code>[21:29:30 | +0.0 min]   Cartographic elements ready.</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb508"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb508-1"><a href="#cb508-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B2: Plotting helpers ───────────────────────────────────────────────────</span></span>
 <span id="cb508-2"><a href="#cb508-2" aria-hidden="true" tabindex="-1"></a>make_stars_polar <span class="ot">&lt;-</span> <span class="cf">function</span>(mat, <span class="at">varname =</span> <span class="st">"value"</span>) {</span>
@@ -5842,49 +5861,49 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[14:25:10 | +0.0 min]   Plotting: eke_synoptic_mean</code></pre>
+[21:29:30 | +0.0 min]   Plotting: eke_synoptic_mean</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:13 | +0.1 min]     Saved: Fig3.5a_Annual_Trend_Map_EKE_synoptic.png</code></pre>
+<pre><code>[21:29:40 | +0.2 min]     Saved: Fig3.5a_Annual_Trend_Map_EKE_synoptic.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:22 | +0.2 min]     Saved: Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png
+<pre><code>[21:30:18 | +0.8 min]     Saved: Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[14:25:22 | +0.2 min]   Plotting: eke_p90</code></pre>
+[21:30:18 | +0.8 min]   Plotting: eke_p90</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:24 | +0.3 min]     Saved: Fig3.6a_Annual_Trend_Map_P90.png</code></pre>
+<pre><code>[21:30:26 | +1.0 min]     Saved: Fig3.6a_Annual_Trend_Map_P90.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:33 | +0.4 min]     Saved: Fig3.6b_Seasonal_Trend_Maps_P90.png
+<pre><code>[21:31:00 | +1.5 min]     Saved: Fig3.6b_Seasonal_Trend_Maps_P90.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[14:25:34 | +0.4 min]   Plotting: eke_p95</code></pre>
+[21:31:00 | +1.5 min]   Plotting: eke_p95</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:36 | +0.4 min]     Saved: Fig3.7a_Annual_Trend_Map_P95.png</code></pre>
+<pre><code>[21:31:08 | +1.7 min]     Saved: Fig3.7a_Annual_Trend_Map_P95.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:45 | +0.6 min]     Saved: Fig3.7b_Seasonal_Trend_Maps_P95.png
+<pre><code>[21:31:42 | +2.2 min]     Saved: Fig3.7b_Seasonal_Trend_Maps_P95.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[14:25:45 | +0.6 min]   Plotting: eke_p99</code></pre>
+[21:31:43 | +2.2 min]   Plotting: eke_p99</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:48 | +0.6 min]     Saved: Fig3.8a_Annual_Trend_Map_P99.png</code></pre>
+<pre><code>[21:31:52 | +2.4 min]     Saved: Fig3.8a_Annual_Trend_Map_P99.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:57 | +0.8 min]     Saved: Fig3.8b_Seasonal_Trend_Maps_P99.png
+<pre><code>[21:32:26 | +3.0 min]     Saved: Fig3.8b_Seasonal_Trend_Maps_P99.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[14:25:57 | +0.8 min]   Plotting: exceed_p95_freq</code></pre>
+[21:32:27 | +3.0 min]   Plotting: exceed_p95_freq</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:25:59 | +0.8 min]     Saved: Fig3.9a_Annual_Trend_Map_ExceedFreq.png</code></pre>
+<pre><code>[21:32:37 | +3.1 min]     Saved: Fig3.9a_Annual_Trend_Map_ExceedFreq.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:26:10 | +1.0 min]     Saved: Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png</code></pre>
+<pre><code>[21:33:09 | +3.7 min]     Saved: Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb520"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb520-1"><a href="#cb520-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
 <span id="cb520-2"><a href="#cb520-2" aria-hidden="true" tabindex="-1"></a><span class="co"># FINAL STATUS</span></span>
@@ -5899,11 +5918,11 @@ Significant trends by season (α = 0.05 ):</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb522"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb522-1"><a href="#cb522-1" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"PHASE 3.4 COMPLETE. Total time: %.1f minutes."</span>, elapsed_total))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[14:26:10 | +1.0 min] PHASE 3.4 COMPLETE. Total time: 1.0 minutes.</code></pre>
+<pre><code>[21:33:09 | +3.7 min] PHASE 3.4 COMPLETE. Total time: 3.7 minutes.</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb524"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb524-1"><a href="#cb524-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Results: %s</span><span class="sc">\n</span><span class="st">"</span>, RESULTS_FILE))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  Results: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Data/processed/analysis_ready/Phase3_4_Spatial_Results.RData</code></pre>
+<pre><code>  Results: C:/Users/franc/Documents/svalbard-storminess-climatology/Data/processed/analysis_ready/Phase3_4_Spatial_Results.RData</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb526"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb526-1"><a href="#cb526-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Variables: %s</span><span class="sc">\n</span><span class="st">"</span>, <span class="fu">paste</span>(<span class="fu">names</span>(spatial_results), <span class="at">collapse =</span> <span class="st">", "</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -5911,7 +5930,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb528"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb528-1"><a href="#cb528-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Figures: %s</span><span class="sc">\n</span><span class="st">"</span>, FIG_PHASE3))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>  Figures: C:/Users/franc/Documents/Master/Task_1_storminess/svalbard-storminess-climatology/Figures/Phase3_Trends</code></pre>
+<pre><code>  Figures: C:/Users/franc/Documents/svalbard-storminess-climatology/Figures/Phase3_Trends</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb530"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb530-1"><a href="#cb530-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
