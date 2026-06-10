@@ -3324,6 +3324,7 @@ p_forest <- ggplot(forest_df,
     values = c("Storminess" = 16, "Energy" = 17),
     name   = "Variable group"
   ) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.15))) +
   labs(
     title    = "Pan-Arctic Annual Trends: Sen\u2019s Slope with 95% MBB CI",
     subtitle = glue(
@@ -3578,7 +3579,7 @@ forest_seas <- results_seasonal %>%
   mutate(
     label_fig = factor(
       unname(VAR_LABELS[variable]),
-      levels = rev(unname(VAR_LABELS[ALL_VARS]))   # reverse for coord readability
+      levels = rev(unname(VAR_LABELS[ALL_VARS]))
     ),
     group  = factor(group, levels = c("Storminess", "Energy")),
     season = factor(season, levels = SEASONS,
@@ -3588,7 +3589,7 @@ forest_seas <- results_seasonal %>%
 p_forest_seas <- ggplot(
   forest_seas,
   aes(x = slope_dec, y = label_fig,
-      colour = significant, shape = group)
+      colour = significant, shape = group) # colour correctly maps to TRUE/FALSE
 ) +
   geom_vline(xintercept = 0, linetype = "dashed",
              colour = "grey40", linewidth = 0.6) +
@@ -3602,14 +3603,16 @@ p_forest_seas <- ggplot(
   ) +
   facet_wrap(~ season, ncol = 2, scales = "free_x") +
   scale_colour_manual(
-    values = SEASON_COLORS,                  # keys "DJF"/"MAM"/"JJA"/"SON" now match
-    labels = unname(SEASON_NAMES),           # legend shows "Winter (DJF)" etc.
-    name   = "Season"
+    values = c("FALSE" = "grey55", "TRUE" = "#D73027"),
+    labels = c("FALSE" = glue("p \u2265 {ALPHA}"),
+               "TRUE"  = glue("p < {ALPHA}")),
+    name   = "Significance"
   ) +
   scale_shape_manual(
     values = c("Storminess" = 16, "Energy" = 17),
     name   = "Variable group"
   ) +
+  scale_x_continuous(expand = expansion(mult = c(0.05, 0.15))) +
   scale_y_discrete(labels = function(x) parse(text = x)) +
   labs(
     title    = "Pan-Arctic Seasonal Trends: Sen\u2019s Slope with 95% MBB CI",

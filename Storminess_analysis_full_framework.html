@@ -4273,35 +4273,36 @@ Significant trends (α = 0.05):  storminess 0/5  |  energy 0/3</code></pre>
 <span id="cb438-100"><a href="#cb438-100" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Storminess"</span> <span class="ot">=</span> <span class="dv">16</span>, <span class="st">"Energy"</span> <span class="ot">=</span> <span class="dv">17</span>),</span>
 <span id="cb438-101"><a href="#cb438-101" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="st">"Variable group"</span></span>
 <span id="cb438-102"><a href="#cb438-102" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb438-103"><a href="#cb438-103" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb438-104"><a href="#cb438-104" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Pan-Arctic Annual Trends: Sen\u2019s Slope with 95% MBB CI"</span>,</span>
-<span id="cb438-105"><a href="#cb438-105" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">glue</span>(</span>
-<span id="cb438-106"><a href="#cb438-106" aria-hidden="true" tabindex="-1"></a>      <span class="st">"Pre-Whitened Mann\u2013Kendall | Adaptive block length "</span>,</span>
-<span id="cb438-107"><a href="#cb438-107" aria-hidden="true" tabindex="-1"></a>      <span class="st">"(Politis &amp; White 2004) | {min(annual_df$year)}\u2013{max(annual_df$year)}"</span></span>
-<span id="cb438-108"><a href="#cb438-108" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb438-109"><a href="#cb438-109" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Sen\u2019s slope [units per decade]"</span>,</span>
-<span id="cb438-110"><a href="#cb438-110" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="cn">NULL</span></span>
-<span id="cb438-111"><a href="#cb438-111" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb438-112"><a href="#cb438-112" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> BASE_SIZE) <span class="sc">+</span></span>
-<span id="cb438-113"><a href="#cb438-113" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
-<span id="cb438-114"><a href="#cb438-114" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title       =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> TITLE_SIZE),</span>
-<span id="cb438-115"><a href="#cb438-115" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle    =</span> <span class="fu">element_text</span>(<span class="at">size =</span> SUBTITLE_SIZE, <span class="at">colour =</span> <span class="st">"grey40"</span>),</span>
-<span id="cb438-116"><a href="#cb438-116" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position  =</span> <span class="st">"bottom"</span>,</span>
-<span id="cb438-117"><a href="#cb438-117" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor =</span> <span class="fu">element_blank</span>()</span>
-<span id="cb438-118"><a href="#cb438-118" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb438-119"><a href="#cb438-119" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_discrete</span>(</span>
-<span id="cb438-120"><a href="#cb438-120" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="cf">function</span>(x) <span class="fu">parse</span>(<span class="at">text =</span> x)   <span class="co"># parse plotmath on the fly</span></span>
-<span id="cb438-121"><a href="#cb438-121" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb438-122"><a href="#cb438-122" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb438-123"><a href="#cb438-123" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(FIG_PHASE3, <span class="st">"Fig3.2_Annual_Forest.png"</span>),</span>
-<span id="cb438-124"><a href="#cb438-124" aria-hidden="true" tabindex="-1"></a>       p_forest, <span class="at">width =</span> <span class="dv">11</span>, <span class="at">height =</span> <span class="dv">7</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
-<span id="cb438-125"><a href="#cb438-125" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb438-103"><a href="#cb438-103" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">expand =</span> <span class="fu">expansion</span>(<span class="at">mult =</span> <span class="fu">c</span>(<span class="fl">0.05</span>, <span class="fl">0.15</span>))) <span class="sc">+</span></span>
+<span id="cb438-104"><a href="#cb438-104" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb438-105"><a href="#cb438-105" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Pan-Arctic Annual Trends: Sen\u2019s Slope with 95% MBB CI"</span>,</span>
+<span id="cb438-106"><a href="#cb438-106" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">glue</span>(</span>
+<span id="cb438-107"><a href="#cb438-107" aria-hidden="true" tabindex="-1"></a>      <span class="st">"Pre-Whitened Mann\u2013Kendall | Adaptive block length "</span>,</span>
+<span id="cb438-108"><a href="#cb438-108" aria-hidden="true" tabindex="-1"></a>      <span class="st">"(Politis &amp; White 2004) | {min(annual_df$year)}\u2013{max(annual_df$year)}"</span></span>
+<span id="cb438-109"><a href="#cb438-109" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb438-110"><a href="#cb438-110" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Sen\u2019s slope [units per decade]"</span>,</span>
+<span id="cb438-111"><a href="#cb438-111" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="cn">NULL</span></span>
+<span id="cb438-112"><a href="#cb438-112" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb438-113"><a href="#cb438-113" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> BASE_SIZE) <span class="sc">+</span></span>
+<span id="cb438-114"><a href="#cb438-114" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb438-115"><a href="#cb438-115" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title       =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> TITLE_SIZE),</span>
+<span id="cb438-116"><a href="#cb438-116" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle    =</span> <span class="fu">element_text</span>(<span class="at">size =</span> SUBTITLE_SIZE, <span class="at">colour =</span> <span class="st">"grey40"</span>),</span>
+<span id="cb438-117"><a href="#cb438-117" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position  =</span> <span class="st">"bottom"</span>,</span>
+<span id="cb438-118"><a href="#cb438-118" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor =</span> <span class="fu">element_blank</span>()</span>
+<span id="cb438-119"><a href="#cb438-119" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb438-120"><a href="#cb438-120" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_discrete</span>(</span>
+<span id="cb438-121"><a href="#cb438-121" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="cf">function</span>(x) <span class="fu">parse</span>(<span class="at">text =</span> x)   <span class="co"># parse plotmath on the fly</span></span>
+<span id="cb438-122"><a href="#cb438-122" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb438-123"><a href="#cb438-123" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb438-124"><a href="#cb438-124" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(FIG_PHASE3, <span class="st">"Fig3.2_Annual_Forest.png"</span>),</span>
+<span id="cb438-125"><a href="#cb438-125" aria-hidden="true" tabindex="-1"></a>       p_forest, <span class="at">width =</span> <span class="dv">11</span>, <span class="at">height =</span> <span class="dv">7</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
 <span id="cb438-126"><a href="#cb438-126" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb438-127"><a href="#cb438-127" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb438-128"><a href="#cb438-128" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 5: SAVE RESULTS</span></span>
-<span id="cb438-129"><a href="#cb438-129" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
-<span id="cb438-130"><a href="#cb438-130" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(results_annual, annual_df,</span>
-<span id="cb438-131"><a href="#cb438-131" aria-hidden="true" tabindex="-1"></a>     <span class="at">file =</span> <span class="fu">file.path</span>(OUTPUT_DATA_DIR, <span class="st">"Phase3_1_Annual_Results.RData"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb438-127"><a href="#cb438-127" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb438-128"><a href="#cb438-128" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb438-129"><a href="#cb438-129" aria-hidden="true" tabindex="-1"></a><span class="co"># STEP 5: SAVE RESULTS</span></span>
+<span id="cb438-130"><a href="#cb438-130" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
+<span id="cb438-131"><a href="#cb438-131" aria-hidden="true" tabindex="-1"></a><span class="fu">save</span>(results_annual, annual_df,</span>
+<span id="cb438-132"><a href="#cb438-132" aria-hidden="true" tabindex="-1"></a>     <span class="at">file =</span> <span class="fu">file.path</span>(OUTPUT_DATA_DIR, <span class="st">"Phase3_1_Annual_Results.RData"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="seasonal-decomposition-of-pan-arctic-trends" class="level2">
@@ -4823,7 +4824,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb479-2"><a href="#cb479-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb479-3"><a href="#cb479-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">label_fig =</span> <span class="fu">factor</span>(</span>
 <span id="cb479-4"><a href="#cb479-4" aria-hidden="true" tabindex="-1"></a>      <span class="fu">unname</span>(VAR_LABELS[variable]),</span>
-<span id="cb479-5"><a href="#cb479-5" aria-hidden="true" tabindex="-1"></a>      <span class="at">levels =</span> <span class="fu">rev</span>(<span class="fu">unname</span>(VAR_LABELS[ALL_VARS]))   <span class="co"># reverse for coord readability</span></span>
+<span id="cb479-5"><a href="#cb479-5" aria-hidden="true" tabindex="-1"></a>      <span class="at">levels =</span> <span class="fu">rev</span>(<span class="fu">unname</span>(VAR_LABELS[ALL_VARS]))</span>
 <span id="cb479-6"><a href="#cb479-6" aria-hidden="true" tabindex="-1"></a>    ),</span>
 <span id="cb479-7"><a href="#cb479-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">group  =</span> <span class="fu">factor</span>(group, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Storminess"</span>, <span class="st">"Energy"</span>)),</span>
 <span id="cb479-8"><a href="#cb479-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">season =</span> <span class="fu">factor</span>(season, <span class="at">levels =</span> SEASONS,</span>
@@ -4833,7 +4834,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb479-12"><a href="#cb479-12" aria-hidden="true" tabindex="-1"></a>p_forest_seas <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(</span>
 <span id="cb479-13"><a href="#cb479-13" aria-hidden="true" tabindex="-1"></a>  forest_seas,</span>
 <span id="cb479-14"><a href="#cb479-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">aes</span>(<span class="at">x =</span> slope_dec, <span class="at">y =</span> label_fig,</span>
-<span id="cb479-15"><a href="#cb479-15" aria-hidden="true" tabindex="-1"></a>      <span class="at">colour =</span> significant, <span class="at">shape =</span> group)</span>
+<span id="cb479-15"><a href="#cb479-15" aria-hidden="true" tabindex="-1"></a>      <span class="at">colour =</span> significant, <span class="at">shape =</span> group) <span class="co"># colour correctly maps to TRUE/FALSE</span></span>
 <span id="cb479-16"><a href="#cb479-16" aria-hidden="true" tabindex="-1"></a>) <span class="sc">+</span></span>
 <span id="cb479-17"><a href="#cb479-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">0</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>,</span>
 <span id="cb479-18"><a href="#cb479-18" aria-hidden="true" tabindex="-1"></a>             <span class="at">colour =</span> <span class="st">"grey40"</span>, <span class="at">linewidth =</span> <span class="fl">0.6</span>) <span class="sc">+</span></span>
@@ -4847,36 +4848,38 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb479-26"><a href="#cb479-26" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
 <span id="cb479-27"><a href="#cb479-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span> season, <span class="at">ncol =</span> <span class="dv">2</span>, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
 <span id="cb479-28"><a href="#cb479-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_colour_manual</span>(</span>
-<span id="cb479-29"><a href="#cb479-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> SEASON_COLORS,                  <span class="co"># keys "DJF"/"MAM"/"JJA"/"SON" now match</span></span>
-<span id="cb479-30"><a href="#cb479-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="fu">unname</span>(SEASON_NAMES),           <span class="co"># legend shows "Winter (DJF)" etc.</span></span>
-<span id="cb479-31"><a href="#cb479-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="st">"Season"</span></span>
-<span id="cb479-32"><a href="#cb479-32" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb479-33"><a href="#cb479-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_shape_manual</span>(</span>
-<span id="cb479-34"><a href="#cb479-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Storminess"</span> <span class="ot">=</span> <span class="dv">16</span>, <span class="st">"Energy"</span> <span class="ot">=</span> <span class="dv">17</span>),</span>
-<span id="cb479-35"><a href="#cb479-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="st">"Variable group"</span></span>
-<span id="cb479-36"><a href="#cb479-36" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb479-37"><a href="#cb479-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_discrete</span>(<span class="at">labels =</span> <span class="cf">function</span>(x) <span class="fu">parse</span>(<span class="at">text =</span> x)) <span class="sc">+</span></span>
-<span id="cb479-38"><a href="#cb479-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb479-39"><a href="#cb479-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Pan-Arctic Seasonal Trends: Sen\u2019s Slope with 95% MBB CI"</span>,</span>
-<span id="cb479-40"><a href="#cb479-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">glue</span>(</span>
-<span id="cb479-41"><a href="#cb479-41" aria-hidden="true" tabindex="-1"></a>      <span class="st">"Pre-Whitened Mann\u2013Kendall | Adaptive block length "</span>,</span>
-<span id="cb479-42"><a href="#cb479-42" aria-hidden="true" tabindex="-1"></a>      <span class="st">"(Politis &amp; White 2004) | 1958\u20132025 | N = 68 per season"</span></span>
-<span id="cb479-43"><a href="#cb479-43" aria-hidden="true" tabindex="-1"></a>    ),</span>
-<span id="cb479-44"><a href="#cb479-44" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Sen\u2019s slope [units per decade]"</span>,</span>
-<span id="cb479-45"><a href="#cb479-45" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="cn">NULL</span></span>
-<span id="cb479-46"><a href="#cb479-46" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb479-47"><a href="#cb479-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> BASE_SIZE) <span class="sc">+</span></span>
-<span id="cb479-48"><a href="#cb479-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
-<span id="cb479-49"><a href="#cb479-49" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title       =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> TITLE_SIZE),</span>
-<span id="cb479-50"><a href="#cb479-50" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle    =</span> <span class="fu">element_text</span>(<span class="at">size =</span> SUBTITLE_SIZE, <span class="at">colour =</span> <span class="st">"grey40"</span>),</span>
-<span id="cb479-51"><a href="#cb479-51" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position  =</span> <span class="st">"bottom"</span>,</span>
-<span id="cb479-52"><a href="#cb479-52" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text       =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>),</span>
-<span id="cb479-53"><a href="#cb479-53" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor =</span> <span class="fu">element_blank</span>()</span>
-<span id="cb479-54"><a href="#cb479-54" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb479-55"><a href="#cb479-55" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb479-56"><a href="#cb479-56" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(FIG_PHASE3, <span class="st">"Fig3.3_Seasonal_Slopes.png"</span>),</span>
-<span id="cb479-57"><a href="#cb479-57" aria-hidden="true" tabindex="-1"></a>       p_forest_seas, <span class="at">width =</span> <span class="dv">13</span>, <span class="at">height =</span> <span class="dv">9</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
-<span id="cb479-58"><a href="#cb479-58" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"  ✓ Saved: Fig3.3_Seasonal_Slopes.png</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb479-29"><a href="#cb479-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> <span class="fu">c</span>(<span class="st">"FALSE"</span> <span class="ot">=</span> <span class="st">"grey55"</span>, <span class="st">"TRUE"</span> <span class="ot">=</span> <span class="st">"#D73027"</span>),</span>
+<span id="cb479-30"><a href="#cb479-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"FALSE"</span> <span class="ot">=</span> <span class="fu">glue</span>(<span class="st">"p \u2265 {ALPHA}"</span>),</span>
+<span id="cb479-31"><a href="#cb479-31" aria-hidden="true" tabindex="-1"></a>               <span class="st">"TRUE"</span>  <span class="ot">=</span> <span class="fu">glue</span>(<span class="st">"p &lt; {ALPHA}"</span>)),</span>
+<span id="cb479-32"><a href="#cb479-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="st">"Significance"</span></span>
+<span id="cb479-33"><a href="#cb479-33" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb479-34"><a href="#cb479-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_shape_manual</span>(</span>
+<span id="cb479-35"><a href="#cb479-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Storminess"</span> <span class="ot">=</span> <span class="dv">16</span>, <span class="st">"Energy"</span> <span class="ot">=</span> <span class="dv">17</span>),</span>
+<span id="cb479-36"><a href="#cb479-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">name   =</span> <span class="st">"Variable group"</span></span>
+<span id="cb479-37"><a href="#cb479-37" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb479-38"><a href="#cb479-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">expand =</span> <span class="fu">expansion</span>(<span class="at">mult =</span> <span class="fu">c</span>(<span class="fl">0.05</span>, <span class="fl">0.15</span>))) <span class="sc">+</span></span>
+<span id="cb479-39"><a href="#cb479-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_discrete</span>(<span class="at">labels =</span> <span class="cf">function</span>(x) <span class="fu">parse</span>(<span class="at">text =</span> x)) <span class="sc">+</span></span>
+<span id="cb479-40"><a href="#cb479-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb479-41"><a href="#cb479-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">title    =</span> <span class="st">"Pan-Arctic Seasonal Trends: Sen\u2019s Slope with 95% MBB CI"</span>,</span>
+<span id="cb479-42"><a href="#cb479-42" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="fu">glue</span>(</span>
+<span id="cb479-43"><a href="#cb479-43" aria-hidden="true" tabindex="-1"></a>      <span class="st">"Pre-Whitened Mann\u2013Kendall | Adaptive block length "</span>,</span>
+<span id="cb479-44"><a href="#cb479-44" aria-hidden="true" tabindex="-1"></a>      <span class="st">"(Politis &amp; White 2004) | 1958\u20132025 | N = 68 per season"</span></span>
+<span id="cb479-45"><a href="#cb479-45" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb479-46"><a href="#cb479-46" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Sen\u2019s slope [units per decade]"</span>,</span>
+<span id="cb479-47"><a href="#cb479-47" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="cn">NULL</span></span>
+<span id="cb479-48"><a href="#cb479-48" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb479-49"><a href="#cb479-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>(<span class="at">base_size =</span> BASE_SIZE) <span class="sc">+</span></span>
+<span id="cb479-50"><a href="#cb479-50" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb479-51"><a href="#cb479-51" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title       =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> TITLE_SIZE),</span>
+<span id="cb479-52"><a href="#cb479-52" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle    =</span> <span class="fu">element_text</span>(<span class="at">size =</span> SUBTITLE_SIZE, <span class="at">colour =</span> <span class="st">"grey40"</span>),</span>
+<span id="cb479-53"><a href="#cb479-53" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position  =</span> <span class="st">"bottom"</span>,</span>
+<span id="cb479-54"><a href="#cb479-54" aria-hidden="true" tabindex="-1"></a>    <span class="at">strip.text       =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>),</span>
+<span id="cb479-55"><a href="#cb479-55" aria-hidden="true" tabindex="-1"></a>    <span class="at">panel.grid.minor =</span> <span class="fu">element_blank</span>()</span>
+<span id="cb479-56"><a href="#cb479-56" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb479-57"><a href="#cb479-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb479-58"><a href="#cb479-58" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="fu">file.path</span>(FIG_PHASE3, <span class="st">"Fig3.3_Seasonal_Slopes.png"</span>),</span>
+<span id="cb479-59"><a href="#cb479-59" aria-hidden="true" tabindex="-1"></a>       p_forest_seas, <span class="at">width =</span> <span class="dv">13</span>, <span class="at">height =</span> <span class="dv">9</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
+<span id="cb479-60"><a href="#cb479-60" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"  ✓ Saved: Fig3.3_Seasonal_Slopes.png</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  ✓ Saved: Fig3.3_Seasonal_Slopes.png</code></pre>
 </div>
@@ -5153,9 +5156,9 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb487-161"><a href="#cb487-161" aria-hidden="true" tabindex="-1"></a>  }</span>
 <span id="cb487-162"><a href="#cb487-162" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:29:28 | +0.0 min] CACHE HIT: Loading precomputed spatial results from disk.
-[21:29:29 | +0.0 min]   Loaded 5 variable(s): eke_synoptic_mean, eke_p90, eke_p95, eke_p99, exceed_p95_freq
-[21:29:29 | +0.0 min]   All requested variables present. Skipping to PART B (figures).</code></pre>
+<pre><code>[14:22:34 | +0.0 min] CACHE HIT: Loading precomputed spatial results from disk.
+[14:22:34 | +0.0 min]   Loaded 5 variable(s): eke_synoptic_mean, eke_p90, eke_p95, eke_p99, exceed_p95_freq
+[14:22:34 | +0.0 min]   All requested variables present. Skipping to PART B (figures).</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb489"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb489-1"><a href="#cb489-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">file.exists</span>(RESULTS_FILE) <span class="sc">||</span> FORCE_RECOMPUTE) {</span>
 <span id="cb489-2"><a href="#cb489-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -5485,7 +5488,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb489-326"><a href="#cb489-326" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb489-327"><a href="#cb489-327" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"PHASE 3.4 PART B: GENERATING FIGURES"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:29:29 | +0.0 min] PHASE 3.4 PART B: GENERATING FIGURES</code></pre>
+<pre><code>[14:22:34 | +0.0 min] PHASE 3.4 PART B: GENERATING FIGURES</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb491"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb491-1"><a href="#cb491-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">rep</span>(<span class="st">"="</span>, <span class="dv">70</span>), <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -5541,7 +5544,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <div class="sourceCode cell-code" id="cb504"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb504-1"><a href="#cb504-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B1: Cartographic setup ─────────────────────────────────────────────────</span></span>
 <span id="cb504-2"><a href="#cb504-2" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"B1: Setting up cartographic elements..."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:29:30 | +0.0 min] B1: Setting up cartographic elements...</code></pre>
+<pre><code>[14:22:35 | +0.0 min] B1: Setting up cartographic elements...</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb506"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb506-1"><a href="#cb506-1" aria-hidden="true" tabindex="-1"></a>arctic_crs  <span class="ot">&lt;-</span> <span class="st">"+proj=laea +lat_0=90 +lon_0=0"</span></span>
 <span id="cb506-2"><a href="#cb506-2" aria-hidden="true" tabindex="-1"></a>view_radius <span class="ot">&lt;-</span> <span class="dv">3330000</span>   <span class="co"># clips at ~60 N data boundary</span></span>
@@ -5584,7 +5587,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <span id="cb506-39"><a href="#cb506-39" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb506-40"><a href="#cb506-40" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="st">"  Cartographic elements ready."</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:29:30 | +0.0 min]   Cartographic elements ready.</code></pre>
+<pre><code>[14:22:35 | +0.0 min]   Cartographic elements ready.</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb508"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb508-1"><a href="#cb508-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ── B2: Plotting helpers ───────────────────────────────────────────────────</span></span>
 <span id="cb508-2"><a href="#cb508-2" aria-hidden="true" tabindex="-1"></a>make_stars_polar <span class="ot">&lt;-</span> <span class="cf">function</span>(mat, <span class="at">varname =</span> <span class="st">"value"</span>) {</span>
@@ -5861,49 +5864,49 @@ Significant trends by season (α = 0.05 ):</code></pre>
 <div class="cell-output cell-output-stdout">
 <pre><code>
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[21:29:30 | +0.0 min]   Plotting: eke_synoptic_mean</code></pre>
+[14:22:35 | +0.0 min]   Plotting: eke_synoptic_mean</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:29:40 | +0.2 min]     Saved: Fig3.5a_Annual_Trend_Map_EKE_synoptic.png</code></pre>
+<pre><code>[14:22:40 | +0.1 min]     Saved: Fig3.5a_Annual_Trend_Map_EKE_synoptic.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:30:18 | +0.8 min]     Saved: Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png
+<pre><code>[14:22:57 | +0.4 min]     Saved: Fig3.5b_Seasonal_Trend_Maps_EKE_synoptic.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[21:30:18 | +0.8 min]   Plotting: eke_p90</code></pre>
+[14:22:57 | +0.4 min]   Plotting: eke_p90</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:30:26 | +1.0 min]     Saved: Fig3.6a_Annual_Trend_Map_P90.png</code></pre>
+<pre><code>[14:23:02 | +0.5 min]     Saved: Fig3.6a_Annual_Trend_Map_P90.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:31:00 | +1.5 min]     Saved: Fig3.6b_Seasonal_Trend_Maps_P90.png
+<pre><code>[14:23:20 | +0.8 min]     Saved: Fig3.6b_Seasonal_Trend_Maps_P90.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[21:31:00 | +1.5 min]   Plotting: eke_p95</code></pre>
+[14:23:20 | +0.8 min]   Plotting: eke_p95</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:31:08 | +1.7 min]     Saved: Fig3.7a_Annual_Trend_Map_P95.png</code></pre>
+<pre><code>[14:23:25 | +0.9 min]     Saved: Fig3.7a_Annual_Trend_Map_P95.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:31:42 | +2.2 min]     Saved: Fig3.7b_Seasonal_Trend_Maps_P95.png
+<pre><code>[14:23:42 | +1.1 min]     Saved: Fig3.7b_Seasonal_Trend_Maps_P95.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[21:31:43 | +2.2 min]   Plotting: eke_p99</code></pre>
+[14:23:42 | +1.1 min]   Plotting: eke_p99</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:31:52 | +2.4 min]     Saved: Fig3.8a_Annual_Trend_Map_P99.png</code></pre>
+<pre><code>[14:23:46 | +1.2 min]     Saved: Fig3.8a_Annual_Trend_Map_P99.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:32:26 | +3.0 min]     Saved: Fig3.8b_Seasonal_Trend_Maps_P99.png
+<pre><code>[14:24:00 | +1.4 min]     Saved: Fig3.8b_Seasonal_Trend_Maps_P99.png
 
  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-[21:32:27 | +3.0 min]   Plotting: exceed_p95_freq</code></pre>
+[14:24:00 | +1.4 min]   Plotting: exceed_p95_freq</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:32:37 | +3.1 min]     Saved: Fig3.9a_Annual_Trend_Map_ExceedFreq.png</code></pre>
+<pre><code>[14:24:04 | +1.5 min]     Saved: Fig3.9a_Annual_Trend_Map_ExceedFreq.png</code></pre>
 </div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:33:09 | +3.7 min]     Saved: Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png</code></pre>
+<pre><code>[14:24:18 | +1.7 min]     Saved: Fig3.9b_Seasonal_Trend_Maps_ExceedFreq.png</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb520"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb520-1"><a href="#cb520-1" aria-hidden="true" tabindex="-1"></a><span class="co"># ============================================================================</span></span>
 <span id="cb520-2"><a href="#cb520-2" aria-hidden="true" tabindex="-1"></a><span class="co"># FINAL STATUS</span></span>
@@ -5918,7 +5921,7 @@ Significant trends by season (α = 0.05 ):</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb522"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb522-1"><a href="#cb522-1" aria-hidden="true" tabindex="-1"></a><span class="fu">progress_msg</span>(<span class="fu">sprintf</span>(<span class="st">"PHASE 3.4 COMPLETE. Total time: %.1f minutes."</span>, elapsed_total))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>[21:33:09 | +3.7 min] PHASE 3.4 COMPLETE. Total time: 3.7 minutes.</code></pre>
+<pre><code>[14:24:18 | +1.7 min] PHASE 3.4 COMPLETE. Total time: 1.7 minutes.</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb524"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb524-1"><a href="#cb524-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">"  Results: %s</span><span class="sc">\n</span><span class="st">"</span>, RESULTS_FILE))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
