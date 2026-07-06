@@ -2190,6 +2190,127 @@ ggsave(file.path(fig_dir, "Fig06b1_P95MeanRatio_Polar.png"),
 ggsave(file.path(fig_dir, "Fig06b2_ExceedFreq_Polar.png"),
        p6b_exceed, width = 8, height = 8, dpi = 300, bg = "white")
 
+
+# FIGURE 6d: SEASONAL SPATIAL CLIMATOLOGY (2×2: DJF, MAM, JJA, SON)
+# ==========================================================================
+cat("\n--- Generating Figure 6d: Seasonal Spatial Climatology (Mean EKE) ---\n")
+
+# --- 1. Compute seasonal means from the raw gridded data ---
+# metrics_list[["eke_synoptic_mean"]] has dims [time, lat, lon]
+# Subset time dimension by month, then average over time
+
+season_months <- list(
+  DJF = c(12, 1, 2),
+  MAM = c(3, 4, 5),
+  JJA = c(6, 7, 8),
+  SON = c(9, 10, 11)
+)
+
+raw_eke  <- metrics_list[["eke_synoptic_mean"]]   # [time, lat, lon]
+mon_vec  <- month(time_dates)                      # month for each time step
+
+seasonal_clim_maps <- list()
+for (seas in SEASONS) {
+  idx <- which(mon_vec %in% season_months[[seas]])
+  # Mean across time (dim 1) for this season → [lat, lon]
+  seasonal_clim_maps[[seas]] <- apply(raw_eke[idx, , ], c(2, 3), mean, na.rm = TRUE)
+  cat(sprintf("  %s: %d months averaged\n", seas, length(idx)))
+}
+
+# --- 2. Build stars objects for each season (wrap → project → mask) ---
+season_panels_clim <- list()
+
+# Shared colour limits across all four seasons
+seas_vals <- unlist(lapply(seasonal_clim_maps, function(m) {
+  wrapped <- wrap_data(m)
+  s <- st_as_stars(list(eke = wrapped),
+                   dimensions = st_dimensions(x = lon_wrapped, y = lat_vec)) %>%
+    st_set_crs(4326)
+  sp <- st_warp(s, crs = arctic_crs)
+  sm <- sp[circle_mask]
+  as.vector(sm[["eke"]])
+}))
+seas_max    <- ceiling(max(seas_vals, na.rm = TRUE) / 10) * 10
+seas_breaks <- seq(0, seas_max, length.out = 5)
+
+cat(sprintf("  Shared seasonal colour limits: [0, %d]\n", seas_max))
+
+eke_scale_seasonal <- function() {
+  scale_fill_viridis(
+    name     = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+    option   = "C",
+    na.value = "transparent",
+    limits   = c(0, seas_max),
+    breaks   = seas_breaks,
+    oob      = scales::squish
+  )
+}
+
+for (seas in SEASONS) {
+  # Wrap, create stars, project, mask
+  mat_w  <- wrap_data(seasonal_clim_maps[[seas]])
+  s_star <- st_as_stars(list(eke = mat_w),
+                        dimensions = st_dimensions(x = lon_wrapped, y = lat_vec)) %>%
+    st_set_crs(4326)
+  s_polar  <- st_warp(s_star, crs = arctic_crs)
+  s_masked <- s_polar[circle_mask]
+
+  season_panels_clim[[seas]] <- ggplot() +
+    geom_stars(data = s_masked, aes(fill = eke), na.rm = TRUE) +
+    eke_scale_seasonal() +
+    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+    geom_sf(data = inverse_mask, fill = "white", color = NA) +
+    geom_sf_text(data = lat_labels, aes(label = label),
+                 size = 2.5, color = "black", hjust = 1.2) +
+    geom_sf_text(data = lon_labels, aes(label = label),
+                 size = 2.5, color = "black") +
+    coord_sf(xlim = c(-plot_radius, plot_radius),
+             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+    labs(title = SEASON_NAMES[seas]) +
+    panel_theme
+}
+
+# --- 3. Apply horizontal bottom legend to each panel (S7-safe) ---
+legend_style_clim <- theme(
+  legend.direction      = "horizontal",
+  legend.title.position = "top",
+  legend.title          = element_text(size = BASE_SIZE, hjust = 0.5),
+  legend.key.width      = unit(3.0, "cm"),
+  legend.key.height     = unit(0.5, "cm")
+)
+legend_guide_clim <- guides(fill = guide_colorbar(title.position = "top",
+                                                   title.hjust = 0.5))
+
+for (seas in names(season_panels_clim)) {
+  season_panels_clim[[seas]] <- season_panels_clim[[seas]] +
+    legend_style_clim + legend_guide_clim
+}
+
+# --- 4. Combine 2×2 + guide_area (same pattern as Phase 3 seasonal maps) ---
+fig6d <- (season_panels_clim[["DJF"]] + season_panels_clim[["MAM"]] +
+            season_panels_clim[["JJA"]] + season_panels_clim[["SON"]] +
+            guide_area()) +
+  plot_layout(design = "AB\nCD\nEE", guides = "collect",
+              heights = c(1, 1, 0.15)) +
+  plot_annotation(
+    title    = parse(text = 'bold("Seasonal Spatial Climatology of "~"Mean EKE"[synoptic]~"(1958–2025)")')[[1]],
+    subtitle = "Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Shared colour scale",
+    theme = theme(
+      plot.title    = element_text(face = "bold", size = TITLE_SIZE, hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40",
+                                   hjust = 0.5, margin = margin(b = 10))
+    )
+  )
+
+print(fig6d)
+ggsave(file.path(fig_dir, "Fig06d_Seasonal_Climatology_EKE.png"),
+       fig6d, width = 14, height = 15, dpi = 300, bg = "white")
+
+rm(season_panels_clim, seasonal_clim_maps, seas_vals, fig6d)
+gc(verbose = FALSE)
+
+
 # ============================================================================
 # PLOT 7: DISTRIBUTION PLOTS (HISTOGRAMS + DENSITY)
 # ============================================================================
