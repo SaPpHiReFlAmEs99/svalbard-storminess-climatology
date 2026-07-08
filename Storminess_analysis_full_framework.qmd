@@ -2311,6 +2311,145 @@ rm(season_panels_clim, seasonal_clim_maps, seas_vals, fig6d)
 gc(verbose = FALSE)
 
 
+# FIGURE 6e: SEASONAL SPATIAL CLIMATOLOGY — P95 EKE (2×2: DJF, MAM, JJA, SON)
+# ==========================================================================
+cat("\n--- Generating Figure 6e: Seasonal Spatial Climatology (P95 EKE) ---\n")
+
+raw_eke_p95  <- metrics_list[["eke_p95"]]   # [time, lat, lon]
+
+seasonal_clim_maps_p95 <- list()
+for (seas in SEASONS) {
+  idx <- which(mon_vec %in% season_months[[seas]])
+  seasonal_clim_maps_p95[[seas]] <- apply(raw_eke_p95[idx, , ], c(2, 3), mean, na.rm = TRUE)
+  cat(sprintf("  %s: %d months averaged\n", seas, length(idx)))
+}
+
+# Shared colour limits across all four seasons
+seas_vals_p95 <- unlist(lapply(seasonal_clim_maps_p95, function(m) {
+  wrapped <- wrap_data(m)
+  s <- st_as_stars(list(eke = wrapped),
+                   dimensions = st_dimensions(x = lon_wrapped, y = lat_vec)) %>%
+    st_set_crs(4326)
+  sp <- st_warp(s, crs = arctic_crs)
+  sm <- sp[circle_mask]
+  as.vector(sm[["eke"]])
+}))
+seas_max_p95    <- ceiling(max(seas_vals_p95, na.rm = TRUE) / 10) * 10
+seas_breaks_p95 <- seq(0, seas_max_p95, length.out = 5)
+
+cat(sprintf("  Shared seasonal P95 colour limits: [0, %d]\n", seas_max_p95))
+
+eke_scale_seasonal_p95 <- function() {
+  scale_fill_viridis(
+    name     = expression(atop("EKE", "[m"^2*"/s"^2*"]")),
+    option   = "C",
+    na.value = "transparent",
+    limits   = c(0, seas_max_p95),
+    breaks   = seas_breaks_p95,
+    oob      = scales::squish
+  )
+}
+
+season_panels_clim_p95 <- list()
+for (seas in SEASONS) {
+  mat_w  <- wrap_data(seasonal_clim_maps_p95[[seas]])
+  s_star <- st_as_stars(list(eke = mat_w),
+                        dimensions = st_dimensions(x = lon_wrapped, y = lat_vec)) %>%
+    st_set_crs(4326)
+  s_polar  <- st_warp(s_star, crs = arctic_crs)
+  s_masked <- s_polar[circle_mask]
+
+  season_panels_clim_p95[[seas]] <- ggplot() +
+    geom_stars(data = s_masked, aes(fill = eke), na.rm = TRUE) +
+    eke_scale_seasonal_p95() +
+    geom_sf(data = world_polar, fill = NA, color = "black", linewidth = 0.2) +
+    geom_sf(data = graticules, color = "gray50", linetype = "dashed", linewidth = 0.25) +
+    geom_sf(data = inverse_mask, fill = "white", color = NA) +
+    geom_sf_text(data = lat_labels, aes(label = label),
+                 size = 2.5, color = "black", hjust = 1.2) +
+    geom_sf_text(data = lon_labels, aes(label = label),
+                 size = 2.5, color = "black") +
+    coord_sf(xlim = c(-plot_radius, plot_radius),
+             ylim = c(-plot_radius, plot_radius), expand = FALSE) +
+    labs(title = SEASON_NAMES[seas]) +
+    panel_theme
+}
+
+# Apply horizontal bottom legend to each panel (S7-safe)
+for (seas in names(season_panels_clim_p95)) {
+  season_panels_clim_p95[[seas]] <- season_panels_clim_p95[[seas]] +
+    legend_style_clim + legend_guide_clim
+}
+
+# Combine 2×2 + guide_area
+fig6e <- (season_panels_clim_p95[["DJF"]] + season_panels_clim_p95[["MAM"]] +
+            season_panels_clim_p95[["JJA"]] + season_panels_clim_p95[["SON"]] +
+            guide_area()) +
+  plot_layout(design = "AB\nCD\nEE", guides = "collect",
+              heights = c(1, 1, 0.15)) +
+  plot_annotation(
+    title    = parse(text = 'bold("Seasonal Spatial Climatology of "~"P95 EKE"~"(1958–2025)")')[[1]],
+    subtitle = "Pan-Arctic (≥55°N) | Lambert Azimuthal Equal-Area Projection | Shared colour scale",
+    theme = theme(
+      plot.title    = element_text(face = "bold", size = TITLE_SIZE, hjust = 0.5),
+      plot.subtitle = element_text(size = SUBTITLE_SIZE, colour = "grey40",
+                                   hjust = 0.5, margin = margin(b = 10))
+    )
+  )
+
+print(fig6e)
+ggsave(file.path(fig_dir, "Fig06e_Seasonal_Climatology_P95_EKE.png"),
+       fig6e, width = 14, height = 15, dpi = 300, bg = "white")
+
+rm(season_panels_clim_p95, seasonal_clim_maps_p95, seas_vals_p95, fig6e)
+gc(verbose = FALSE)
+```
+
+### Seasonal and Annual Mean Storminess
+
+```{r seasonal-annual-means}
+# ============================================================================
+# TABLE 1: SEASONAL AND ANNUAL MEAN STORMINESS METRICS
+# ============================================================================
+
+cat("\n--- Computing Table 1: Seasonal & Annual Mean Storminess Metrics ---\n")
+
+# Metrics to summarise
+tbl_metrics <- c("eke_synoptic_mean", "eke_p90", "eke_p95", "eke_p99")
+
+# --- Annual means ---
+annual_means <- sapply(tbl_metrics, function(m) mean(storm_df[[m]], na.rm = TRUE))
+
+# --- Seasonal means ---
+seasonal_means <- storm_df %>%
+  group_by(season) %>%
+  summarise(across(all_of(tbl_metrics), ~ mean(.x, na.rm = TRUE)), .groups = "drop") %>%
+  arrange(match(season, SEASONS))   # DJF, MAM, JJA, SON order
+
+# Build the display table: seasons as rows + an Annual row
+tbl_display <- seasonal_means %>%
+  rename(Season = season)
+
+# Append annual row
+tbl_display <- bind_rows(
+  tbl_display,
+  tibble(Season = "Annual", !!!setNames(as.list(annual_means), tbl_metrics))
+)
+
+# Rename columns to readable labels
+colnames(tbl_display) <- c(
+  "Season",
+  "Mean EKE (m²/s²)",
+  "P90 EKE (m²/s²)",
+  "P95 EKE (m²/s²)",
+  "P99 EKE (m²/s²)"
+)
+
+cat("\nSeasonal and Annual Mean Storminess Metrics (Pan-Arctic ≥60°N, 1958–2025)\n\n")
+print(knitr::kable(tbl_display, digits = 2, format = "simple"))
+```
+
+```{r}
 # ============================================================================
 # PLOT 7: DISTRIBUTION PLOTS (HISTOGRAMS + DENSITY)
 # ============================================================================
